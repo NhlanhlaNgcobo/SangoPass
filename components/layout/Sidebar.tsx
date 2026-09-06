@@ -10,6 +10,7 @@ import {
   Search,
   Building2,
   Users,
+  UserCheck,
   ShieldCheck,
   LayoutGrid,
   Activity,
@@ -46,6 +47,11 @@ function getNavItems(role: Role): SidebarNavItem[] {
           label: "Properties",
           href: "/dashboard/manager/properties",
           icon: Building2,
+        },
+        {
+          label: "Visitors",
+          href: "/dashboard/manager/visitors",
+          icon: UserCheck,
         },
         {
           label: "Tenants & Staff",

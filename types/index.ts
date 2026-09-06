@@ -55,3 +55,31 @@ export interface StaffSummary {
   roleLabel: string;
   assignedPropertyName: string;
 }
+
+export type VisitorInvitationStatus =
+  | "upcoming"
+  | "checked_in"
+  | "checked_out"
+  | "cancelled"
+  | "expired";
+
+export interface VisitorInvitation {
+  id: string;
+  referenceNumber: string;
+  secureToken: string;
+  visitorName: string;
+  visitorPhone: string;
+  visitorEmail?: string;
+  vehicleRegistration?: string;
+  reasonForVisit?: string;
+  tenantName: string;
+  propertyName: string;
+  unitNumber: string;
+  visitDate: string;
+  expectedArrival: string;
+  expectedDeparture: string;
+  status: VisitorInvitationStatus;
+  checkedInAt?: string;
+  checkedOutAt?: string;
+  createdAt: string;
+}
