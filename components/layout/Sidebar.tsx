@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   LayoutGrid,
   Activity,
+  CreditCard,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -78,6 +79,11 @@ function getNavItems(role: Role): SidebarNavItem[] {
           label: "Reports",
           href: "/dashboard/manager/reports",
           icon: History,
+        },
+        {
+          label: "Billing & Plan",
+          href: "/dashboard/manager/billing",
+          icon: CreditCard,
         },
       ];
     case "admin":

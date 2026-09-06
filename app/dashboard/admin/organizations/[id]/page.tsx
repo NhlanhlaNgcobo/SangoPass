@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import Badge from "@/components/ui/Badge";
 import PropertyCard from "@/components/manager/PropertyCard";
 import { SAMPLE_ORGANIZATIONS } from "@/lib/mock/sampleOrganizations";
 import { SAMPLE_PROPERTIES } from "@/lib/mock/sampleProperties";
+import { getPlan } from "@/lib/mock/plans";
 
 export default async function OrganizationDetailPage({
   params,
@@ -31,13 +33,16 @@ export default async function OrganizationDetailPage({
         All organizations
       </Link>
 
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-slate-900">
-          {organization.name}
-        </h1>
-        <p className="text-sm text-slate-500">
-          {properties.length} propert{properties.length === 1 ? "y" : "ies"}
-        </p>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">
+            {organization.name}
+          </h1>
+          <p className="text-sm text-slate-500">
+            {properties.length} propert{properties.length === 1 ? "y" : "ies"}
+          </p>
+        </div>
+        <Badge color="blue">{getPlan(organization.plan).name} plan</Badge>
       </div>
 
       <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">

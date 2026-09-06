@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
+import Badge from "@/components/ui/Badge";
+import { getPlan } from "@/lib/mock/plans";
 import type { Organization } from "@/types";
 
 function formatDate(iso: string): string {
@@ -22,11 +24,14 @@ export default function OrganizationCard({
       href={`/dashboard/admin/organizations/${organization.id}`}
       className="block rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-blue-300 hover:bg-blue-50/40"
     >
-      <div className="mb-3 flex items-center gap-2">
-        <span className="rounded-lg bg-blue-50 p-2 text-blue-600">
-          <ShieldCheck className="h-4 w-4" />
-        </span>
-        <h3 className="font-semibold text-slate-900">{organization.name}</h3>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="rounded-lg bg-blue-50 p-2 text-blue-600">
+            <ShieldCheck className="h-4 w-4" />
+          </span>
+          <h3 className="font-semibold text-slate-900">{organization.name}</h3>
+        </div>
+        <Badge color="blue">{getPlan(organization.plan).name}</Badge>
       </div>
       <p className="text-sm text-slate-500">
         {propertyCount} propert{propertyCount === 1 ? "y" : "ies"}

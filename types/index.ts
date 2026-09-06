@@ -31,10 +31,13 @@ export interface PropertySummary {
   units: UnitSummary[];
 }
 
+export type PlanTier = "starter" | "growth" | "premium" | "portfolio";
+
 export interface Organization {
   id: string;
   name: string;
   createdAt: string;
+  plan: PlanTier;
 }
 
 export type ReportCategory = "complaint" | "maintenance" | "suggestion";
