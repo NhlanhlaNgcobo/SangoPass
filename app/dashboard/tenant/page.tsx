@@ -1,6 +1,7 @@
 import { CalendarClock, Users, History } from "lucide-react";
 import Button from "@/components/ui/Button";
 import PlaceholderCard from "@/components/dashboard/PlaceholderCard";
+import LogReportButton from "@/components/reports/LogReportButton";
 
 export default function TenantDashboardPage() {
   return (
@@ -14,7 +15,10 @@ export default function TenantDashboardPage() {
             Here&apos;s what&apos;s happening with your visitors.
           </p>
         </div>
-        <Button className="sm:w-auto">+ Invite Visitor</Button>
+        <div className="flex gap-3">
+          <LogReportButton role="tenant" />
+          <Button className="sm:w-auto">+ Invite Visitor</Button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

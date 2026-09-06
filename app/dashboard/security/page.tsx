@@ -1,6 +1,7 @@
 import { CalendarCheck, Users, LogOut as CheckOutIcon } from "lucide-react";
 import Button from "@/components/ui/Button";
 import PlaceholderCard from "@/components/dashboard/PlaceholderCard";
+import LogReportButton from "@/components/reports/LogReportButton";
 
 export default function SecurityDashboardPage() {
   return (
@@ -14,7 +15,8 @@ export default function SecurityDashboardPage() {
             Verify and manage visitors at your assigned property.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <LogReportButton role="security" />
           <Button variant="secondary">Manual Search</Button>
           <Button>Scan QR Code</Button>
         </div>

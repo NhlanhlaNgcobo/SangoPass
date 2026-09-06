@@ -42,9 +42,21 @@ function getNavItems(role: Role): SidebarNavItem[] {
     case "manager":
       return [
         { label: "Dashboard", href: dashboardHref, icon: LayoutDashboard },
-        { label: "Properties", href: dashboardHref, icon: Building2 },
-        { label: "Tenants & Staff", href: dashboardHref, icon: Users },
-        { label: "Reports", href: dashboardHref, icon: History },
+        {
+          label: "Properties",
+          href: "/dashboard/manager/properties",
+          icon: Building2,
+        },
+        {
+          label: "Tenants & Staff",
+          href: "/dashboard/manager/tenants-staff",
+          icon: Users,
+        },
+        {
+          label: "Reports",
+          href: "/dashboard/manager/reports",
+          icon: History,
+        },
       ];
     case "admin":
       return [
@@ -65,6 +77,7 @@ interface SidebarProps {
 export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const navItems = getNavItems(role);
+  const dashboardHref = getDashboardPath(role);
 
   const content = (
     <div className="flex h-full flex-col">
@@ -90,7 +103,9 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
 
       <nav className="flex flex-1 flex-col gap-1 px-3">
         {navItems.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href;
+          const active =
+            pathname === href ||
+            (href !== dashboardHref && pathname.startsWith(`${href}/`));
           return (
             <Link
               key={label}
