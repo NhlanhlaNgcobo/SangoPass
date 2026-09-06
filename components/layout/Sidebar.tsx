@@ -67,9 +67,21 @@ function getNavItems(role: Role): SidebarNavItem[] {
     case "admin":
       return [
         { label: "Dashboard", href: dashboardHref, icon: LayoutDashboard },
-        { label: "Organizations", href: dashboardHref, icon: ShieldCheck },
-        { label: "Properties", href: dashboardHref, icon: LayoutGrid },
-        { label: "Platform Activity", href: dashboardHref, icon: Activity },
+        {
+          label: "Organizations",
+          href: "/dashboard/admin/organizations",
+          icon: ShieldCheck,
+        },
+        {
+          label: "Properties",
+          href: "/dashboard/admin/properties",
+          icon: LayoutGrid,
+        },
+        {
+          label: "Platform Activity",
+          href: "/dashboard/admin/activity",
+          icon: Activity,
+        },
       ];
   }
 }

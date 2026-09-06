@@ -27,7 +27,14 @@ export interface PropertySummary {
   name: string;
   address: string;
   propertyType: PropertyType;
+  organizationName: string;
   units: UnitSummary[];
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  createdAt: string;
 }
 
 export type ReportCategory = "complaint" | "maintenance" | "suggestion";
