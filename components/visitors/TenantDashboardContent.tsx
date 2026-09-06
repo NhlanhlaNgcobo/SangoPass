@@ -100,7 +100,7 @@ export default function TenantDashboardContent() {
             Here&apos;s what&apos;s happening with your visitors.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div id="invite-visitor" className="flex scroll-mt-6 gap-3">
           <LogReportButton role="tenant" />
           <InviteVisitorModal
             onCreated={() => {
@@ -150,7 +150,10 @@ export default function TenantDashboardContent() {
           )}
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <section
+          id="history"
+          className="scroll-mt-6 rounded-xl border border-slate-200 bg-white p-5"
+        >
           <div className="mb-2 flex items-center gap-2">
             <History className="h-4 w-4 text-blue-600" />
             <h2 className="font-semibold text-slate-900">Visitor History</h2>

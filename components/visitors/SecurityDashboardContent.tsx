@@ -82,7 +82,7 @@ export default function SecurityDashboardContent() {
             Verify and manage visitors at your assigned property.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div id="scan-qr" className="flex scroll-mt-6 flex-wrap gap-3">
           <LogReportButton role="security" />
           <ScanQrCodeButton />
         </div>
@@ -106,7 +106,10 @@ export default function SecurityDashboardContent() {
         />
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <section
+        id="manual-search"
+        className="scroll-mt-6 rounded-xl border border-slate-200 bg-white p-5"
+      >
         <div className="mb-3 flex items-center gap-2">
           <Search className="h-4 w-4 text-blue-600" />
           <h2 className="font-semibold text-slate-900">Manual Search</h2>

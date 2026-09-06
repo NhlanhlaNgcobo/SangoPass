@@ -31,14 +31,30 @@ function getNavItems(role: Role): SidebarNavItem[] {
     case "tenant":
       return [
         { label: "Dashboard", href: dashboardHref, icon: LayoutDashboard },
-        { label: "Invite Visitor", href: dashboardHref, icon: UserPlus },
-        { label: "Visitor History", href: dashboardHref, icon: History },
+        {
+          label: "Invite Visitor",
+          href: `${dashboardHref}#invite-visitor`,
+          icon: UserPlus,
+        },
+        {
+          label: "Visitor History",
+          href: `${dashboardHref}#history`,
+          icon: History,
+        },
       ];
     case "security":
       return [
         { label: "Dashboard", href: dashboardHref, icon: LayoutDashboard },
-        { label: "Scan QR Code", href: dashboardHref, icon: ScanLine },
-        { label: "Manual Search", href: dashboardHref, icon: Search },
+        {
+          label: "Scan QR Code",
+          href: `${dashboardHref}#scan-qr`,
+          icon: ScanLine,
+        },
+        {
+          label: "Manual Search",
+          href: `${dashboardHref}#manual-search`,
+          icon: Search,
+        },
       ];
     case "manager":
       return [
