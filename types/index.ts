@@ -20,10 +20,13 @@ export interface UnitSummary {
   outstandingAmount?: number;
 }
 
+export type PropertyType = "student_accommodation" | "apartment";
+
 export interface PropertySummary {
   id: string;
   name: string;
   address: string;
+  propertyType: PropertyType;
   units: UnitSummary[];
 }
 
@@ -47,6 +50,7 @@ export interface TenantSummary {
   name: string;
   propertyName: string;
   unitNumber: string;
+  studentNumber?: string;
 }
 
 export interface StaffSummary {

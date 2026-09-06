@@ -1,20 +1,41 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Users, ShieldCheck } from "lucide-react";
-import { SAMPLE_STAFF, SAMPLE_TENANTS } from "@/lib/mock/sampleTenantsStaff";
+import AddTenantModal from "@/components/manager/AddTenantModal";
+import { SAMPLE_STAFF } from "@/lib/mock/sampleTenantsStaff";
+import { getTenants } from "@/lib/mock/tenantsStore";
+import type { TenantSummary } from "@/types";
 
 export default function TenantsStaffPage() {
+  const [tenants, setTenants] = useState<TenantSummary[]>([]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of demo tenants from localStorage on mount
+    setTenants(getTenants());
+  }, []);
+
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-slate-900">
-          Tenants & Staff
-        </h1>
-        <p className="text-sm text-slate-500">
-          Everyone assigned to your properties.
-        </p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">
+            Tenants & Staff
+          </h1>
+          <p className="text-sm text-slate-500">
+            Everyone assigned to your properties.
+          </p>
+        </div>
+        <AddTenantModal
+          onCreated={() => {
+            setTenants(getTenants());
+          }}
+        />
       </div>
 
       <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-        Preview data — not yet connected to a real database.
+        Preview data — stored in this browser only, not yet connected to a
+        real database.
       </div>
 
       <div className="mb-8">
@@ -25,16 +46,17 @@ export default function TenantsStaffPage() {
           </h2>
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full min-w-[480px] text-left text-sm">
+          <table className="w-full min-w-[560px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Property</th>
                 <th className="px-4 py-3">Unit</th>
+                <th className="px-4 py-3">Student Number</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {SAMPLE_TENANTS.map((tenant) => (
+              {tenants.map((tenant) => (
                 <tr key={tenant.id}>
                   <td className="px-4 py-3 font-medium text-slate-900">
                     {tenant.name}
@@ -44,6 +66,9 @@ export default function TenantsStaffPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {tenant.unitNumber}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {tenant.studentNumber ?? "—"}
                   </td>
                 </tr>
               ))}

@@ -9,6 +9,7 @@ export const SAMPLE_PROPERTIES: PropertySummary[] = [
     id: "riverside-student-residence",
     name: "Riverside Student Residence",
     address: "12 Riverside Ave, Cape Town",
+    propertyType: "student_accommodation",
     units: [
       {
         id: "r-101",
@@ -50,6 +51,7 @@ export const SAMPLE_PROPERTIES: PropertySummary[] = [
     id: "oakwood-apartments",
     name: "Oakwood Apartments",
     address: "45 Oak Street, Johannesburg",
+    propertyType: "apartment",
     units: [
       {
         id: "u-4b",

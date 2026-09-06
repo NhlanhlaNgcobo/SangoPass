@@ -10,18 +10,21 @@ export const SAMPLE_TENANTS: TenantSummary[] = [
     name: "Thabo M.",
     propertyName: "Riverside Student Residence",
     unitNumber: "Room 101",
+    studentNumber: "ST-2024-00871",
   },
   {
     id: "t-2",
     name: "Lindiwe K.",
     propertyName: "Riverside Student Residence",
     unitNumber: "Room 103",
+    studentNumber: "ST-2024-00944",
   },
   {
     id: "t-3",
     name: "Sipho N.",
     propertyName: "Riverside Student Residence",
     unitNumber: "Room 104",
+    studentNumber: "ST-2023-00652",
   },
   {
     id: "t-4",
