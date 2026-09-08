@@ -1,10 +1,12 @@
 "use client";
 
+import { useDialog } from "@/lib/utils/useDialog";
+
 import { useState, type FormEvent } from "react";
 import { UserPlus, X } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { addTenant } from "@/lib/mock/tenantsStore";
-import { SAMPLE_PROPERTIES } from "@/lib/mock/sampleProperties";
+import { useDemoProperties } from "@/lib/mock/propertiesStore";
 import type { TenantSummary } from "@/types";
 
 export default function AddTenantModal({
@@ -12,23 +14,22 @@ export default function AddTenantModal({
 }: {
   onCreated: (tenant: TenantSummary) => void;
 }) {
+  const properties = useDemoProperties();
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
-  const [propertyName, setPropertyName] = useState(SAMPLE_PROPERTIES[0].name);
+  const [propertyName, setPropertyName] = useState(properties[0].name);
   const [unitNumber, setUnitNumber] = useState("");
   const [studentNumber, setStudentNumber] = useState("");
   const [error, setError] = useState("");
   const [created, setCreated] = useState<TenantSummary | null>(null);
 
-  const selectedProperty = SAMPLE_PROPERTIES.find(
-    (p) => p.name === propertyName
-  );
+  const selectedProperty = properties.find((p) => p.name === propertyName);
   const requiresStudentNumber =
     selectedProperty?.propertyType === "student_accommodation";
 
   function resetForm() {
     setName("");
-    setPropertyName(SAMPLE_PROPERTIES[0].name);
+    setPropertyName(properties[0].name);
     setUnitNumber("");
     setStudentNumber("");
     setError("");
@@ -53,25 +54,33 @@ export default function AddTenantModal({
       return;
     }
 
-    const tenant = addTenant({
-      name: name.trim(),
-      propertyName,
-      unitNumber: unitNumber.trim(),
-      studentNumber: requiresStudentNumber
-        ? studentNumber.trim()
-        : undefined,
-    });
+    try {
+      const tenant = addTenant({
+        name: name.trim(),
+        propertyName,
+        unitNumber: unitNumber.trim(),
+        studentNumber: requiresStudentNumber ? studentNumber.trim() : undefined,
+      });
 
-    setError("");
-    setCreated(tenant);
-    onCreated(tenant);
+      setError("");
+      setCreated(tenant);
+      onCreated(tenant);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Could not save the resident. Please try again.",
+      );
+    }
   }
+
+  const dialog = useDialog(isOpen, handleClose);
 
   return (
     <>
       <Button onClick={() => setIsOpen(true)}>
         <UserPlus className="h-4 w-4" />
-        Add Tenant
+        Add resident
       </Button>
 
       {isOpen && (
@@ -81,7 +90,11 @@ export default function AddTenantModal({
             onClick={handleClose}
             aria-hidden="true"
           />
-          <div className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <div
+            {...dialog}
+            aria-label="Add a resident"
+            className="relative max-h-[90dvh] overflow-y-auto w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+          >
             <button
               onClick={handleClose}
               className="absolute right-4 top-4 rounded-md p-1 text-slate-400 hover:bg-slate-100"
@@ -106,7 +119,7 @@ export default function AddTenantModal({
             ) : (
               <form onSubmit={handleSubmit}>
                 <h2 className="mb-4 text-lg font-semibold text-slate-900">
-                  Add Tenant
+                  Add resident
                 </h2>
 
                 <label className="mb-3 block">
@@ -133,7 +146,7 @@ export default function AddTenantModal({
                     }}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
                   >
-                    {SAMPLE_PROPERTIES.map((property) => (
+                    {properties.map((property) => (
                       <option key={property.id} value={property.name}>
                         {property.name}
                       </option>
@@ -145,12 +158,20 @@ export default function AddTenantModal({
                   <span className="mb-1.5 block text-sm font-medium text-slate-700">
                     Unit number
                   </span>
-                  <input
+                  <select
                     value={unitNumber}
                     onChange={(e) => setUnitNumber(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="e.g. Room 105"
-                  />
+                  >
+                    <option value="">Choose a vacant unit</option>
+                    {selectedProperty?.units
+                      .filter((unit) => unit.status === "vacant")
+                      .map((unit) => (
+                        <option key={unit.id} value={unit.unitNumber}>
+                          {unit.unitNumber}
+                        </option>
+                      ))}
+                  </select>
                 </label>
 
                 {requiresStudentNumber && (
@@ -175,7 +196,7 @@ export default function AddTenantModal({
                 )}
 
                 <Button type="submit" className="mt-2 w-full">
-                  Add Tenant
+                  Add resident
                 </Button>
               </form>
             )}

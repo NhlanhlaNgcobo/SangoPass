@@ -71,11 +71,7 @@ export interface StaffSummary {
 }
 
 export type VisitorInvitationStatus =
-  | "upcoming"
-  | "checked_in"
-  | "checked_out"
-  | "cancelled"
-  | "expired";
+  "upcoming" | "checked_in" | "checked_out" | "cancelled" | "expired";
 
 export interface VisitorInvitation {
   id: string;

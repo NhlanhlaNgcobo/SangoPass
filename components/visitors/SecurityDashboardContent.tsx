@@ -1,13 +1,20 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { CalendarCheck, Users, LogOut as CheckOutIcon, Search } from "lucide-react";
+import {
+  CalendarCheck,
+  Users,
+  LogOut as CheckOutIcon,
+  Search,
+} from "lucide-react";
+import { localDate } from "@/lib/utils/locale";
 import Button from "@/components/ui/Button";
 import StatCard from "@/components/dashboard/StatCard";
 import LogReportButton from "@/components/reports/LogReportButton";
 import ScanQrCodeButton from "@/components/visitors/ScanQrCodeButton";
 import VisitorStatusBadge from "@/components/visitors/VisitorStatusBadge";
 import {
+  canCheckIn,
   checkInInvitation,
   checkOutInvitation,
   getDisplayStatus,
@@ -17,7 +24,7 @@ import {
 import type { VisitorInvitation } from "@/types";
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDate();
 }
 
 export default function SecurityDashboardContent() {
@@ -45,9 +52,7 @@ export default function SecurityDashboardContent() {
     const updated = checkInInvitation(id);
     setInvitations(updated);
     setResults((prev) =>
-      prev
-        ? prev.map((r) => updated.find((u) => u.id === r.id) ?? r)
-        : prev
+      prev ? prev.map((r) => updated.find((u) => u.id === r.id) ?? r) : prev,
     );
   }
 
@@ -55,20 +60,20 @@ export default function SecurityDashboardContent() {
     const updated = checkOutInvitation(id);
     setInvitations(updated);
     setResults((prev) =>
-      prev
-        ? prev.map((r) => updated.find((u) => u.id === r.id) ?? r)
-        : prev
+      prev ? prev.map((r) => updated.find((u) => u.id === r.id) ?? r) : prev,
     );
   }
 
   const today = todayStr();
   const expectedToday = invitations.filter((i) => i.visitDate === today);
   const currentlyInside = invitations.filter(
-    (i) => getDisplayStatus(i) === "checked_in"
+    (i) => getDisplayStatus(i) === "checked_in",
   );
   const checkedOutToday = invitations.filter(
     (i) =>
-      i.status === "checked_out" && i.checkedOutAt?.slice(0, 10) === today
+      i.status === "checked_out" &&
+      i.checkedOutAt &&
+      localDate(new Date(i.checkedOutAt)) === today,
   );
 
   return (
@@ -76,7 +81,7 @@ export default function SecurityDashboardContent() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">
-            Security Dashboard
+            Welcome to your gate desk.
           </h1>
           <p className="text-sm text-slate-500">
             Verify and manage visitors at your assigned property.
@@ -84,7 +89,14 @@ export default function SecurityDashboardContent() {
         </div>
         <div id="scan-qr" className="flex scroll-mt-6 flex-wrap gap-3">
           <LogReportButton role="security" />
-          <ScanQrCodeButton />
+          <ScanQrCodeButton
+            onVerified={(invitation) => {
+              setQuery(invitation.referenceNumber);
+              setResults([invitation]);
+              setSearched(true);
+              refresh();
+            }}
+          />
         </div>
       </div>
 
@@ -114,8 +126,13 @@ export default function SecurityDashboardContent() {
           <Search className="h-4 w-4 text-blue-600" />
           <h2 className="font-semibold text-slate-900">Manual Search</h2>
         </div>
+        <p className="mb-5 text-sm text-slate-500">
+          Find the invitation, confirm the visitor’s details, then check them
+          in. Record check-out when they leave.
+        </p>
         <form onSubmit={handleSearch} className="flex gap-2">
           <input
+            aria-label="Search visitor invitations"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by visitor name, phone, or reference number"
@@ -158,7 +175,15 @@ export default function SecurityDashboardContent() {
                       <div className="flex items-center gap-3">
                         <VisitorStatusBadge status={status} />
                         {status === "upcoming" && (
-                          <Button onClick={() => handleCheckIn(invitation.id)}>
+                          <Button
+                            disabled={!canCheckIn(invitation)}
+                            title={
+                              !canCheckIn(invitation)
+                                ? "Check-in is available during the scheduled visit time (SAST)"
+                                : undefined
+                            }
+                            onClick={() => handleCheckIn(invitation.id)}
+                          >
                             Check In
                           </Button>
                         )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import TopNav from "@/components/layout/TopNav";
 import { getDemoRole } from "@/lib/utils/demoAuth";
@@ -13,6 +13,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [role, setRole] = useState<Role | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -22,12 +23,25 @@ export default function DashboardLayout({
       router.replace("/login");
       return;
     }
+    const requestedRole = pathname.split("/")[2];
+    if (requestedRole && requestedRole !== currentRole) {
+      router.replace(`/dashboard/${currentRole}`);
+      return;
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the demo role on mount
     setRole(currentRole);
-  }, [router]);
+  }, [router, pathname]);
 
   if (!role) {
-    return null;
+    return (
+      <main
+        id="main-content"
+        className="flex min-h-screen items-center justify-center text-sm text-slate-500"
+        role="status"
+      >
+        Opening your SangoPass workspace…
+      </main>
+    );
   }
 
   return (
@@ -39,7 +53,9 @@ export default function DashboardLayout({
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopNav role={role} onMenuClick={() => setMobileMenuOpen(true)} />
-        <main className="flex-1 bg-slate-50 p-4 lg:p-6">{children}</main>
+        <main id="main-content" className="app-main flex-1">
+          {children}
+        </main>
       </div>
     </div>
   );

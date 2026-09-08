@@ -1,3 +1,5 @@
+"use client";
+import { useDemoPlan } from "@/lib/mock/billingStore";
 import { CreditCard, Building2, Users } from "lucide-react";
 import StatCard from "@/components/dashboard/StatCard";
 import PlanComparisonTable from "@/components/manager/PlanComparisonTable";
@@ -8,9 +10,10 @@ import { getPlan } from "@/lib/mock/plans";
 const DEMO_SEATS_USED = 1;
 
 export default function ManagerBillingPage() {
-  const plan = getPlan(DEMO_ORGANIZATION.plan);
+  const currentPlan = useDemoPlan();
+  const plan = getPlan(currentPlan);
   const unitsUsed = SAMPLE_PROPERTIES.filter(
-    (property) => property.organizationName === DEMO_ORGANIZATION.name
+    (property) => property.organizationName === DEMO_ORGANIZATION.name,
   ).reduce((sum, property) => sum + property.units.length, 0);
 
   return (
@@ -24,9 +27,8 @@ export default function ManagerBillingPage() {
         </p>
       </div>
 
-      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-        Preview data — plan changes here don&apos;t charge anything; real
-        billing isn&apos;t connected yet.
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">
+        Demo billing · Try changing plans here. No payment is collected.
       </div>
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
@@ -61,7 +63,7 @@ export default function ManagerBillingPage() {
       <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
         Compare Plans
       </p>
-      <PlanComparisonTable currentPlan={DEMO_ORGANIZATION.plan} />
+      <PlanComparisonTable currentPlan={currentPlan} />
     </div>
   );
 }

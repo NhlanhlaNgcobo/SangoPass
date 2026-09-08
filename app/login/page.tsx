@@ -1,66 +1,109 @@
 "use client";
-
 import { useRouter } from "next/navigation";
-import { ShieldCheck, User, Shield, Building2, LayoutGrid } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
-import Button from "@/components/ui/Button";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Building2,
+  User,
+  Shield,
+  LayoutGrid,
+} from "lucide-react";
+import Brand from "@/components/ui/Brand";
 import { setDemoRole } from "@/lib/utils/demoAuth";
 import type { Role } from "@/types";
-
-const ROLE_OPTIONS: { role: Role; label: string; icon: typeof User }[] = [
-  { role: "tenant", label: "Continue as Tenant", icon: User },
-  { role: "security", label: "Continue as Security", icon: Shield },
-  { role: "manager", label: "Continue as Property Manager", icon: Building2 },
-  { role: "admin", label: "Continue as Super Admin", icon: LayoutGrid },
+const roles = [
+  {
+    role: "manager" as Role,
+    title: "Property manager",
+    description: "Your properties, people and daily operations.",
+    icon: Building2,
+  },
+  {
+    role: "tenant" as Role,
+    title: "Resident",
+    description: "Invite a guest. Feel right at home.",
+    icon: User,
+  },
+  {
+    role: "security" as Role,
+    title: "Security team",
+    description: "A clear view of every arrival and departure.",
+    icon: Shield,
+  },
+  {
+    role: "admin" as Role,
+    title: "Platform admin",
+    description: "Oversee organisations across SangoPass.",
+    icon: LayoutGrid,
+  },
 ];
-
 export default function LoginPage() {
   const router = useRouter();
-
-  function handleContinue(role: Role) {
-    setDemoRole(role);
-    router.push("/dashboard");
-  }
-
   return (
-    <div className="flex flex-1 items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-2">
-          <Link href="/" className="flex items-center gap-2">
-            <ShieldCheck className="h-7 w-7 text-blue-600" />
-            <span className="text-xl font-semibold tracking-tight">
-              GatePass
-            </span>
+    <main id="main-content" className="login-page">
+      <div className="login-panel">
+        <Link href="/">
+          <Brand />
+        </Link>
+        <div className="login-content">
+          <Link href="/" className="text-link">
+            <ArrowLeft size={15} /> Back to home
           </Link>
-          <p className="text-sm text-slate-500">
-            Preview build — sign-in is not connected yet
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h1 className="mb-1 text-lg font-semibold text-slate-900">
-            Choose a role to preview
+          <p className="eyebrow">YOUR COMMUNITY STARTS HERE</p>
+          <h1>
+            Make yourself
+            <br />
+            at home.
           </h1>
-          <p className="mb-6 text-sm text-slate-600">
-            Real login with email and password arrives once accounts are
-            connected. For now, pick a role to see its dashboard.
-          </p>
-
-          <div className="flex flex-col gap-3">
-            {ROLE_OPTIONS.map(({ role, label, icon: Icon }) => (
-              <Button
+          <p>Choose a role to explore your SangoPass workspace.</p>
+          <div className="role-options">
+            {roles.map(({ role, title, description, icon: Icon }) => (
+              <button
                 key={role}
-                variant="secondary"
-                className="w-full justify-start"
-                onClick={() => handleContinue(role)}
+                onClick={() => {
+                  setDemoRole(role);
+                  router.push("/dashboard/" + role);
+                }}
               >
-                <Icon className="h-4 w-4 text-slate-500" />
-                {label}
-              </Button>
+                <span className="feature-icon">
+                  <Icon size={21} />
+                </span>
+                <span>
+                  <strong>{title}</strong>
+                  <small>{description}</small>
+                </span>
+                <ArrowUpRight size={18} />
+              </button>
             ))}
           </div>
+          <p className="demo-note">
+            <span className="live-dot" /> Interactive demo · Sample data, no
+            account required.
+          </p>
+        </div>
+        <p className="login-footer">SangoPass · A better welcome, every day.</p>
+      </div>
+      <div className="login-visual">
+        <Image
+          src="/brand/student-life-sa.webp"
+          alt="South African university friends chatting outside their residence"
+          fill
+          sizes="50vw"
+          preload
+          className="object-cover"
+        />
+        <div className="login-quote">
+          <span className="eyebrow">LESS FRICTION. MORE CONNECTION.</span>
+          <h2>
+            Good living starts
+            <br />
+            at the entrance.
+          </h2>
+          <p>One simple place to bring your community together.</p>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

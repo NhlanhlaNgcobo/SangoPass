@@ -20,7 +20,7 @@ export default function TenantsStaffPage() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">
-            Tenants & Staff
+            Residents & staff
           </h1>
           <p className="text-sm text-slate-500">
             Everyone assigned to your properties.
@@ -33,9 +33,8 @@ export default function TenantsStaffPage() {
         />
       </div>
 
-      <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-        Preview data — stored in this browser only, not yet connected to a
-        real database.
+      <div className="mb-6 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">
+        Demo workspace · Changes are saved in this browser.
       </div>
 
       <div className="mb-8">

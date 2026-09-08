@@ -1,180 +1,274 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, LogIn, LogOut, Clock, Wallet, AlertCircle } from "lucide-react";
+import Image from "next/image";
+import {
+  Users,
+  LogIn,
+  Clock,
+  Wallet,
+  ArrowUpRight,
+  ArrowRight,
+  Building2,
+} from "lucide-react";
 import StatCard from "@/components/dashboard/StatCard";
-import Button from "@/components/ui/Button";
 import LogReportButton from "@/components/reports/LogReportButton";
-import { SAMPLE_PROPERTIES } from "@/lib/mock/sampleProperties";
+import { useDemoProperties } from "@/lib/mock/propertiesStore";
 import { getInvitations, getDisplayStatus } from "@/lib/mock/visitorsStore";
+import { localDate } from "@/lib/utils/locale";
 import type { VisitorInvitation } from "@/types";
-
-function formatCurrency(amount: number): string {
-  return `R${amount.toLocaleString("en-ZA")}`;
-}
-
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function activityLine(invitation: VisitorInvitation): {
-  time: string;
-  text: string;
-} {
-  if (invitation.checkedOutAt) {
-    return {
-      time: invitation.checkedOutAt,
-      text: `${invitation.visitorName} checked out`,
-    };
-  }
-  if (invitation.checkedInAt) {
-    return {
-      time: invitation.checkedInAt,
-      text: `${invitation.visitorName} checked in`,
-    };
-  }
+function activity(i: VisitorInvitation) {
   return {
-    time: invitation.createdAt,
+    time: i.checkedOutAt || i.checkedInAt || i.createdAt,
     text:
-      invitation.status === "cancelled"
-        ? `${invitation.visitorName}'s invitation was cancelled`
-        : `${invitation.visitorName} was invited`,
+      i.visitorName +
+      (i.checkedOutAt
+        ? " checked out"
+        : i.checkedInAt
+          ? " checked in"
+          : i.status === "cancelled"
+            ? " cancelled their visit"
+            : " was invited"),
+    property: i.propertyName,
   };
 }
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export default function ManagerDashboardPage() {
+  const properties = useDemoProperties();
   const [invitations, setInvitations] = useState<VisitorInvitation[]>([]);
-
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of demo visitors from localStorage on mount
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initialise the demo visitor store
     setInvitations(getInvitations());
   }, []);
-
-  const allUnits = SAMPLE_PROPERTIES.flatMap((property) => property.units);
-  const occupiedUnits = allUnits.filter((unit) => unit.status === "occupied");
-  const outstandingUnits = occupiedUnits.filter((unit) => !unit.rentPaid);
-  const outstandingTotal = outstandingUnits.reduce(
-    (sum, unit) => sum + (unit.outstandingAmount ?? 0),
-    0
-  );
-
-  const today = todayStr();
-  const totalToday = invitations.filter((i) => i.visitDate === today).length;
-  const currentlyInside = invitations.filter(
-    (i) => getDisplayStatus(i) === "checked_in"
+  const units = properties.flatMap((p) => p.units);
+  const occupied = units.filter((u) => u.status === "occupied");
+  const outstanding = occupied.filter((u) => !u.rentPaid);
+  const total = outstanding.reduce((n, u) => n + (u.outstandingAmount || 0), 0);
+  const today = localDate();
+  const visitors = invitations.filter((i) => i.visitDate === today).length;
+  const inside = invitations.filter(
+    (i) => getDisplayStatus(i) === "checked_in",
   ).length;
-  const checkedOutToday = invitations.filter(
-    (i) =>
-      i.status === "checked_out" && i.checkedOutAt?.slice(0, 10) === today
+  const pending = invitations.filter(
+    (i) => getDisplayStatus(i) === "upcoming",
   ).length;
-  const pendingUpcoming = invitations.filter(
-    (i) => getDisplayStatus(i) === "upcoming"
-  ).length;
-
-  const recentActivity = [...invitations]
-    .map(activityLine)
-    .sort((a, b) => (a.time < b.time ? 1 : -1))
+  const recent = [...invitations]
+    .map(activity)
+    .sort((a, b) => b.time.localeCompare(a.time))
     .slice(0, 5);
-
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="dashboard-welcome">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">
-            Property Manager Dashboard
-          </h1>
-          <p className="text-sm text-slate-500">
-            An overview of visitor activity and rent across your properties.
+          <p className="eyebrow">YOUR COMMUNITY AT A GLANCE</p>
+          <h1>A little clarity for your day.</h1>
+          <p>
+            Welcome back. Here’s what’s happening across your demo portfolio.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <LogReportButton role="manager" />
-          <Link href="/dashboard/manager/properties">
-            <Button variant="secondary">View Properties</Button>
+          <Link
+            href="/dashboard/manager/tenants-staff"
+            className="link-button dark"
+          >
+            Manage residents <ArrowUpRight size={15} />
           </Link>
         </div>
       </div>
-
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-          Visitors
-        </p>
-        <Link
-          href="/dashboard/manager/visitors"
-          className="text-sm font-medium text-blue-600 hover:text-blue-700"
-        >
-          View all visitors →
-        </Link>
+      <div className="mb-5 flex items-center justify-between">
+        <span className="text-xs font-medium text-slate-600">
+          Visitor overview
+        </span>
+        <span className="text-[10px] text-slate-500">Today · South Africa</span>
       </div>
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
-          title="Total Visitors Today"
-          value={String(totalToday)}
+          title="Expected today"
+          value={String(visitors)}
           icon={Users}
+          hint="Visitor invitations for today"
         />
         <StatCard
-          title="Currently Inside"
-          value={String(currentlyInside)}
+          title="Currently inside"
+          value={String(inside)}
           icon={LogIn}
+          hint="Guests checked in"
         />
         <StatCard
-          title="Checked Out Today"
-          value={String(checkedOutToday)}
-          icon={LogOut}
-        />
-        <StatCard
-          title="Pending / Upcoming"
-          value={String(pendingUpcoming)}
+          title="Upcoming visits"
+          value={String(pending)}
           icon={Clock}
+          hint="Invitations awaiting arrival"
+        />
+        <StatCard
+          title="Portfolio occupancy"
+          value={Math.round((occupied.length / units.length) * 100) + "%"}
+          icon={Building2}
+          hint={occupied.length + " of " + units.length + " units occupied"}
         />
       </div>
-
-      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
-        Recent Activity
-      </p>
-      <div className="mb-8 rounded-xl border border-slate-200 bg-white p-5">
-        {recentActivity.length === 0 ? (
-          <p className="text-sm text-slate-500">No visitor activity yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {recentActivity.map((entry, i) => (
-              <li key={i} className="flex justify-between text-sm">
-                <span className="text-slate-700">{entry.text}</span>
-                <span className="text-slate-400">
-                  {formatTime(entry.time)}
+      <div className="dashboard-grid">
+        <section className="dashboard-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>The latest in your community</h2>
+              <p>Recent visitor activity</p>
+            </div>
+            <Link href="/dashboard/manager/visitors">
+              View all <ArrowUpRight size={13} />
+            </Link>
+          </div>
+          {recent.length ? (
+            recent.map((entry, i) => (
+              <div className="activity-row" key={entry.text + entry.time}>
+                <span
+                  className="avatar"
+                  style={{ background: i % 2 ? "#f0eddf" : "#eaf0e1" }}
+                >
+                  {entry.text
+                    .split(" ")
+                    .slice(0, 2)
+                    .map((x) => x[0])
+                    .join("")}
                 </span>
-              </li>
-            ))}
-          </ul>
-        )}
+                <div>
+                  <strong>{entry.text}</strong>
+                  <small>{entry.property}</small>
+                </div>
+                <time dateTime={entry.time}>
+                  {new Date(entry.time).toLocaleString("en-ZA", {
+                    timeZone: "Africa/Johannesburg",
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </time>
+              </div>
+            ))
+          ) : (
+            <p className="p-6 text-sm text-slate-500">
+              No activity yet. New visitor invitations will appear here.
+            </p>
+          )}
+        </section>
+        <section className="dashboard-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Your properties</h2>
+              <p>{properties.length} demo properties, one clear view</p>
+            </div>
+            <Link href="/dashboard/manager/properties">
+              View all <ArrowUpRight size={13} />
+            </Link>
+          </div>
+          {properties.map((p) => (
+            <Link
+              href={"/dashboard/manager/properties/" + p.id}
+              className="property-mini"
+              key={p.id}
+            >
+              <Image
+                src={
+                  p.propertyType === "apartment"
+                    ? "/brand/courtyard.webp"
+                    : "/brand/residence.webp"
+                }
+                alt="Illustrative property exterior"
+                width={57}
+                height={63}
+              />
+              <div className="min-w-0 flex-1">
+                <strong>{p.name}</strong>
+                <small>
+                  {p.units.filter((u) => u.status === "occupied").length} /{" "}
+                  {p.units.length} units occupied
+                </small>
+                <div className="occupancy-track">
+                  <span
+                    style={{
+                      width:
+                        (p.units.filter((u) => u.status === "occupied").length /
+                          p.units.length) *
+                          100 +
+                        "%",
+                    }}
+                  />
+                </div>
+              </div>
+              <ArrowUpRight size={14} />
+            </Link>
+          ))}
+        </section>
       </div>
-
-      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
-        Rent (preview data)
-      </p>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <StatCard
-          title="Rent Paid Up To Date"
-          value={`${occupiedUnits.length - outstandingUnits.length} of ${occupiedUnits.length} tenants`}
-          hint="Based on sample property data"
-          icon={Wallet}
-        />
-        <StatCard
-          title="Rent Outstanding"
-          value={formatCurrency(outstandingTotal)}
-          hint={`${outstandingUnits.length} tenant${outstandingUnits.length === 1 ? "" : "s"} behind on payment`}
-          icon={AlertCircle}
-        />
+      <div className="dashboard-grid">
+        <section className="dashboard-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Rent, without the guesswork</h2>
+              <p>Sample balances across the demo portfolio</p>
+            </div>
+            <Wallet size={17} className="text-slate-400" />
+          </div>
+          <div className="grid grid-cols-2 gap-5 p-6">
+            <div>
+              <p className="text-[10px] text-slate-500">Residents up to date</p>
+              <p className="stat-value mt-3">
+                {occupied.length - outstanding.length}
+                <span className="text-sm font-normal text-slate-400">
+                  {" "}
+                  / {occupied.length}
+                </span>
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500">Outstanding rent</p>
+              <p className="stat-value mt-3">
+                R {total.toLocaleString("en-ZA")}
+              </p>
+              <p className="stat-hint">
+                {outstanding.length} residents with outstanding balances
+              </p>
+            </div>
+          </div>
+        </section>
+        <section className="dashboard-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Make the next step simple</h2>
+              <p>Quick links for everyday tasks</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-4 p-6 text-xs text-slate-600">
+            <Link
+              className="flex justify-between"
+              href="/dashboard/manager/visitors"
+            >
+              Review visitor invitations <ArrowRight size={15} />
+            </Link>
+            <Link
+              className="flex justify-between"
+              href="/dashboard/manager/reports"
+            >
+              Follow up on requests <ArrowRight size={15} />
+            </Link>
+            <Link
+              className="flex justify-between"
+              href="/dashboard/manager/billing"
+            >
+              Manage your organisation’s plan <ArrowRight size={15} />
+            </Link>
+          </div>
+        </section>
+      </div>
+      <div className="dashboard-banner">
+        <div>
+          <strong>Better spaces. Happier communities.</strong>
+          <p>Keep the people and places you manage connected with SangoPass.</p>
+        </div>
+        <Link href="/dashboard/manager/properties">
+          Explore your properties <ArrowUpRight size={16} />
+        </Link>
       </div>
     </div>
   );

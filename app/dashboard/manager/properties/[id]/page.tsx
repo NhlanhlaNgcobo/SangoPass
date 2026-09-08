@@ -33,9 +33,8 @@ export default async function PropertyDetailPage({
         <p className="text-sm text-slate-500">{property.address}</p>
       </div>
 
-      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-        Preview data — changes here are for demonstration only and are not
-        saved yet.
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">
+        Demo workspace · Rent and frequency changes are saved in this browser.
       </div>
 
       <UnitsTable units={property.units} />

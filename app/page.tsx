@@ -1,268 +1,281 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
-  ShieldCheck,
+  ArrowUpRight,
+  ArrowRight,
+  Check,
   QrCode,
-  ClipboardList,
-  GraduationCap,
+  ShieldCheck,
   Building2,
-  ScanLine,
+  GraduationCap,
+  Users,
   Wallet,
-  MessageSquarePlus,
-  BarChart3,
-  UserPlus,
-  Send,
-  DoorOpen,
-  FileCheck,
+  Wrench,
+  ScanLine,
 } from "lucide-react";
-import Button from "@/components/ui/Button";
-
-const AUDIENCES = [
+import PricingCards from "@/components/marketing/PricingCards";
+import Brand from "@/components/ui/Brand";
+const features = [
   {
-    icon: GraduationCap,
-    title: "Student Accommodations",
-    description:
-      "Manage hundreds of residents and their visitors without a paper sign-in book at reception. Reduce unauthorized access and give parents and management peace of mind.",
+    icon: QrCode,
+    title: "A warm welcome. A smarter pass.",
+    text: "Invite guests in a few taps. Give each visitor a unique QR pass and keep arrivals organised.",
   },
   {
     icon: Building2,
-    title: "Apartments & Complexes",
-    description:
-      "Give residents an easy way to invite guests, deliveries, and contractors — and give security a fast, reliable way to verify who's allowed in.",
-  },
-];
-
-const HOW_IT_WORKS = [
-  {
-    icon: UserPlus,
-    title: "Tenant invites a visitor",
-    description: "A few taps — name, date, and arrival time.",
-  },
-  {
-    icon: Send,
-    title: "Visitor gets a digital pass",
-    description: "Sent straight to their email with a QR code.",
-  },
-  {
-    icon: DoorOpen,
-    title: "Visitor arrives",
-    description: "They show the pass at reception or the gate.",
-  },
-  {
-    icon: ScanLine,
-    title: "Security scans & checks in",
-    description: "One scan verifies the invitation instantly.",
-  },
-  {
-    icon: FileCheck,
-    title: "Manager gets the full record",
-    description: "Every arrival and departure, logged automatically.",
-  },
-];
-
-const FEATURES = [
-  {
-    icon: ClipboardList,
-    title: "Invite visitors",
-    description:
-      "Tenants create a visitor invitation in seconds and send a digital pass automatically.",
-  },
-  {
-    icon: QrCode,
-    title: "Digital QR passes",
-    description:
-      "Every invitation gets a secure, unique QR code — no shared links or guesswork.",
-  },
-  {
-    icon: ScanLine,
-    title: "Scan at the gate",
-    description:
-      "Security scans a QR code or searches manually to verify and check visitors in.",
+    title: "Every property, in perspective.",
+    text: "Bring your properties, units and residents together in a workspace your team can navigate with ease.",
   },
   {
     icon: Wallet,
-    title: "Rent & payments",
-    description:
-      "Track rent paid and outstanding per tenant, with monthly, annual, or per-semester billing.",
-  },
-  {
-    icon: MessageSquarePlus,
-    title: "Maintenance & complaints",
-    description:
-      "Tenants and staff can log complaints, maintenance issues, or suggestions straight to management.",
-  },
-  {
-    icon: BarChart3,
-    title: "Full visibility",
-    description:
-      "Property managers get a complete, accountable record of every visitor and every property.",
+    title: "Less chasing. More clarity.",
+    text: "See paid and outstanding rent, track maintenance requests and keep daily operations moving.",
   },
 ];
-
+const people = [
+  {
+    icon: Users,
+    title: "Residents",
+    text: "Invite visitors and raise requests.",
+  },
+  {
+    icon: ScanLine,
+    title: "Security teams",
+    text: "Find passes and manage arrivals.",
+  },
+  {
+    icon: Building2,
+    title: "Property managers",
+    text: "Oversee properties, rent and reports.",
+  },
+  {
+    icon: Wrench,
+    title: "Platform admins",
+    text: "Manage organisations and plans.",
+  },
+];
 export default function LandingPage() {
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-blue-600" />
-            <span className="text-lg font-semibold tracking-tight">
-              GatePass
+    <div className="marketing">
+      <header className="marketing-header">
+        <Link href="/" aria-label="SangoPass home">
+          <Brand />
+        </Link>
+        <nav aria-label="Main navigation">
+          <a href="#platform">The platform</a>
+          <a href="#communities">Who it’s for</a>
+          <a href="#how-it-works">How it works</a>
+          <Link href="/pricing">Pricing</Link>
+        </nav>
+        <Link className="link-button dark" href="/login">
+          Explore the demo <ArrowUpRight size={16} />
+        </Link>
+      </header>
+      <main id="main-content">
+        <section className="hero marketing-width">
+          <div className="hero-copy">
+            <div className="eyebrow">
+              <span className="live-dot" /> CONNECTED PROPERTIES. BETTER LIVING.
+            </div>
+            <h1>
+              Great communities
+              <br />
+              start with a<br />
+              <span>better welcome.</span>
+            </h1>
+            <p>
+              Meet SangoPass. Visitor access, residents and property operations,
+              beautifully connected in one simple workspace.
+            </p>
+            <div className="hero-actions">
+              <Link href="/login" className="link-button dark">
+                Find your flow <ArrowUpRight size={18} />
+              </Link>
+              <a href="#how-it-works" className="text-link">
+                See how it works <ArrowRight size={16} />
+              </a>
+            </div>
+            <div className="hero-note">
+              <ShieldCheck size={17} /> Built for South African residential
+              communities
+            </div>
+          </div>
+          <div className="hero-visual">
+            <Image
+              src="/brand/community-sa.webp"
+              alt="Neighbours chatting in a Cape Town courtyard with Table Mountain beyond"
+              fill
+              sizes="(max-width: 800px) 100vw, 50vw"
+              preload
+              className="object-cover"
+            />
+            <div className="image-label">
+              <span className="live-dot" /> A little more peace of mind.
+            </div>
+            <div className="arrival-card">
+              <span className="arrival-icon">
+                <Check size={20} />
+              </span>
+              <div>
+                <strong>You’re on the list.</strong>
+                <span>A seamless arrival starts here.</span>
+              </div>
+              <QrCode size={34} />
+            </div>
+            <span className="visual-caption">
+              Many backgrounds. One community.
             </span>
           </div>
-          <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 sm:flex">
-            <a href="#who-its-for" className="hover:text-slate-900">
-              Who it&apos;s for
-            </a>
-            <a href="#how-it-works" className="hover:text-slate-900">
-              How it works
-            </a>
-            <a href="#features" className="hover:text-slate-900">
-              Features
-            </a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost">Log in</Button>
-            </Link>
-            <Link href="/login">
-              <Button>Get started</Button>
-            </Link>
+        </section>
+        <div className="audience-strip marketing-width">
+          <span>
+            MADE FOR THE WAY
+            <br />
+            YOUR COMMUNITY LIVES
+          </span>
+          <div>
+            <GraduationCap /> Student living
+          </div>
+          <div>
+            <Building2 /> Apartment communities
+          </div>
+          <div>
+            <ShieldCheck /> Residential estates
           </div>
         </div>
-      </header>
-
-      <main className="flex-1">
-        {/* Hero */}
-        <section className="mx-auto max-w-3xl px-6 py-24 text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-            Know who comes and goes.
-          </h1>
-          <p className="mt-4 text-lg text-slate-600">
-            GatePass replaces paper visitor books, WhatsApp messages, and
-            spreadsheets with a simple digital visitor management system for
-            student accommodations, apartments, and residential complexes.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/login">
-              <Button className="px-6 py-3 text-base">Get started</Button>
-            </Link>
-            <a href="#how-it-works">
-              <Button variant="secondary" className="px-6 py-3 text-base">
-                See how it works
-              </Button>
-            </a>
-          </div>
-        </section>
-
-        {/* Who it's for */}
-        <section id="who-its-for" className="border-t border-slate-200 bg-white">
-          <div className="mx-auto max-w-6xl px-6 py-16">
-            <h2 className="text-center text-2xl font-semibold text-slate-900">
-              Built for every kind of residence
-            </h2>
-            <p className="mx-auto mt-2 max-w-xl text-center text-sm text-slate-500">
-              Whether it&apos;s a 500-bed student residence or a small block
-              of flats, GatePass works the same way.
-            </p>
-            <div className="mt-10 grid gap-6 sm:grid-cols-2">
-              {AUDIENCES.map(({ icon: Icon, title, description }) => (
-                <div
-                  key={title}
-                  className="rounded-xl border border-slate-200 p-6"
-                >
-                  <span className="mb-3 inline-flex rounded-lg bg-blue-50 p-2.5 text-blue-600">
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <h3 className="font-semibold text-slate-900">{title}</h3>
-                  <p className="mt-2 text-sm text-slate-600">{description}</p>
-                </div>
-              ))}
+        <section id="platform" className="marketing-width marketing-section">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">ONE WORKSPACE. EVERYDAY CLARITY.</p>
+              <h2>
+                Less admin.
+                <br />
+                More room for people.
+              </h2>
             </div>
+            <p>
+              From the first invitation to the last check-out, make the everyday
+              feel effortless for residents, security and management.
+            </p>
+          </div>
+          <div className="feature-grid">
+            {features.map(({ icon: Icon, title, text }, i) => (
+              <article key={title}>
+                <div className="feature-top">
+                  <span className="feature-icon">
+                    <Icon size={23} />
+                  </span>
+                  <span>0{i + 1}</span>
+                </div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </article>
+            ))}
           </div>
         </section>
-
-        {/* How it works */}
-        <section id="how-it-works" className="border-t border-slate-200 bg-slate-50">
-          <div className="mx-auto max-w-6xl px-6 py-16">
-            <h2 className="text-center text-2xl font-semibold text-slate-900">
-              How it works
+        <section id="communities" className="community-section marketing-width">
+          <div className="community-image">
+            <Image
+              src="/brand/student-life-sa.webp"
+              alt="A diverse group of South African university friends outside their student residence"
+              fill
+              sizes="(max-width: 800px) 100vw, 50vw"
+              className="object-cover"
+            />
+          </div>
+          <div className="community-copy">
+            <p className="eyebrow">BUILT AROUND YOUR COMMUNITY</p>
+            <h2>
+              One platform.
+              <br />
+              Everyone at home.
             </h2>
-            <p className="mx-auto mt-2 max-w-xl text-center text-sm text-slate-500">
-              From invitation to check-out, in five simple steps.
+            <p>
+              A focused experience for every role, with a clear view of what
+              matters to their day.
             </p>
-            <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
-              {HOW_IT_WORKS.map(({ icon: Icon, title, description }, i) => (
-                <div key={title} className="flex flex-col items-start gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
-                      {i + 1}
-                    </span>
-                    <Icon className="h-4 w-4 text-blue-600" />
+            <ul>
+              {people.map(({ icon: Icon, title, text }) => (
+                <li key={title}>
+                  <Icon size={20} />
+                  <div>
+                    <strong>{title}</strong>
+                    <span>{text}</span>
                   </div>
-                  <h3 className="font-semibold text-slate-900">{title}</h3>
-                  <p className="text-sm text-slate-600">{description}</p>
-                </div>
+                  <Check size={17} />
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         </section>
-
-        {/* Features */}
-        <section id="features" className="border-t border-slate-200 bg-white">
-          <div className="mx-auto max-w-6xl px-6 py-16">
-            <h2 className="text-center text-2xl font-semibold text-slate-900">
-              Everything you need to run your property
-            </h2>
-            <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {FEATURES.map(({ icon: Icon, title, description }) => (
-                <div key={title} className="flex flex-col items-start gap-3">
-                  <span className="rounded-lg bg-blue-50 p-2.5 text-blue-600">
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <h3 className="font-semibold text-slate-900">{title}</h3>
-                  <p className="text-sm text-slate-600">{description}</p>
-                </div>
-              ))}
-            </div>
+        <section
+          id="how-it-works"
+          className="marketing-width marketing-section"
+        >
+          <p className="eyebrow">A SIMPLER WAY IN</p>
+          <h2>From “come over” to “welcome in”.</h2>
+          <div className="steps-grid">
+            {[
+              [
+                "01",
+                "Invite",
+                "A resident adds their visitor and visit details.",
+              ],
+              [
+                "02",
+                "Share",
+                "Open the unique digital pass, ready to share with a guest.",
+              ],
+              [
+                "03",
+                "Welcome",
+                "Security verifies the invitation and records arrival.",
+              ],
+              [
+                "04",
+                "Stay informed",
+                "Management sees the visitor record in one place.",
+              ],
+            ].map(([n, title, text]) => (
+              <article key={n}>
+                <span>{n}</span>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </article>
+            ))}
           </div>
         </section>
-
-        {/* Closing CTA */}
-        <section className="border-t border-slate-200 bg-blue-600">
-          <div className="mx-auto max-w-3xl px-6 py-16 text-center">
-            <h2 className="text-2xl font-semibold text-white">
-              Ready to see GatePass in action?
+        <section id="pricing" className="marketing-width marketing-section">
+          <p className="eyebrow">SPACE TO GROW</p>
+          <h2>Simple plans. Stronger communities.</h2>
+          <p className="mb-8 text-sm text-slate-500">
+            Monthly pricing in rand, shaped around your property portfolio.
+          </p>
+          <PricingCards />
+        </section>
+        <section className="closing-cta marketing-width">
+          <div>
+            <p className="eyebrow">WELCOME TO A BETTER EVERYDAY</p>
+            <h2>
+              Your community.
+              <br />
+              Beautifully connected.
             </h2>
-            <p className="mt-2 text-blue-100">
-              Get started in minutes — no paper, no spreadsheets.
-            </p>
-            <div className="mt-6">
-              <Link href="/login">
-                <Button
-                  variant="secondary"
-                  className="border-transparent bg-white px-6 py-3 text-base text-blue-700 hover:bg-blue-50"
-                >
-                  Get started
-                </Button>
-              </Link>
-            </div>
+          </div>
+          <div>
+            <Link href="/login" className="link-button lime">
+              Step inside SangoPass <ArrowUpRight size={18} />
+            </Link>
+            <p>Explore all four roles in the interactive demo.</p>
           </div>
         </section>
       </main>
-
-      <footer className="border-t border-slate-200 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-6 text-center sm:flex-row sm:justify-between sm:text-left">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-blue-600" />
-            <span className="font-semibold text-slate-900">GatePass</span>
-            <span className="text-sm text-slate-500">
-              — Know who comes and goes.
-            </span>
-          </div>
-          <p className="text-sm text-slate-500">
-            &copy; {new Date().getFullYear()} GatePass
-          </p>
-        </div>
+      <footer className="marketing-footer marketing-width">
+        <Link href="/">
+          <Brand />
+        </Link>
+        <p>Thoughtfully built for the places we call home.</p>
+        <span>© {new Date().getFullYear()} SangoPass</span>
       </footer>
     </div>
   );

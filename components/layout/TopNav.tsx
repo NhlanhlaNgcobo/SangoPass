@@ -1,45 +1,56 @@
 "use client";
-
-import { useRouter } from "next/navigation";
-import { Menu, LogOut } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { Menu, LogOut, ChevronRight, Building2 } from "lucide-react";
 import { ROLE_LABELS, clearDemoRole } from "@/lib/utils/demoAuth";
 import type { Role } from "@/types";
-
-interface TopNavProps {
+export default function TopNav({
+  role,
+  onMenuClick,
+}: {
   role: Role;
   onMenuClick: () => void;
-}
-
-export default function TopNav({ role, onMenuClick }: TopNavProps) {
+}) {
   const router = useRouter();
-
-  function handleLogout() {
-    clearDemoRole();
-    router.push("/login");
-  }
-
+  const pathname = usePathname();
+  const segment = pathname.split("/")[3];
+  const names: Record<string, string> = {
+    properties: "Properties",
+    "tenants-staff": "Residents & staff",
+    visitors: "Visitors",
+    billing: "Billing & plan",
+    reports: "Reports & requests",
+    organizations: "Organisations",
+    activity: "Platform activity",
+  };
   return (
-    <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
-      <div className="flex items-center gap-3">
+    <header className="app-topnav">
+      <div className="topnav-context">
         <button
           onClick={onMenuClick}
-          className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
+          className="p-1 lg:hidden"
           aria-label="Open menu"
         >
-          <Menu className="h-5 w-5" />
+          <Menu size={20} />
         </button>
-        <span className="text-sm font-medium text-slate-500">
-          {ROLE_LABELS[role]} Dashboard
-        </span>
+        <Building2 size={16} className="hidden sm:block" />
+        <span>{ROLE_LABELS[role]}</span>
+        <ChevronRight size={13} className="hidden sm:block" />
+        <strong>{segment ? names[segment] || "Workspace" : "Overview"}</strong>
       </div>
-
-      <button
-        onClick={handleLogout}
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-      >
-        <LogOut className="h-4 w-4" />
-        <span className="hidden sm:inline">Log out</span>
-      </button>
+      <div className="topnav-actions">
+        <span className="demo-chip">Demo workspace</span>
+        <button
+          onClick={() => {
+            clearDemoRole();
+            router.push("/login");
+          }}
+          className="flex items-center gap-2 rounded-lg p-2 text-xs text-slate-500 hover:bg-slate-100"
+          aria-label="Log out"
+        >
+          <LogOut size={16} />
+          <span className="hidden sm:inline">Log out</span>
+        </button>
+      </div>
     </header>
   );
 }

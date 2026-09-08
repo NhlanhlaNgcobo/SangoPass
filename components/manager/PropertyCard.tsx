@@ -1,9 +1,11 @@
+"use client";
 import Link from "next/link";
-import { Building2, DoorOpen } from "lucide-react";
+import { useDemoProperties } from "@/lib/mock/propertiesStore";
+import Image from "next/image";
+import { ArrowUpRight, DoorOpen } from "lucide-react";
 import type { PropertySummary } from "@/types";
-
 export default function PropertyCard({
-  property,
+  property: initialProperty,
   hrefBase = "/dashboard/manager/properties",
   showOrganization = false,
 }: {
@@ -11,31 +13,44 @@ export default function PropertyCard({
   hrefBase?: string;
   showOrganization?: boolean;
 }) {
-  const vacantCount = property.units.filter((u) => u.status === "vacant").length;
-
+  const properties = useDemoProperties();
+  const property =
+    properties.find((item) => item.id === initialProperty.id) ??
+    initialProperty;
+  const vacant = property.units.filter((u) => u.status === "vacant").length;
   return (
-    <Link
-      href={`${hrefBase}/${property.id}`}
-      className="block rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-blue-300 hover:bg-blue-50/40"
-    >
-      <div className="mb-3 flex items-center gap-2">
-        <span className="rounded-lg bg-blue-50 p-2 text-blue-600">
-          <Building2 className="h-4 w-4" />
+    <Link href={hrefBase + "/" + property.id} className="property-card">
+      <div className="property-card-image">
+        <Image
+          src={
+            property.propertyType === "student_accommodation"
+              ? "/brand/residence.webp"
+              : "/brand/courtyard.webp"
+          }
+          alt="Illustrative residential property exterior"
+          fill
+          sizes="(max-width:640px) 100vw, 33vw"
+          className="object-cover"
+        />
+        <span>
+          {property.propertyType === "student_accommodation"
+            ? "Student living"
+            : "Apartments"}{" "}
+          · Demo property
         </span>
-        <h3 className="font-semibold text-slate-900">{property.name}</h3>
       </div>
-      <p className="text-sm text-slate-500">{property.address}</p>
-      {showOrganization && (
-        <p className="mt-1 text-xs text-slate-400">
-          {property.organizationName}
-        </p>
-      )}
-      <div className="mt-4 flex items-center gap-4 text-sm text-slate-600">
-        <span>{property.units.length} units</span>
-        <span className="flex items-center gap-1">
-          <DoorOpen className="h-3.5 w-3.5" />
-          {vacantCount} vacant
-        </span>
+      <div className="property-card-body">
+        <h3>{property.name}</h3>
+        <p>{property.address}</p>
+        {showOrganization && <p>{property.organizationName}</p>}
+        <div className="property-card-footer">
+          <span>{property.units.length} units</span>
+          <span>
+            <DoorOpen size={13} />
+            {vacant} vacant
+          </span>
+          <ArrowUpRight size={16} />
+        </div>
       </div>
     </Link>
   );

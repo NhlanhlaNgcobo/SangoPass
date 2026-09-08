@@ -88,10 +88,10 @@ export function addReport(input: {
 
 export function updateReportStatus(
   id: string,
-  status: ReportStatus
+  status: ReportStatus,
 ): ReportEntry[] {
   const reports = readStore().map((report) =>
-    report.id === id ? { ...report, status } : report
+    report.id === id ? { ...report, status } : report,
   );
   writeStore(reports);
   return reports;

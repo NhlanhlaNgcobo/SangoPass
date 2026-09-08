@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SangoPass
 
-## Getting Started
+A South African residential property SaaS interface for visitor access, residents, rent and maintenance. Rebranded from GatePass with a forest, ivory and lime identity and original imagery representing South Africa's diverse communities.
 
-First, run the development server:
+## Run locally
 
-```bash
+Use Node.js 24 and npm.
+
+~~~sh
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+~~~
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. On Windows PowerShell, use npm.cmd if npm.ps1 is blocked by your execution policy.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Current application
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This repository is an interactive, browser-persisted demo. It does not yet include production authentication, server-side organisation isolation, a shared database, notification delivery or payment processing. Role selection is a preview control, not an authentication boundary. Demo visitors are shared across the roles in one browser; they are not synced to another device. Do not use real resident information in this demo.
 
-## Learn More
+- Public homepage and pricing at /pricing.
+- Resident: invite a visitor, view/download a branded QR pass, copy visit details, cancel an invitation and submit a request.
+- Security: scan with a camera or upload a QR image, verify the pass token, manually search, check in during the scheduled SAST window and check out.
+- Manager: review visitors, assign a resident to an existing vacant unit, track occupancy, save rent/frequency updates, resolve reports and change demo plans.
+- Platform admin: browse organisations, properties, plans and platform activity.
+- Camera scanning requires HTTPS or localhost and user camera permission. Image upload and manual search are available as alternatives. QR decoding uses jsQR: https://github.com/cozmo/jsQR.
+- Legacy GatePass storage keys and QR payloads remain supported so the rebrand does not discard existing demo records.
 
-To learn more about Next.js, take a look at the following resources:
+## Pricing
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The existing pricing strategy is retained: Starter R499/month (25 units, 1 manager), Growth R1,299/month (150 units, 5 managers), Premium R2,499/month (300 units, 10 managers), and custom Portfolio pricing. Prices are indicative; tax treatment and commercial terms must be agreed before enabling checkout. Demo plan changes never collect payment.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Verification
 
-## Deploy on Vercel
+~~~sh
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm start
+~~~
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Integration tests cover a resident invitation through rendered QR encoding/decoding, security check-in/out and manager visibility, tampered tokens, legacy passes, invalid state transitions, South African dates, saved plans, rent, resident assignments and report resolution. They run against in-memory browser storage; they are not browser automation or production tenant-isolation tests. GitHub Actions runs lint, tests and build.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Browser QA still needs to be performed on desktop/mobile with a connected browser: landing/pricing navigation; all four roles; modal focus/Escape; downloaded pass and uploaded QR; permission denied/camera cleanup; resident assignment; rent/plan persistence; report updates. No connected browser was available during this build.
+
+## Live SaaS work remaining
+
+Connect the chosen authentication/database provider and payment merchant account before a production launch. The initial code comments proposed Supabase, but no project configuration or credentials are present in this repository. Production requires authenticated memberships and property assignments, enforced organisation-level data access, persisted records shared between devices, a payment checkout and verified webhook integration, and real delivery of notifications. These are separate from the completed brand and demo workflows.
+
+Brand files, asset paths and exact image prompts are documented in [docs/BRAND.md](docs/BRAND.md). PNG source images are retained beside WebP delivery assets in public/brand.

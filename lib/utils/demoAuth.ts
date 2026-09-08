@@ -10,10 +10,10 @@ const STORAGE_KEY = "gatepass_demo_role";
 const ROLES: Role[] = ["tenant", "security", "manager", "admin"];
 
 export const ROLE_LABELS: Record<Role, string> = {
-  tenant: "Tenant",
+  tenant: "Resident",
   security: "Security",
   manager: "Property Manager",
-  admin: "Super Admin",
+  admin: "Platform Admin",
 };
 
 export function getDashboardPath(role: Role): string {

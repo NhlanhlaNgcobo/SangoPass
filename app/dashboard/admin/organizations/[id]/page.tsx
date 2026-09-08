@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import Badge from "@/components/ui/Badge";
+import OrganizationPlanBadge from "@/components/admin/OrganizationPlanBadge";
 import PropertyCard from "@/components/manager/PropertyCard";
 import { SAMPLE_ORGANIZATIONS } from "@/lib/mock/sampleOrganizations";
 import { SAMPLE_PROPERTIES } from "@/lib/mock/sampleProperties";
-import { getPlan } from "@/lib/mock/plans";
 
 export default async function OrganizationDetailPage({
   params,
@@ -20,7 +19,7 @@ export default async function OrganizationDetailPage({
   }
 
   const properties = SAMPLE_PROPERTIES.filter(
-    (p) => p.organizationName === organization.name
+    (p) => p.organizationName === organization.name,
   );
 
   return (
@@ -42,11 +41,11 @@ export default async function OrganizationDetailPage({
             {properties.length} propert{properties.length === 1 ? "y" : "ies"}
           </p>
         </div>
-        <Badge color="blue">{getPlan(organization.plan).name} plan</Badge>
+        <OrganizationPlanBadge organization={organization} />
       </div>
 
-      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-        Preview data — not yet connected to a real database.
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">
+        Demo workspace · Explore with sample data.
       </div>
 
       {properties.length === 0 ? (

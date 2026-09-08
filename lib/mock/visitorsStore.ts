@@ -1,3 +1,4 @@
+import { localDate, localTime } from "@/lib/utils/locale";
 import type { VisitorInvitation, VisitorInvitationStatus } from "@/types";
 
 /**
@@ -17,7 +18,7 @@ export const DEMO_TENANT = {
 };
 
 function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return localDate(date);
 }
 
 function daysAgo(n: number): string {
@@ -34,7 +35,7 @@ function getSeedInvitations(): VisitorInvitation[] {
   return [
     {
       id: "seed-v1",
-      referenceNumber: "GP-482913",
+      referenceNumber: "SP-482913",
       secureToken: "seed-token-1",
       visitorName: "Karabo S.",
       visitorPhone: "082 123 4567",
@@ -47,7 +48,7 @@ function getSeedInvitations(): VisitorInvitation[] {
     },
     {
       id: "seed-v2",
-      referenceNumber: "GP-118820",
+      referenceNumber: "SP-118820",
       secureToken: "seed-token-2",
       visitorName: "Nomvula T.",
       visitorPhone: "083 555 1212",
@@ -61,7 +62,7 @@ function getSeedInvitations(): VisitorInvitation[] {
     },
     {
       id: "seed-v3",
-      referenceNumber: "GP-903471",
+      referenceNumber: "SP-903471",
       secureToken: "seed-token-3",
       visitorName: "Sipho D.",
       visitorPhone: "084 222 9911",
@@ -76,7 +77,7 @@ function getSeedInvitations(): VisitorInvitation[] {
     },
     {
       id: "seed-v4",
-      referenceNumber: "GP-660214",
+      referenceNumber: "SP-660214",
       secureToken: "seed-token-4",
       visitorName: "Ayanda P.",
       visitorPhone: "071 888 3344",
@@ -110,7 +111,14 @@ export function getInvitations(): VisitorInvitation[] {
 }
 
 function generateReferenceNumber(): string {
-  return `GP-${Math.floor(100000 + Math.random() * 900000)}`;
+  const references = new Set(
+    readStore().map((invitation) => invitation.referenceNumber),
+  );
+  let reference: string;
+  do {
+    reference = `SP-${Math.floor(100000 + Math.random() * 900000)}`;
+  } while (references.has(reference));
+  return reference;
 }
 
 function generateSecureToken(): string {
@@ -133,8 +141,28 @@ export function addInvitation(input: {
   expectedArrival: string;
   expectedDeparture: string;
 }): VisitorInvitation {
+  if (!input.visitorName.trim() || !input.visitorPhone.trim())
+    throw new Error("Enter the visitor’s name and phone number.");
+  if (!/^\+?[\d\s()-]{7,20}$/.test(input.visitorPhone))
+    throw new Error(
+      "Enter a valid phone number, for example 082 123 4567 or +27 82 123 4567.",
+    );
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(input.visitDate) ||
+    input.visitDate < localDate() ||
+    Number.isNaN(Date.parse(`${input.visitDate}T00:00:00Z`)) ||
+    new Date(`${input.visitDate}T00:00:00Z`).toISOString().slice(0, 10) !==
+      input.visitDate
+  )
+    throw new Error("Choose today or a future visit date.");
+  if (
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.expectedArrival) ||
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.expectedDeparture) ||
+    input.expectedDeparture <= input.expectedArrival
+  )
+    throw new Error("Departure must be later than arrival on the same day.");
   const newInvitation: VisitorInvitation = {
-    id: `visitor-${Date.now()}`,
+    id: `visitor-${crypto.randomUUID()}`,
     referenceNumber: generateReferenceNumber(),
     secureToken: generateSecureToken(),
     status: "upcoming",
@@ -149,7 +177,7 @@ export function cancelInvitation(id: string): VisitorInvitation[] {
   const invitations = readStore().map((invitation) =>
     invitation.id === id && invitation.status === "upcoming"
       ? { ...invitation, status: "cancelled" as VisitorInvitationStatus }
-      : invitation
+      : invitation,
   );
   writeStore(invitations);
   return invitations;
@@ -157,13 +185,13 @@ export function cancelInvitation(id: string): VisitorInvitation[] {
 
 export function checkInInvitation(id: string): VisitorInvitation[] {
   const invitations = readStore().map((invitation) =>
-    invitation.id === id
+    invitation.id === id && canCheckIn(invitation)
       ? {
           ...invitation,
           status: "checked_in" as VisitorInvitationStatus,
           checkedInAt: new Date().toISOString(),
         }
-      : invitation
+      : invitation,
   );
   writeStore(invitations);
   return invitations;
@@ -171,25 +199,39 @@ export function checkInInvitation(id: string): VisitorInvitation[] {
 
 export function checkOutInvitation(id: string): VisitorInvitation[] {
   const invitations = readStore().map((invitation) =>
-    invitation.id === id
+    invitation.id === id && invitation.status === "checked_in"
       ? {
           ...invitation,
           status: "checked_out" as VisitorInvitationStatus,
           checkedOutAt: new Date().toISOString(),
         }
-      : invitation
+      : invitation,
   );
   writeStore(invitations);
   return invitations;
 }
 
 export function getDisplayStatus(
-  invitation: VisitorInvitation
+  invitation: VisitorInvitation,
 ): VisitorInvitationStatus {
-  if (invitation.status === "upcoming" && invitation.visitDate < daysAgo(0)) {
+  if (
+    invitation.status === "upcoming" &&
+    (invitation.visitDate < localDate() ||
+      (invitation.visitDate === localDate() &&
+        invitation.expectedDeparture < localTime()))
+  ) {
     return "expired";
   }
   return invitation.status;
+}
+
+export function canCheckIn(invitation: VisitorInvitation): boolean {
+  return (
+    getDisplayStatus(invitation) === "upcoming" &&
+    invitation.visitDate === localDate() &&
+    invitation.expectedArrival <= localTime() &&
+    invitation.expectedDeparture >= localTime()
+  );
 }
 
 export function searchInvitations(query: string): VisitorInvitation[] {
@@ -200,6 +242,6 @@ export function searchInvitations(query: string): VisitorInvitation[] {
     (invitation) =>
       invitation.visitorName.toLowerCase().includes(q) ||
       invitation.visitorPhone.replace(/\s+/g, "").includes(qDigits) ||
-      invitation.referenceNumber.toLowerCase().includes(q)
+      invitation.referenceNumber.toLowerCase().includes(q),
   );
 }

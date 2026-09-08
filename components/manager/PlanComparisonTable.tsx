@@ -34,7 +34,10 @@ export default function PlanComparisonTable({
           <tr>
             <td className="px-4 py-3 text-slate-500">Price</td>
             {PLANS.map((plan) => (
-              <td key={plan.id} className="px-4 py-3 font-semibold text-slate-900">
+              <td
+                key={plan.id}
+                className="px-4 py-3 font-semibold text-slate-900"
+              >
                 {plan.priceLabel}
               </td>
             ))}
@@ -56,7 +59,9 @@ export default function PlanComparisonTable({
             ))}
           </tr>
           <tr>
-            <td className="px-4 py-3 text-slate-500">Rent &amp; maintenance tracking</td>
+            <td className="px-4 py-3 text-slate-500">
+              Rent &amp; maintenance tracking
+            </td>
             {PLANS.map((plan) => (
               <td key={plan.id} className="px-4 py-3 text-green-700">
                 Included

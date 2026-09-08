@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useDemoProperties, updateDemoUnit } from "@/lib/mock/propertiesStore";
 import Badge from "@/components/ui/Badge";
 import type { RentFrequency, UnitSummary } from "@/types";
 
@@ -15,32 +16,40 @@ function formatCurrency(amount: number): string {
 }
 
 export default function UnitsTable({ units }: { units: UnitSummary[] }) {
-  const [rows, setRows] = useState(units);
-
+  const properties = useDemoProperties();
+  const [error, setError] = useState("");
+  const ids = new Set(units.map((unit) => unit.id));
+  const rows = properties
+    .flatMap((p) => p.units)
+    .filter((unit) => ids.has(unit.id));
   function updateFrequency(id: string, frequency: RentFrequency) {
-    setRows((prev) =>
-      prev.map((unit) =>
-        unit.id === id ? { ...unit, rentFrequency: frequency } : unit
-      )
-    );
+    try {
+      updateDemoUnit(id, { rentFrequency: frequency });
+      setError("");
+    } catch {
+      setError("Could not save your change. Please try again.");
+    }
   }
-
   function toggleRentStatus(id: string) {
-    setRows((prev) =>
-      prev.map((unit) =>
-        unit.id === id
-          ? {
-              ...unit,
-              rentPaid: !unit.rentPaid,
-              outstandingAmount: unit.rentPaid ? unit.rentAmount : undefined,
-            }
-          : unit
-      )
-    );
+    const unit = rows.find((u) => u.id === id);
+    if (!unit) return;
+    try {
+      updateDemoUnit(id, {
+        rentPaid: !unit.rentPaid,
+        outstandingAmount: unit.rentPaid ? unit.rentAmount : 0,
+      });
+      setError("");
+    } catch {
+      setError("Could not save your change. Please try again.");
+    }
   }
-
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      {error && (
+        <p role="alert" className="p-4 text-sm text-red-600">
+          {error}
+        </p>
+      )}
       <table className="w-full min-w-[640px] text-left text-sm">
         <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
           <tr>
@@ -72,6 +81,7 @@ export default function UnitsTable({ units }: { units: UnitSummary[] }) {
               <td className="px-4 py-3">
                 {unit.status === "occupied" ? (
                   <select
+                    aria-label={`Rent frequency for ${unit.unitNumber}`}
                     value={unit.rentFrequency ?? "monthly"}
                     onChange={(e) =>
                       updateFrequency(unit.id, e.target.value as RentFrequency)
@@ -90,7 +100,10 @@ export default function UnitsTable({ units }: { units: UnitSummary[] }) {
               </td>
               <td className="px-4 py-3">
                 {unit.status === "occupied" ? (
-                  <button onClick={() => toggleRentStatus(unit.id)}>
+                  <button
+                    aria-label={`Mark rent ${unit.rentPaid ? "outstanding" : "paid"} for ${unit.unitNumber}`}
+                    onClick={() => toggleRentStatus(unit.id)}
+                  >
                     <Badge color={unit.rentPaid ? "green" : "red"}>
                       {unit.rentPaid
                         ? "Paid"

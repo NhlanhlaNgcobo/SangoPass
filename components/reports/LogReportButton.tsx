@@ -1,5 +1,7 @@
 "use client";
 
+import { useDialog } from "@/lib/utils/useDialog";
+
 import { useState, type FormEvent } from "react";
 import { MessageSquarePlus, X } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -53,8 +55,10 @@ export default function LogReportButton({ role }: { role: Role }) {
   }
 
   const selectedLabel = CATEGORY_OPTIONS.find(
-    (opt) => opt.value === category
+    (opt) => opt.value === category,
   )?.label;
+
+  const dialog = useDialog(isOpen, handleClose);
 
   return (
     <>
@@ -70,7 +74,11 @@ export default function LogReportButton({ role }: { role: Role }) {
             onClick={handleClose}
             aria-hidden="true"
           />
-          <div className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <div
+            {...dialog}
+            aria-label="Log a report"
+            className="relative max-h-[90dvh] overflow-y-auto w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+          >
             <button
               onClick={handleClose}
               className="absolute right-4 top-4 rounded-md p-1 text-slate-400 hover:bg-slate-100"
@@ -98,8 +106,8 @@ export default function LogReportButton({ role }: { role: Role }) {
                   Log a Report
                 </h2>
                 <p className="mb-4 text-sm text-slate-500">
-                  Let the property manager know about a complaint,
-                  maintenance issue, or suggestion.
+                  Let the property manager know about a complaint, maintenance
+                  issue, or suggestion.
                 </p>
 
                 <div className="mb-4">
@@ -164,9 +172,7 @@ export default function LogReportButton({ role }: { role: Role }) {
                   />
                 </label>
 
-                {error && (
-                  <p className="mb-3 text-sm text-red-600">{error}</p>
-                )}
+                {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
                 <Button type="submit" className="mt-2 w-full">
                   Submit Report

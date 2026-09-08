@@ -5,7 +5,10 @@ import VisitorStatusBadge from "@/components/visitors/VisitorStatusBadge";
 import { getDisplayStatus, getInvitations } from "@/lib/mock/visitorsStore";
 import type { VisitorInvitation, VisitorInvitationStatus } from "@/types";
 
-const STATUS_FILTERS: { value: "all" | VisitorInvitationStatus; label: string }[] = [
+const STATUS_FILTERS: {
+  value: "all" | VisitorInvitationStatus;
+  label: string;
+}[] = [
   { value: "all", label: "All statuses" },
   { value: "upcoming", label: "Upcoming" },
   { value: "checked_in", label: "Currently Inside" },
@@ -25,9 +28,9 @@ function formatDate(iso: string): string {
 export default function ManagerVisitorsPage() {
   const [invitations, setInvitations] = useState<VisitorInvitation[]>([]);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | VisitorInvitationStatus>(
-    "all"
-  );
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | VisitorInvitationStatus
+  >("all");
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of demo visitors from localStorage on mount
@@ -58,19 +61,20 @@ export default function ManagerVisitorsPage() {
         </p>
       </div>
 
-      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-        Preview data — stored in this browser only, not yet connected to a
-        real database.
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">
+        Demo workspace · Changes are saved in this browser.
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row">
         <input
+          aria-label="Search visitors"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by visitor, tenant, property, or reference"
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:max-w-sm"
         />
         <select
+          aria-label="Filter visitors by status"
           value={statusFilter}
           onChange={(e) =>
             setStatusFilter(e.target.value as "all" | VisitorInvitationStatus)
@@ -86,9 +90,7 @@ export default function ManagerVisitorsPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          No visitors match your search.
-        </p>
+        <p className="text-sm text-slate-500">No visitors match your search.</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full min-w-[760px] text-left text-sm">
@@ -125,9 +127,7 @@ export default function ManagerVisitorsPage() {
                     {invitation.referenceNumber}
                   </td>
                   <td className="px-4 py-3">
-                    <VisitorStatusBadge
-                      status={getDisplayStatus(invitation)}
-                    />
+                    <VisitorStatusBadge status={getDisplayStatus(invitation)} />
                   </td>
                 </tr>
               ))}

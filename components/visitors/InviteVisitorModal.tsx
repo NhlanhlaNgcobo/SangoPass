@@ -1,5 +1,8 @@
 "use client";
 
+import { localDate } from "@/lib/utils/locale";
+import { useDialog } from "@/lib/utils/useDialog";
+
 import { useState, type FormEvent } from "react";
 import { UserPlus, X } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -71,22 +74,32 @@ export default function InviteVisitorModal({
       return;
     }
 
-    const invitation = addInvitation({
-      visitorName: form.visitorName.trim(),
-      visitorPhone: form.visitorPhone.trim(),
-      visitorEmail: form.visitorEmail.trim() || undefined,
-      vehicleRegistration: form.vehicleRegistration.trim() || undefined,
-      reasonForVisit: form.reasonForVisit.trim() || undefined,
-      visitDate: form.visitDate,
-      expectedArrival: form.expectedArrival,
-      expectedDeparture: form.expectedDeparture,
-      ...DEMO_TENANT,
-    });
+    try {
+      const invitation = addInvitation({
+        visitorName: form.visitorName.trim(),
+        visitorPhone: form.visitorPhone.trim(),
+        visitorEmail: form.visitorEmail.trim() || undefined,
+        vehicleRegistration: form.vehicleRegistration.trim() || undefined,
+        reasonForVisit: form.reasonForVisit.trim() || undefined,
+        visitDate: form.visitDate,
+        expectedArrival: form.expectedArrival,
+        expectedDeparture: form.expectedDeparture,
+        ...DEMO_TENANT,
+      });
 
-    setError("");
-    setCreated(invitation);
-    onCreated(invitation);
+      setError("");
+      setCreated(invitation);
+      onCreated(invitation);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Could not save your invitation. Please try again.",
+      );
+    }
   }
+
+  const dialog = useDialog(isOpen, handleClose);
 
   return (
     <>
@@ -102,7 +115,11 @@ export default function InviteVisitorModal({
             onClick={handleClose}
             aria-hidden="true"
           />
-          <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+          <div
+            {...dialog}
+            aria-label="Invite a visitor"
+            className="relative max-h-[90dvh] overflow-y-auto max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
+          >
             <button
               onClick={handleClose}
               className="absolute right-4 top-4 rounded-md p-1 text-slate-400 hover:bg-slate-100"
@@ -152,9 +169,7 @@ export default function InviteVisitorModal({
                   </span>
                   <input
                     value={form.visitorName}
-                    onChange={(e) =>
-                      updateField("visitorName", e.target.value)
-                    }
+                    onChange={(e) => updateField("visitorName", e.target.value)}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                     placeholder="e.g. Karabo S."
                   />
@@ -165,6 +180,8 @@ export default function InviteVisitorModal({
                     Phone number
                   </span>
                   <input
+                    type="tel"
+                    autoComplete="tel"
                     value={form.visitorPhone}
                     onChange={(e) =>
                       updateField("visitorPhone", e.target.value)
@@ -181,10 +198,9 @@ export default function InviteVisitorModal({
                     </span>
                     <input
                       type="date"
+                      min={localDate()}
                       value={form.visitDate}
-                      onChange={(e) =>
-                        updateField("visitDate", e.target.value)
-                      }
+                      onChange={(e) => updateField("visitDate", e.target.value)}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                     />
                   </label>
@@ -269,7 +285,9 @@ export default function InviteVisitorModal({
                 </label>
 
                 {error && (
-                  <p className="mb-3 text-sm text-red-600">{error}</p>
+                  <p role="alert" className="mb-3 text-sm text-red-600">
+                    {error}
+                  </p>
                 )}
 
                 <Button type="submit" className="mt-2 w-full">

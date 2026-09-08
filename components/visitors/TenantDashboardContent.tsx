@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CalendarClock, Users, History } from "lucide-react";
+import StatCard from "@/components/dashboard/StatCard";
 import Button from "@/components/ui/Button";
 import LogReportButton from "@/components/reports/LogReportButton";
 import InviteVisitorModal from "@/components/visitors/InviteVisitorModal";
@@ -47,10 +48,7 @@ function VisitorRow({
           View Pass
         </Button>
         {status === "upcoming" && onCancel && (
-          <Button
-            variant="secondary"
-            onClick={() => onCancel(invitation.id)}
-          >
+          <Button variant="secondary" onClick={() => onCancel(invitation.id)}>
             Cancel
           </Button>
         )}
@@ -82,11 +80,13 @@ export default function TenantDashboardContent() {
   }
 
   const upcoming = invitations.filter(
-    (i) => getDisplayStatus(i) === "upcoming"
+    (i) => getDisplayStatus(i) === "upcoming",
   );
-  const active = invitations.filter((i) => getDisplayStatus(i) === "checked_in");
+  const active = invitations.filter(
+    (i) => getDisplayStatus(i) === "checked_in",
+  );
   const history = invitations.filter((i) =>
-    ["checked_out", "cancelled", "expired"].includes(getDisplayStatus(i))
+    ["checked_out", "cancelled", "expired"].includes(getDisplayStatus(i)),
   );
 
   return (
@@ -94,10 +94,10 @@ export default function TenantDashboardContent() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">
-            Welcome back
+            Welcome home, Thabo.
           </h1>
           <p className="text-sm text-slate-500">
-            Here&apos;s what&apos;s happening with your visitors.
+            Riverside Student Residence · Room 101
           </p>
         </div>
         <div id="invite-visitor" className="flex scroll-mt-6 gap-3">
@@ -110,13 +110,31 @@ export default function TenantDashboardContent() {
         </div>
       </div>
 
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard
+          title="Upcoming visits"
+          value={String(upcoming.length)}
+          icon={CalendarClock}
+          hint="Your next guests, all in one place"
+        />
+        <StatCard
+          title="Currently visiting"
+          value={String(active.length)}
+          icon={Users}
+          hint="Guests who have checked in"
+        />
+        <StatCard
+          title="Past visits"
+          value={String(history.length)}
+          icon={History}
+          hint="Your visitor history"
+        />
+      </div>
       <div className="space-y-6">
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="mb-2 flex items-center gap-2">
             <CalendarClock className="h-4 w-4 text-blue-600" />
-            <h2 className="font-semibold text-slate-900">
-              Upcoming Visitors
-            </h2>
+            <h2 className="font-semibold text-slate-900">Upcoming Visitors</h2>
           </div>
           {upcoming.length === 0 ? (
             <EmptyRow text="No upcoming visitors." />

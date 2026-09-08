@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Building2, ShieldCheck, Users, MessageSquareWarning } from "lucide-react";
+import {
+  Building2,
+  ShieldCheck,
+  Users,
+  MessageSquareWarning,
+} from "lucide-react";
 import StatCard from "@/components/dashboard/StatCard";
 import Badge from "@/components/ui/Badge";
 import LogReportButton from "@/components/reports/LogReportButton";
@@ -10,7 +15,10 @@ import { SAMPLE_ORGANIZATIONS } from "@/lib/mock/sampleOrganizations";
 import { SAMPLE_PROPERTIES } from "@/lib/mock/sampleProperties";
 import { getDisplayStatus, getInvitations } from "@/lib/mock/visitorsStore";
 import { getReports } from "@/lib/mock/reportsStore";
-import { getPlatformActivity, type ActivityEntry } from "@/lib/mock/activityFeed";
+import {
+  getPlatformActivity,
+  type ActivityEntry,
+} from "@/lib/mock/activityFeed";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString("en-ZA", {
@@ -30,7 +38,7 @@ export default function AdminDashboardPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of demo data from localStorage on mount
     setCurrentlyInside(
       getInvitations().filter((i) => getDisplayStatus(i) === "checked_in")
-        .length
+        .length,
     );
     setOpenReports(getReports().filter((r) => r.status !== "resolved").length);
     setRecentActivity(getPlatformActivity().slice(0, 5));
@@ -41,10 +49,10 @@ export default function AdminDashboardPage() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">
-            Super Admin Dashboard
+            Your platform, in perspective.
           </h1>
           <p className="text-sm text-slate-500">
-            Platform-wide overview across all organizations.
+            A clear view of the organisations and communities on SangoPass.
           </p>
         </div>
         <LogReportButton role="admin" />

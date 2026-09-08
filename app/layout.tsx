@@ -13,18 +13,25 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GatePass — Know who comes and goes",
+  title: "SangoPass — A better welcome, every day",
+  icons: {
+    icon: "/brand/sangopass-mark.svg",
+    apple: "/brand/sangopass-mark.svg",
+  },
   description:
-    "Digital visitor management for student accommodations, apartments, and residential complexes.",
+    "Visitor access, residents and property operations, connected in one simple workspace for South African residential communities.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="en-ZA"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
+        <a className="skip-link" href="#main-content">
+          Skip to content
+        </a>
         {children}
       </body>
     </html>

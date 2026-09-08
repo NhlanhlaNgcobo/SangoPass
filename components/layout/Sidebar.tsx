@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
+import Brand from "@/components/ui/Brand";
+import { ArrowUpRight } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -31,7 +34,7 @@ function getNavItems(role: Role): SidebarNavItem[] {
   switch (role) {
     case "tenant":
       return [
-        { label: "Dashboard", href: dashboardHref, icon: LayoutDashboard },
+        { label: "Overview", href: dashboardHref, icon: LayoutDashboard },
         {
           label: "Invite Visitor",
           href: `${dashboardHref}#invite-visitor`,
@@ -45,7 +48,7 @@ function getNavItems(role: Role): SidebarNavItem[] {
       ];
     case "security":
       return [
-        { label: "Dashboard", href: dashboardHref, icon: LayoutDashboard },
+        { label: "Overview", href: dashboardHref, icon: LayoutDashboard },
         {
           label: "Scan QR Code",
           href: `${dashboardHref}#scan-qr`,
@@ -59,7 +62,7 @@ function getNavItems(role: Role): SidebarNavItem[] {
       ];
     case "manager":
       return [
-        { label: "Dashboard", href: dashboardHref, icon: LayoutDashboard },
+        { label: "Overview", href: dashboardHref, icon: LayoutDashboard },
         {
           label: "Properties",
           href: "/dashboard/manager/properties",
@@ -71,12 +74,12 @@ function getNavItems(role: Role): SidebarNavItem[] {
           icon: UserCheck,
         },
         {
-          label: "Tenants & Staff",
+          label: "Residents & staff",
           href: "/dashboard/manager/tenants-staff",
           icon: Users,
         },
         {
-          label: "Reports",
+          label: "Reports & requests",
           href: "/dashboard/manager/reports",
           icon: History,
         },
@@ -88,7 +91,7 @@ function getNavItems(role: Role): SidebarNavItem[] {
       ];
     case "admin":
       return [
-        { label: "Dashboard", href: dashboardHref, icon: LayoutDashboard },
+        { label: "Overview", href: dashboardHref, icon: LayoutDashboard },
         {
           label: "Organizations",
           href: "/dashboard/admin/organizations",
@@ -119,70 +122,136 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
   const navItems = getNavItems(role);
   const dashboardHref = getDashboardPath(role);
 
-  const content = (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-4 py-4">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-6 w-6 text-blue-600" />
-          <span className="text-lg font-semibold tracking-tight">
-            GatePass
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
-          aria-label="Close menu"
-        >
-          <X className="h-5 w-5" />
-        </button>
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+      previous?.focus();
+    };
+  }, [isOpen, onClose]);
+  const content = (mobile = false) => (
+    <div className="sidebar-inner">
+      <div className="sidebar-brand">
+        <Link href="/" aria-label="SangoPass home">
+          <Brand light />
+        </Link>
+        {mobile && (
+          <button
+            ref={closeRef}
+            onClick={onClose}
+            className="p-1 text-white"
+            aria-label="Close menu"
+          >
+            <X size={20} />
+          </button>
+        )}
       </div>
-
-      <p className="px-4 pb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-        {ROLE_LABELS[role]}
-      </p>
-
-      <nav className="flex flex-1 flex-col gap-1 px-3">
+      <div className="workspace-card">
+        <span className="workspace-icon">
+          <Building2 size={18} />
+        </span>
+        <div>
+          <strong>
+            {role === "admin"
+              ? "SangoPass platform"
+              : role === "manager"
+                ? "Demo property portfolio"
+                : "Riverside Residence"}
+          </strong>
+          <small>
+            {role === "admin" ? "All organisations" : "Demo workspace"}
+          </small>
+        </div>
+      </div>
+      <p className="sidebar-caption">WORKSPACE</p>
+      <nav className="sidebar-nav" aria-label="Workspace navigation">
         {navItems.map(({ label, href, icon: Icon }) => {
           const active =
             pathname === href ||
-            (href !== dashboardHref && pathname.startsWith(`${href}/`));
+            (href !== dashboardHref && pathname.startsWith(href + "/"));
           return (
             <Link
               key={label}
               href={href}
               onClick={onClose}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                active
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-100"
-              }`}
+              aria-current={active ? "page" : undefined}
+              className={"sidebar-link" + (active ? " active" : "")}
             >
-              <Icon className="h-4 w-4" />
+              <Icon />
               {label}
             </Link>
           );
         })}
       </nav>
+      <div className="sidebar-bottom">
+        <div className="sidebar-help">
+          <strong>A better everyday starts here.</strong>
+          <p>Explore a workspace built around your role in the community.</p>
+          <Link href="/login">
+            Explore another role <ArrowUpRight size={13} />
+          </Link>
+        </div>
+        <div className="sidebar-user">
+          <span className="avatar">
+            {role === "tenant"
+              ? "TM"
+              : role === "security"
+                ? "ST"
+                : role === "admin"
+                  ? "SA"
+                  : "PM"}
+          </span>
+          <div>
+            <strong>{ROLE_LABELS[role]}</strong>
+            <small>SangoPass demo</small>
+          </div>
+        </div>
+      </div>
     </div>
   );
-
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white lg:block">
-        {content}
-      </aside>
-
-      {/* Mobile slide-over sidebar */}
+      <aside className="app-sidebar desktop hidden">{content()}</aside>
       {isOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div
+          className="fixed inset-0 z-40 lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+          onKeyDown={(event) => {
+            if (event.key !== "Tab") return;
+            const items =
+              event.currentTarget.querySelectorAll<HTMLElement>(
+                "a[href],button",
+              );
+            const first = items[0],
+              last = items[items.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }}
+        >
           <div
-            className="absolute inset-0 bg-slate-900/40"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={onClose}
             aria-hidden="true"
           />
-          <aside className="absolute inset-y-0 left-0 w-64 bg-white shadow-xl">
-            {content}
+          <aside className="app-sidebar absolute inset-y-0 left-0 w-[min(280px,85vw)] overflow-y-auto shadow-xl">
+            {content(true)}
           </aside>
         </div>
       )}

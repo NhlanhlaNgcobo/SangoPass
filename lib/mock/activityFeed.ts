@@ -47,6 +47,6 @@ export function getPlatformActivity(): ActivityEntry[] {
   const visitorEntries = getInvitations().map(visitorActivity);
   const reportEntries = getReports().map(reportActivity);
   return [...visitorEntries, ...reportEntries].sort((a, b) =>
-    a.time < b.time ? 1 : -1
+    a.time < b.time ? 1 : -1,
   );
 }

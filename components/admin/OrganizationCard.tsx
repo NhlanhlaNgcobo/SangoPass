@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
-import Badge from "@/components/ui/Badge";
-import { getPlan } from "@/lib/mock/plans";
+import OrganizationPlanBadge from "@/components/admin/OrganizationPlanBadge";
 import type { Organization } from "@/types";
 
 function formatDate(iso: string): string {
@@ -31,7 +30,7 @@ export default function OrganizationCard({
           </span>
           <h3 className="font-semibold text-slate-900">{organization.name}</h3>
         </div>
-        <Badge color="blue">{getPlan(organization.plan).name}</Badge>
+        <OrganizationPlanBadge organization={organization} />
       </div>
       <p className="text-sm text-slate-500">
         {propertyCount} propert{propertyCount === 1 ? "y" : "ies"}
