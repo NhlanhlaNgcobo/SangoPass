@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "$comment": "Showcase deployment. SANGOPASS_DEMO=true serves the marketing site plus the interactive demo, which runs entirely in the visitor's browser: no database, no credentials, nothing stored. It also tells the boot guard that ephemeral serverless storage is acceptable here, because there is nothing to lose. REMOVE THIS FILE (or set the value to false) before deploying for real customers, and follow docs/DEPLOY.md option B instead. `npm run preflight` warns while it is on.",
+  "env": {
+    "SANGOPASS_DEMO": "true"
+  },
+  "build": {
+    "env": {
+      "SANGOPASS_DEMO": "true"
+    }
+  }
+}

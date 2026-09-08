@@ -1,5 +1,7 @@
-# Deploying SangoPass
+# Deploying SangoPass`vercel.json` in the repository root already sets `SANGOPASS_DEMO=true` for
+both build and runtime, so there is nothing to configure in the dashboard.
 
+That is the whole configuration.
 Three shapes. They differ in the backend, not the code.
 
 | | **A. Demo only** | **B. Vercel + Firebase** | **C. One server + SQLite** |
@@ -33,15 +35,15 @@ site and the interactive demo are statically rendered, and the demo runs in the
 visitor's browser, so there is no database, no Firebase project and no
 credentials to manage.
 
+Push the branch and let Vercel build it, or deploy directly:
+
 ```sh
-npx vercel --prod
+npx vercel
 ```
 
-Then set one environment variable in the Vercel project and redeploy:
-
-| Variable | Value |
-| --- | --- |
-| `SANGOPASS_DEMO` | `true` |
+`vercel.json` in the repository root already sets `SANGOPASS_DEMO=true` for
+both the build and the runtime, so there is nothing to configure in the
+dashboard.
 
 That is the whole configuration. `APP_URL` is optional here — without it the
 server falls back to the request origin. The boot guard permits ephemeral
@@ -54,7 +56,13 @@ other's changes. **Reset data** in the demo bar starts the world over.
 
 Send the prospect `https://your-deployment.vercel.app/demo`.
 
+Preview deployments are protected by default. To hand the link to someone
+without a Vercel account: **Settings -> Deployment Protection -> Vercel
+Authentication -> Disabled**.
+
 **This mode is for demonstrations only** — real customers need Option B or C.
+Delete `vercel.json` before going live; `npm run preflight` warns while it is
+in place.
 
 ---
 

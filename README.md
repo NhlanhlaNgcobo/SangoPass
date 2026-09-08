@@ -87,8 +87,11 @@ as the server, so switching roles demonstrates real isolation. **Reset data**
 puts the world back.
 
 Set `SANGOPASS_DEMO=true` for a showcase deployment: the boot guard then allows
-ephemeral hosting (there is nothing to store), and the sign-in screens say
-accounts are switched off and point at the demo.
+ephemeral hosting (there is nothing to store), `APP_URL` becomes optional, and
+the sign-in screens say accounts are switched off and point at the demo. The
+committed `vercel.json` turns this on, so the branch deploys to Vercel as a
+demo with no configuration. Delete it before deploying for real customers;
+`npm run preflight` warns while it is in place.
 
 ## Backends
 

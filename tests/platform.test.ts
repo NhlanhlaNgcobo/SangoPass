@@ -293,6 +293,28 @@ test("unsafe deployments are refused at boot", async (t) => {
     restore();
   });
 
+  await t.test(
+    "a showcase deployment boots on Vercel with no configuration",
+    () => {
+      // The demo stores nothing, so ephemeral hosting is correct rather than
+      // dangerous, and there are no absolute links to build.
+      env.NODE_ENV = "production";
+      env.SANGOPASS_BACKEND = "sqlite";
+      env.SANGOPASS_DEMO = "true";
+      env.VERCEL = "1";
+      delete env.APP_URL;
+      assert.deepEqual(assertDeployable(), []);
+
+      // Turning the flag off restores both guards, so a real deployment can
+      // never inherit the demo's permissions by accident.
+      env.SANGOPASS_DEMO = "false";
+      const problems = assertDeployable();
+      assert.ok(problems.some((p) => p.includes("APP_URL is required")));
+      assert.ok(problems.some((p) => p.includes("persistent disk")));
+      restore();
+    },
+  );
+
   restore();
 });
 

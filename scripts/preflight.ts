@@ -13,6 +13,7 @@ import {
   assertDeployable,
   backend,
   billingConfigured,
+  demoMode,
   emailConfigured,
   ephemeralHost,
   firebase,
@@ -37,6 +38,20 @@ async function main() {
     `SangoPass preflight — NODE_ENV=${process.env.NODE_ENV || "(unset)"}`,
     "",
   );
+
+  /* Mode ------------------------------------------------------------ */
+  // A showcase deployment stores nothing, so it must never be mistaken for a
+  // live one. vercel.json pins this on for the public demo.
+  if (demoMode()) {
+    report(
+      "Mode",
+      true,
+      "SHOWCASE DEMO — nothing is stored, sign-in is switched off",
+    );
+    warnings.push(
+      "SANGOPASS_DEMO is true: this deployment cannot serve real customers, because accounts, visits and reports are never stored. Remove it (and vercel.json) before going live, then follow docs/DEPLOY.md option B.",
+    );
+  }
 
   /* Application ---------------------------------------------------- */
   const url = appUrl();

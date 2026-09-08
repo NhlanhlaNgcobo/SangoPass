@@ -94,11 +94,15 @@ export function assertDeployable(): string[] {
   const problems: string[] = [];
   if (!isProduction()) return problems;
   const url = appUrl();
-  if (!process.env.APP_URL)
-    problems.push(
-      "APP_URL is required in production: it sets the accepted request origin, the session cookie Secure flag and every absolute payment and recovery link.",
-    );
-  else if (!url)
+  // A showcase deployment issues no sessions, sends no email and takes no
+  // payment, so it has no absolute links to build and falls back to the
+  // request's own origin for the mutation origin check.
+  if (!process.env.APP_URL) {
+    if (!demoMode())
+      problems.push(
+        "APP_URL is required in production: it sets the accepted request origin, the session cookie Secure flag and every absolute payment and recovery link.",
+      );
+  } else if (!url)
     problems.push(`APP_URL is not a valid absolute URL: ${process.env.APP_URL}`);
   else if (url.protocol !== "https:" && !loopback(url))
     problems.push(
