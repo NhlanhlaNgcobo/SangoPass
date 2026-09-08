@@ -9,7 +9,7 @@ export default function DashboardRedirectPage() {
 
   useEffect(() => {
     const role = getDemoRole();
-    router.replace(role ? getDashboardPath(role) : "/login");
+    router.replace(role ? getDashboardPath(role) : "/demo");
   }, [router]);
 
   return null;

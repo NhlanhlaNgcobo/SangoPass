@@ -11,7 +11,7 @@ export default function PricingPage() {
           <Brand />
         </Link>
         <Link href="/login" className="link-button dark">
-          Explore the demo
+          Sign in
         </Link>
       </header>
       <main id="main-content" className="marketing-width marketing-section">
@@ -44,7 +44,7 @@ export default function PricingPage() {
             ],
             [
               "Will selecting a plan charge me?",
-              "No. Plan selection currently changes your demo workspace only. Live checkout will be available when payment processing is connected.",
+              "Creating an account starts a 14-day trial with no card required. A paid month starts only after a verified PayFast payment. Checkout is available when the operator connects their merchant account.",
             ],
           ].map(([q, a]) => (
             <details key={q}>

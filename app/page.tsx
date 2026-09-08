@@ -68,7 +68,7 @@ export default function LandingPage() {
           <Link href="/pricing">Pricing</Link>
         </nav>
         <Link className="link-button dark" href="/login">
-          Explore the demo <ArrowUpRight size={16} />
+          Sign in <ArrowUpRight size={16} />
         </Link>
       </header>
       <main id="main-content">
@@ -88,8 +88,8 @@ export default function LandingPage() {
               beautifully connected in one simple workspace.
             </p>
             <div className="hero-actions">
-              <Link href="/login" className="link-button dark">
-                Find your flow <ArrowUpRight size={18} />
+              <Link href="/register" className="link-button dark">
+                Start your free trial <ArrowUpRight size={18} />
               </Link>
               <a href="#how-it-works" className="text-link">
                 See how it works <ArrowRight size={16} />
@@ -263,10 +263,13 @@ export default function LandingPage() {
             </h2>
           </div>
           <div>
-            <Link href="/login" className="link-button lime">
+            <Link href="/register" className="link-button lime">
               Step inside SangoPass <ArrowUpRight size={18} />
             </Link>
-            <p>Explore all four roles in the interactive demo.</p>
+            <p>
+              Start a 14-day trial. No card required. Or{" "}
+              <Link href="/demo">explore the demo</Link>.
+            </p>
           </div>
         </section>
       </main>

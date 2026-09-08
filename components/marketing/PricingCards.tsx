@@ -31,12 +31,12 @@ export default function PricingCards() {
               <span>/month</span>
             </p>
             <Link
-              href="/login"
+              href="/register"
               className={
                 "link-button " + (plan.id === "growth" ? "lime" : "dark")
               }
             >
-              Explore {plan.name} <ArrowUpRight size={16} />
+              Start free trial <ArrowUpRight size={16} />
             </Link>
             <ul>
               {[
@@ -63,14 +63,14 @@ export default function PricingCards() {
             tailored plan.
           </p>
         </div>
-        <Link href="/login" className="text-link">
+        <Link href="/register" className="text-link">
           Explore Portfolio <ArrowUpRight size={17} />
         </Link>
       </div>
       <p className="pricing-footnote">
-        Indicative monthly pricing in South African rand. This is an interactive
-        demo; no payments are collected. Final tax treatment and commercial
-        terms will be confirmed before checkout.
+        Monthly pricing in South African rand. Start with a 14-day Starter
+        trial, no card required. Paid access is renewed manually through
+        PayFast. The total amount is shown before payment.
       </p>
     </>
   );

@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local customer records and database backups
+/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+!.env.example

@@ -20,7 +20,7 @@ export default function DashboardLayout({
   useEffect(() => {
     const currentRole = getDemoRole();
     if (!currentRole) {
-      router.replace("/login");
+      router.replace("/demo");
       return;
     }
     const requestedRole = pathname.split("/")[2];

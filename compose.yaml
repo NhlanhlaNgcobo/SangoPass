@@ -1,0 +1,13 @@
+services:
+  sangopass:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file: .env
+    environment:
+      SANGOPASS_DATABASE_PATH: /app/data/sangopass.sqlite
+    volumes:
+      - sangopass-data:/app/data
+volumes:
+  sangopass-data:

@@ -197,7 +197,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         <div className="sidebar-help">
           <strong>A better everyday starts here.</strong>
           <p>Explore a workspace built around your role in the community.</p>
-          <Link href="/login">
+          <Link href="/demo">
             Explore another role <ArrowUpRight size={13} />
           </Link>
         </div>

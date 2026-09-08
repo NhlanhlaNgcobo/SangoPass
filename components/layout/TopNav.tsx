@@ -42,7 +42,7 @@ export default function TopNav({
         <button
           onClick={() => {
             clearDemoRole();
-            router.push("/login");
+            router.push("/demo");
           }}
           className="flex items-center gap-2 rounded-lg p-2 text-xs text-slate-500 hover:bg-slate-100"
           aria-label="Log out"
