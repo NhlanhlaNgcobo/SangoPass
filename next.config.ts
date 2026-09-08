@@ -27,7 +27,11 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Standalone output bundles a self-contained server for the Docker and
+  // single-VM deployments. Vercel builds its own serverless output and traces
+  // its own dependencies, and the two collide: leaving standalone on there
+  // fails the build looking for .next/next-server.js.nft.json.
+  output: process.env.VERCEL ? undefined : "standalone",
   // Lets a verification build run without disturbing a server already serving
   // .next. scripts/start.mjs reads the same variable.
   distDir: process.env.NEXT_DIST_DIR || ".next",
