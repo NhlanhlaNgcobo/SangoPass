@@ -3,15 +3,21 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import type { InvitationDetails } from "@/lib/server/enrolment";
 import Brand from "@/components/ui/Brand";
 export default function AuthForm({
   mode,
   token = "",
+  propertyCode = "",
+  invitation,
 }: {
-  mode: "login" | "register" | "join";
+  mode: "login" | "register" | "join" | "tenant-login";
+  propertyCode?: string;
+  invitation?: InvitationDetails;
   token?: string;
 }) {
   const router = useRouter();
+  const isLogin = mode === "login" || mode === "tenant-login";
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -27,7 +33,10 @@ export default function AuthForm({
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
-      router.push("/workspace");
+      router.push(
+        "/workspace" +
+          (result.orgId ? "?org=" + encodeURIComponent(result.orgId) : ""),
+      );
       router.refresh();
     } catch (error) {
       setError(
@@ -47,21 +56,25 @@ export default function AuthForm({
         <div className="sp-auth-inner">
           <span className="sp-eyebrow">A better way to belong</span>
           <h1>
-            {mode === "login"
+            {isLogin
               ? "Welcome home."
               : mode === "join"
                 ? "Your community awaits."
                 : "Make room for better."}
           </h1>
           <p>
-            {mode === "login"
-              ? "Sign in to your SangoPass workspace."
+            {isLogin
+              ? mode === "tenant-login"
+                ? "Sign in with your assigned username, or your student number if you stay in student accommodation."
+                : "Sign in to your management or security workspace."
               : mode === "join"
-                ? "Accept your invitation using the email your manager invited. Already have an account? Use your existing password."
+                ? invitation?.existingAccount
+                  ? "Use your existing SangoPass password to activate this property access."
+                  : "You’ve been added to your community. Create your own password to activate your account."
                 : "Bring your properties, people and access together. Start with a 14-day trial, no card required."}
           </p>
           <form onSubmit={submit} className="sp-form">
-            {mode !== "login" && (
+            {!isLogin && (
               <label>
                 Your name
                 <input
@@ -84,30 +97,86 @@ export default function AuthForm({
                 />
               </label>
             )}
+            {mode === "tenant-login" ? (
+              <>
+                <label>
+                  Property code
+                  <input
+                    name="propertyCode"
+                    required
+                    maxLength={40}
+                    defaultValue={propertyCode}
+                    autoComplete="organization"
+                    spellCheck={false}
+                  />
+                </label>
+                <label>
+                  Username / student number
+                  <input
+                    name="username"
+                    autoComplete="username"
+                    required
+                    maxLength={80}
+                    autoCapitalize="none"
+                    spellCheck={false}
+                  />
+                </label>
+                <small>
+                  Your welcome email includes your property code and personal
+                  login link.
+                </small>
+              </>
+            ) : (
+              <label>
+                Email address
+                <input
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  defaultValue={invitation?.email}
+                  readOnly={Boolean(invitation)}
+                />
+              </label>
+            )}
+            {invitation && (
+              <div className="sp-enrolment-summary">
+                <strong>
+                  {invitation.propertyName || invitation.orgName}
+                  {invitation.unitLabel
+                    ? " · Unit " + invitation.unitLabel
+                    : ""}
+                </strong>
+                {invitation.username && (
+                  <p>
+                    Your username / student number:{" "}
+                    <strong>{invitation.username}</strong>
+                  </p>
+                )}
+                <small>
+                  Your property and unit are assigned by your administrator.
+                </small>
+              </div>
+            )}
             <label>
-              Email address
-              <input
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                maxLength={254}
-              />
-            </label>
-            <label>
-              Password
+              {mode === "join" && !invitation?.existingAccount
+                ? "Create your password"
+                : "Password"}
               <input
                 name="password"
                 type="password"
                 autoComplete={
-                  mode === "login" ? "current-password" : "new-password"
+                  isLogin || invitation?.existingAccount
+                    ? "current-password"
+                    : "new-password"
                 }
-                minLength={mode === "login" ? undefined : 12}
+                minLength={isLogin ? undefined : 12}
                 maxLength={128}
                 required
               />
             </label>
-            {mode !== "login" && (
+            {!isLogin && (
               <small>
                 Use at least 12 characters. A memorable phrase works well.
               </small>
@@ -120,7 +189,7 @@ export default function AuthForm({
             <button disabled={busy} className="sp-primary">
               {busy
                 ? "Please wait…"
-                : mode === "login"
+                : isLogin
                   ? "Sign in"
                   : mode === "join"
                     ? "Join your organisation"
@@ -128,11 +197,17 @@ export default function AuthForm({
             </button>
           </form>
           <p>
-            {mode === "login" ? (
-              <>
-                New to SangoPass?{" "}
-                <Link href="/register">Create a workspace</Link>
-              </>
+            {isLogin ? (
+              mode === "tenant-login" ? (
+                <>
+                  <Link href="/login">Management & security sign in</Link>
+                </>
+              ) : (
+                <>
+                  New to SangoPass?{" "}
+                  <Link href="/register">Create a workspace</Link>
+                </>
+              )
             ) : (
               <>
                 Already registered? <Link href="/login">Sign in</Link>
@@ -140,6 +215,12 @@ export default function AuthForm({
             )}
           </p>
           {mode === "login" && (
+            <p>
+              Resident or student?{" "}
+              <Link href="/tenant/login">Tenant sign in</Link>
+            </p>
+          )}
+          {isLogin && (
             <p>
               <Link href="/forgot">Forgot your password?</Link>
             </p>

@@ -5,7 +5,11 @@ import { workspace } from "@/lib/server/workspace";
 import WorkspaceApp from "@/components/workspace/WorkspaceApp";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export default async function WorkspacePage() {
+export default async function WorkspacePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ org?: string }>;
+}) {
   const user = session((await cookies()).get(cookieName)?.value);
   if (!user) redirect("/login");
   if (!memberships(user.id).length)
@@ -24,5 +28,13 @@ export default async function WorkspacePage() {
         </section>
       </main>
     );
-  return <WorkspaceApp initial={workspace(user)} />;
+  const { org } = await searchParams;
+  return (
+    <WorkspaceApp
+      initial={workspace(
+        user,
+        memberships(user.id).some((m) => m.orgId === org) ? org : undefined,
+      )}
+    />
+  );
 }

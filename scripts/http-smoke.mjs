@@ -121,6 +121,14 @@ try {
     owner.cookie,
   );
   assert.equal(invitation.status, 200);
+  assert.equal(invitation.data.result.emailStatus, "not_configured");
+  const activationPage = await fetch(
+    origin + "/join?token=" + invitation.data.result.token,
+  );
+  assert.equal(activationPage.status, 200);
+  const activationHtml = await activationPage.text();
+  assert.ok(activationHtml.includes(invitation.data.result.username));
+  assert.ok(activationHtml.includes("A1"));
   const resident = await api("/api/auth/join", {
     token: invitation.data.result.token,
     name: "Aisha QA",
@@ -128,6 +136,21 @@ try {
     password,
   });
   assert.equal(resident.status, 200);
+  const propertyCode = property.data.state.properties[0].loginCode;
+  const tenantLoginPage = await fetch(
+    origin + "/tenant/login?property=" + propertyCode,
+  );
+  assert.equal(tenantLoginPage.status, 200);
+  assert.ok((await tenantLoginPage.text()).includes(propertyCode));
+  const tenantSignIn = await api("/api/auth/tenant-login", {
+    propertyCode,
+    username: invitation.data.result.username,
+    password,
+  });
+  assert.equal(tenantSignIn.status, 200);
+  assert.equal(tenantSignIn.data.orgId, orgId);
+  const tenantState = await api("/api/workspace", null, tenantSignIn.cookie);
+  assert.equal(tenantState.data.membership.unitId, unit.data.result.id);
   assert.equal(
     (
       await api(

@@ -16,7 +16,9 @@ Open http://localhost:3000 and choose **Start your free trial**. Create your org
 - /register creates a real account and organisation with a 14-day Starter trial.
 - /login signs in to the live /workspace using a server session.
 - Managers manage properties, units, invitations, visitor movements, rent status, reports and billing.
-- Residents join with a private email-bound invitation, create/cancel guest passes and submit reports.
+- Managers enrol residents by email and vacant unit. Apartment residents receive a generated unit-linked username; student accommodation requires their student number, preserved exactly (including leading zeroes).
+- The welcome email provides the username, property/unit and a one-use password-setup link. Tenant sign-in is at /tenant/login. The emailed login link pre-fills the property code so matching student numbers at different properties remain separate.
+- Residents activate their account by setting their own password, then create/cancel guest passes and submit reports. Existing account holders confirm their existing password instead of having it overwritten.
 - Security joins with an assigned property, scans QR passes, checks visitors in/out and submits reports.
 - /pass/[token] is a private, shareable guest pass with a printable QR code. It omits the visitor phone number and host account details.
 - /demo and /dashboard/* are the separate browser-only sample-data experiences, including the platform-admin preview. Demo role selection never grants live access.
@@ -27,9 +29,11 @@ All visit times use Africa/Johannesburg (SAST). Camera scanning needs HTTPS or l
 
 Passwords use salted scrypt. Random session tokens are hashed in SQLite; cookies are HttpOnly and SameSite=Lax (Secure on configured HTTPS deployments). Mutation endpoints enforce the configured request origin, validate inputs and use bound SQL parameters. Every workspace action verifies the authenticated organisation membership and role/property assignment. Invitation tokens expire after seven days and can be used once. Managers can revoke pending invitations or remove another member. Removal cancels that member's upcoming passes and retains historical records.
 
+The v2 database migration preserves existing passwords, unit assignments and email sign-in, adds property login codes, and gives existing resident memberships a generated username. Existing student records without a stored student number need re-enrolment with the student number; it cannot be inferred.
+
 One account can belong to multiple organisations through invitations; switch between them in the workspace menu. Public signup creates a manager only, never a platform administrator. The platform administration screens remain explicitly labelled demo screens; there is no public route to cross-organisation production access.
 
-Password recovery supports Resend when RESEND_API_KEY, EMAIL_FROM and APP_URL are configured. Reset links expire after 30 minutes, are single use and revoke previous sessions. Team invitations are copied and shared directly by the manager; they are not automatically emailed.
+Password recovery supports Resend when RESEND_API_KEY, EMAIL_FROM and APP_URL are configured. Reset links expire after 30 minutes, are single use and revoke previous sessions. Enrolment welcome emails are automatically submitted to Resend when configured. The manager sees not-configured, failed or sent-to-provider status and can resend a pending invitation. Resending rotates the setup token, invalidates its previous link and retains the username. Provider acceptance does not guarantee inbox delivery; no delivery webhook is configured. Without credentials, enrolments are saved visibly as unsent.
 
 ## Pricing and PayFast
 

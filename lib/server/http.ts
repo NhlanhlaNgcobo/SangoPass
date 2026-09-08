@@ -50,8 +50,8 @@ export function failure(error: unknown) {
     { status: 500 },
   );
 }
-export function authResponse(token?: string) {
-  const response = NextResponse.json({ ok: true });
+export function authResponse(token?: string, orgId?: string) {
+  const response = NextResponse.json({ ok: true, orgId });
   response.cookies.set(cookieName, token || "", {
     httpOnly: true,
     secure:

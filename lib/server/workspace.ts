@@ -83,7 +83,7 @@ export function workspace(user: Account, orgId?: string): WorkspaceState {
     members:
       m.role === "manager"
         ? all(
-            "SELECT u.id,u.name,u.email,m.role,m.propertyId,m.unitId FROM memberships m JOIN users u ON u.id=m.userId WHERE m.orgId=? ORDER BY u.name",
+            "SELECT u.id,u.name,u.email,m.role,m.propertyId,m.unitId,m.username FROM memberships m JOIN users u ON u.id=m.userId WHERE m.orgId=? ORDER BY u.name",
             m.orgId,
           )
         : [],
@@ -113,7 +113,7 @@ export function workspace(user: Account, orgId?: string): WorkspaceState {
     invitations:
       m.role === "manager"
         ? all(
-            "SELECT id,email,role,expiresAt FROM invitations WHERE orgId=? AND acceptedAt IS NULL AND expiresAt>?",
+            "SELECT id,email,role,expiresAt,username,emailStatus,emailSentAt,propertyId,unitId FROM invitations WHERE orgId=? AND acceptedAt IS NULL AND expiresAt>?",
             m.orgId,
             now(),
           )
@@ -126,7 +126,9 @@ export function workspace(user: Account, orgId?: string): WorkspaceState {
     ),
     billingMode: process.env.PAYFAST_MODE === "live" ? "live" : "sandbox",
     emailConfigured: Boolean(
-      process.env.RESEND_API_KEY && process.env.EMAIL_FROM,
+      process.env.RESEND_API_KEY &&
+      process.env.EMAIL_FROM &&
+      process.env.APP_URL,
     ),
   };
 }
@@ -158,7 +160,7 @@ export function command(
         manager(m);
         const id = randomUUID();
         run(
-          "INSERT INTO properties VALUES(?,?,?,?,?)",
+          "INSERT INTO properties(id,orgId,name,address,type,loginCode) VALUES(?,?,?,?,?,?)",
           id,
           orgId,
           text(input.name, "property name", 100),
@@ -168,6 +170,7 @@ export function command(
             ["apartment", "student_accommodation"],
             "property type",
           ),
+          newToken().slice(0, 12),
         );
         result = { id };
         break;
@@ -227,7 +230,8 @@ export function command(
         );
         const address = email(input.email);
         let propertyId: string | null = null,
-          unitId: string | null = null;
+          unitId: string | null = null,
+          username: string | null = null;
         if (role !== "manager") propertyId = property(m, input.propertyId).id;
         if (role === "manager") {
           const plan = one<{ plan: string }>(
@@ -254,8 +258,8 @@ export function command(
             );
         }
         if (role === "tenant") {
-          const unit = one<{ id: string }>(
-            "SELECT id FROM units WHERE id=? AND propertyId=?",
+          const unit = one<{ id: string; label: string }>(
+            "SELECT id,label FROM units WHERE id=? AND propertyId=?",
             text(input.unitId, "unit"),
             propertyId,
           );
@@ -273,6 +277,35 @@ export function command(
               409,
             );
           unitId = unit.id;
+          const isStudent =
+            property(m, propertyId).type === "student_accommodation";
+          username = isStudent
+            ? text(input.studentNumber, "student number", 80)
+            : "SP-" +
+              (unit.label.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16) || "UNIT") +
+              "-" +
+              newToken().slice(0, 8).toUpperCase();
+          if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{1,79}$/.test(username))
+            throw new AppError(
+              "Student numbers must be 2–80 letters, digits, dots, hyphens or underscores. Leading zeroes are preserved.",
+            );
+          if (
+            one(
+              "SELECT userId FROM memberships WHERE propertyId=? AND username=?",
+              propertyId,
+              username,
+            ) ||
+            one(
+              "SELECT id FROM invitations WHERE propertyId=? AND username=? AND acceptedAt IS NULL AND expiresAt>?",
+              propertyId,
+              username,
+              now(),
+            )
+          )
+            throw new AppError(
+              "That username or student number is already enrolled at this property.",
+              409,
+            );
         }
         if (
           one(
@@ -288,7 +321,7 @@ export function command(
         const token = newToken(),
           id = randomUUID();
         run(
-          "INSERT INTO invitations(id,orgId,email,role,propertyId,unitId,hash,expiresAt) VALUES(?,?,?,?,?,?,?,?)",
+          "INSERT INTO invitations(id,orgId,email,role,propertyId,unitId,hash,expiresAt,username) VALUES(?,?,?,?,?,?,?,?,?)",
           id,
           orgId,
           address,
@@ -297,8 +330,35 @@ export function command(
           unitId,
           hashToken(token),
           new Date(Date.now() + 7 * 86400000).toISOString(),
+          username,
         );
-        result = { token };
+        result = { token, invitationId: id, username };
+        break;
+      }
+      case "resendInvitation": {
+        manager(m);
+        const invitation = one<{ id: string; username: string | null }>(
+          "SELECT id,username FROM invitations WHERE id=? AND orgId=? AND acceptedAt IS NULL AND expiresAt>?",
+          text(input.id, "invitation"),
+          orgId,
+          now(),
+        );
+        if (!invitation)
+          throw new AppError(
+            "Invitation is expired or no longer available. Revoke it and enrol the person again.",
+            409,
+          );
+        const token = newToken();
+        run(
+          "UPDATE invitations SET hash=?,emailStatus='not_sent',emailSentAt=NULL WHERE id=?",
+          hashToken(token),
+          invitation.id,
+        );
+        result = {
+          token,
+          invitationId: invitation.id,
+          username: invitation.username,
+        };
         break;
       }
       case "revokeInvitation":
@@ -473,6 +533,7 @@ export async function join(input: Record<string, unknown>) {
     role: string;
     propertyId: string | null;
     unitId: string | null;
+    username: string | null;
   }>(
     "SELECT * FROM invitations WHERE hash=? AND acceptedAt IS NULL AND expiresAt>?",
     hashToken(token),
@@ -531,12 +592,13 @@ export async function join(input: Record<string, unknown>) {
         now(),
       );
     run(
-      "INSERT INTO memberships VALUES(?,?,?,?,?)",
+      "INSERT INTO memberships(userId,orgId,role,propertyId,unitId,username) VALUES(?,?,?,?,?,?)",
       id,
       invitation.orgId,
       invitation.role,
       invitation.propertyId,
       invitation.unitId,
+      invitation.username,
     );
     run("UPDATE invitations SET acceptedAt=? WHERE id=?", now(), invitation.id);
   });

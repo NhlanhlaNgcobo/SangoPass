@@ -24,7 +24,32 @@ CREATE TABLE IF NOT EXISTS invoices(id TEXT PRIMARY KEY, orgId TEXT NOT NULL REF
 CREATE TABLE IF NOT EXISTS reset_tokens(hash TEXT PRIMARY KEY, userId TEXT NOT NULL REFERENCES users(id), expiresAt TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS rate_limits(key TEXT PRIMARY KEY, count INTEGER NOT NULL, resetsAt INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS audit(id TEXT PRIMARY KEY, orgId TEXT REFERENCES organisations(id), userId TEXT, action TEXT NOT NULL, createdAt TEXT NOT NULL);
-PRAGMA user_version=1;`);
+`);
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const version = database.prepare("PRAGMA user_version").get() as {
+      user_version: number;
+    };
+    if (version.user_version < 2) {
+      database.exec(`ALTER TABLE properties ADD COLUMN loginCode TEXT COLLATE NOCASE;
+        CREATE UNIQUE INDEX property_login_code ON properties(loginCode);
+        ALTER TABLE memberships ADD COLUMN username TEXT COLLATE NOCASE;
+        CREATE UNIQUE INDEX tenant_username ON memberships(propertyId,username) WHERE role='tenant';
+        ALTER TABLE invitations ADD COLUMN username TEXT COLLATE NOCASE;
+        ALTER TABLE invitations ADD COLUMN emailStatus TEXT NOT NULL DEFAULT 'not_sent';
+        ALTER TABLE invitations ADD COLUMN emailSentAt TEXT;
+        UPDATE properties SET loginCode=lower(hex(randomblob(6))) WHERE loginCode IS NULL;
+        UPDATE memberships SET username='SP-' || upper(substr(replace(unitId,'-',''),1,8)) || '-' || upper(substr(replace(userId,'-',''),1,8)) WHERE role='tenant';
+        UPDATE invitations SET username='SP-' || upper(substr(replace(unitId,'-',''),1,8)) || '-' || upper(substr(replace(id,'-',''),1,8)) WHERE role='tenant';
+        PRAGMA user_version=2;`);
+    }
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    database.close();
+    database = undefined;
+    throw error;
+  }
   return database;
 }
 export function one<T>(sql: string, ...values: SQLInputValue[]): T | undefined {

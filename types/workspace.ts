@@ -5,6 +5,7 @@ export interface Account {
   email: string;
 }
 export interface Membership {
+  username: string | null;
   orgId: string;
   orgName: string;
   role: MemberRole;
@@ -12,6 +13,7 @@ export interface Membership {
   unitId: string | null;
 }
 export interface LiveProperty {
+  loginCode: string;
   id: string;
   orgId: string;
   name: string;
@@ -28,6 +30,7 @@ export interface LiveUnit {
   residentName: string | null;
 }
 export interface LiveMember {
+  username: string | null;
   id: string;
   name: string;
   email: string;
@@ -90,7 +93,17 @@ export interface WorkspaceState {
   visitors: LiveVisitor[];
   reports: LiveReport[];
   invoices: LiveInvoice[];
-  invitations: { id: string; email: string; role: string; expiresAt: string }[];
+  invitations: {
+    id: string;
+    email: string;
+    role: string;
+    expiresAt: string;
+    username: string | null;
+    emailStatus: string;
+    emailSentAt: string | null;
+    propertyId: string | null;
+    unitId: string | null;
+  }[];
   billingConfigured: boolean;
   billingMode: "sandbox" | "live";
   emailConfigured: boolean;

@@ -49,7 +49,7 @@ export function throttle(key: string, limit = 10) {
 }
 export function memberships(userId: string) {
   return all<Membership>(
-    "SELECT m.orgId,o.name orgName,m.role,m.propertyId,m.unitId FROM memberships m JOIN organisations o ON o.id=m.orgId WHERE m.userId=? ORDER BY o.name",
+    "SELECT m.orgId,o.name orgName,m.role,m.propertyId,m.unitId,m.username FROM memberships m JOIN organisations o ON o.id=m.orgId WHERE m.userId=? ORDER BY o.name",
     userId,
   );
 }
@@ -139,4 +139,36 @@ export async function login(input: Record<string, unknown>) {
     token: createSession(user.id),
     user: { id: user.id, name: user.name, email: user.email },
   };
+}
+
+export async function tenantLogin(input: Record<string, unknown>) {
+  const username = text(
+    input.username,
+    "username or student number",
+    80,
+  ).toLowerCase();
+  const propertyCode = text(
+    input.propertyCode,
+    "property code",
+    40,
+  ).toLowerCase();
+  throttle("tenant-login:" + propertyCode + ":" + username);
+  throttle("logins", 300);
+  const user = one<Account & { password: string; orgId: string }>(
+    "SELECT u.id,u.name,u.email,u.password,m.orgId FROM memberships m JOIN users u ON u.id=m.userId JOIN properties p ON p.id=m.propertyId WHERE p.loginCode=? AND m.username=? AND m.role='tenant'",
+    propertyCode,
+    username,
+  );
+  const pass =
+    typeof input.password === "string" && input.password.length <= 128
+      ? input.password
+      : "";
+  const digest =
+    user?.password || "00000000000000000000000000000000:" + "00".repeat(64);
+  if (!(await verifyPassword(pass, digest)) || !user)
+    throw new AppError(
+      "Property code, username or password is incorrect.",
+      401,
+    );
+  return { token: createSession(user.id), orgId: user.orgId };
 }

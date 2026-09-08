@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { body, currentUser, failure } from "@/lib/server/http";
-import { command, workspace } from "@/lib/server/workspace";
+import { workspace } from "@/lib/server/workspace";
+import { enrolmentCommand } from "@/lib/server/enrolment";
 import { text } from "@/lib/server/validation";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
     const input = await body(request);
     const user = await currentUser();
     const orgId = text(input.orgId, "organisation");
-    const result = command(user, orgId, input);
+    const result = await enrolmentCommand(user, orgId, input);
     return NextResponse.json({ result, state: workspace(user, orgId) });
   } catch (error) {
     return failure(error);

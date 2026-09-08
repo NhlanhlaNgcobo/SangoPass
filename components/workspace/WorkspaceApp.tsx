@@ -107,6 +107,8 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
     [notice, setNotice] = useState(""),
     [search, setSearch] = useState(""),
     [inviteLink, setInviteLink] = useState(""),
+    [inviteUsername, setInviteUsername] = useState<string | null>(null),
+    [emailStatus, setEmailStatus] = useState(""),
     [pass, setPass] = useState<LiveVisitor | null>(null),
     [selectedProperty, setSelectedProperty] = useState(
       initial.properties[0]?.id || "",
@@ -163,15 +165,29 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
       if (!response.ok) throw new Error(data.error);
       setState(data.state);
       setModal("");
-      if (data.result.token && input.action === "invite")
+      if (
+        data.result.token &&
+        (input.action === "invite" || input.action === "resendInvitation")
+      ) {
         setInviteLink(
           `${window.location.origin}/join?token=${data.result.token}`,
         );
+        setInviteUsername(data.result.username);
+        setEmailStatus(data.result.emailStatus);
+      }
       if (data.result.id && input.action === "visitor")
         setPass(
           data.state.visitors.find((v: LiveVisitor) => v.id === data.result.id),
         );
-      setNotice("Saved successfully.");
+      setNotice(
+        data.result.emailStatus === "sent"
+          ? "Enrolment saved. The welcome email has been sent to the email provider."
+          : data.result.emailStatus === "failed"
+            ? "Enrolment saved, but the email could not be sent. Use Resend email in Pending invitations to retry."
+            : data.result.emailStatus === "not_configured"
+              ? "Enrolment saved. Email is not connected yet; the welcome email has not been sent."
+              : "Saved successfully.",
+      );
       return true;
     } catch (e) {
       setError(
@@ -432,7 +448,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
             ) : view === "people" ? (
               <button className="sp-primary" onClick={() => open("invite")}>
                 <Plus size={17} />
-                Invite someone
+                Enrol someone
               </button>
             ) : view === "visitors" && !security ? (
               <button
@@ -572,7 +588,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                         },
                         {
                           title: "Bring your people in",
-                          text: "Invite residents and security with a private link.",
+                          text: "Send residents and security their welcome email.",
                           view: "people",
                           icon: Users,
                         },
@@ -744,6 +760,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                       <tr>
                         <th>Name</th>
                         <th>Email</th>
+                        <th>Username / student number</th>
                         <th>Role</th>
                         <th>Property / unit</th>
                         <th>Access</th>
@@ -756,6 +773,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                             <strong>{m.name}</strong>
                           </td>
                           <td>{m.email}</td>
+                          <td>{m.username || "Email sign-in"}</td>
                           <td>
                             <span className="sp-badge">
                               {m.role === "tenant" ? "Resident" : m.role}
@@ -798,7 +816,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                 <h2>Pending invitations</h2>
                 {!state.invitations.length ? (
                   <p className="sp-muted">
-                    Invite someone to securely join your organisation. Links
+                    Enrol someone to securely join your organisation. Links
                     expire after seven days.
                   </p>
                 ) : (
@@ -810,7 +828,28 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                           {i.role === "tenant" ? "Resident" : i.role} · expires{" "}
                           {new Date(i.expiresAt).toLocaleDateString("en-ZA")}
                         </p>
+                        {i.username && (
+                          <p>
+                            Username / student number:{" "}
+                            <strong>{i.username}</strong>
+                          </p>
+                        )}
+                        <p>
+                          Email:{" "}
+                          {i.emailStatus === "sent"
+                            ? "Sent to email provider"
+                            : label(i.emailStatus)}
+                        </p>
                       </div>
+                      <button
+                        disabled={busy}
+                        className="sp-secondary"
+                        onClick={() =>
+                          void act({ action: "resendInvitation", id: i.id })
+                        }
+                      >
+                        Resend email
+                      </button>
                       <button
                         disabled={busy}
                         className="sp-secondary"
@@ -1122,7 +1161,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
             {
               property: "Add a property",
               unit: "Add a unit",
-              invite: "Invite someone",
+              invite: "Enrol someone",
               visitor: "Invite a visitor",
               report: "Create a report",
             }[modal] || "New record"
@@ -1185,7 +1224,8 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                         .filter(
                           (u) =>
                             u.propertyId === selectedProperty &&
-                            !u.residentName,
+                            !u.residentName &&
+                            !state.invitations.some((i) => i.unitId === u.id),
                         )
                         .map((u) => (
                           <option key={u.id} value={u.id}>
@@ -1195,10 +1235,37 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                     </select>
                   </label>
                 )}
+                {inviteRole === "tenant" &&
+                  state.properties.find((p) => p.id === selectedProperty)
+                    ?.type === "student_accommodation" && (
+                    <label>
+                      Student number
+                      <input
+                        name="studentNumber"
+                        required
+                        maxLength={80}
+                        autoCapitalize="none"
+                        spellCheck={false}
+                      />
+                      <small>
+                        The student will use this exact student number as their
+                        username. Keep any leading zeroes.
+                      </small>
+                    </label>
+                  )}
                 <p className="sp-muted">
-                  You’ll receive a private invitation link to share with this
-                  person. They’ll create their own password.
+                  {inviteRole === "tenant"
+                    ? "Residents receive a unique username linked to their unit. For student accommodation, their student number is their username. "
+                    : "The invited person signs in with their email. "}
+                  A welcome email asks them to create their own password.
                 </p>
+                {!state.emailConfigured && (
+                  <p className="sp-error">
+                    Email delivery is not connected. You can save this
+                    enrolment, but the welcome email will not be sent until the
+                    operator configures the email service and you resend it.
+                  </p>
+                )}
               </>
             )}
             {modal === "visitor" && (
@@ -1257,21 +1324,28 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
               {busy
                 ? "Saving…"
                 : modal === "invite"
-                  ? "Create invitation link"
+                  ? state.emailConfigured
+                    ? "Enrol & send welcome email"
+                    : "Save enrolment"
                   : "Save"}
             </button>
           </form>
         </Dialog>
       )}
       {inviteLink && (
-        <Dialog
-          title="Your invitation is ready"
-          close={() => setInviteLink("")}
-        >
+        <Dialog title="Enrolment saved" close={() => setInviteLink("")}>
           <p>
-            Send this private link directly to the person you invited. It
-            expires in seven days and can only be used once.
+            {emailStatus === "sent"
+              ? "The welcome email includes their login details and a private password-setup link."
+              : "The welcome email has not been sent. Connect the email service or retry sending from Pending invitations."}{" "}
+            The setup link is single-use. Resending replaces the old link
+            without changing the username.
           </p>
+          {inviteUsername && (
+            <div className="sp-enrolment-summary">
+              Username / student number: <strong>{inviteUsername}</strong>
+            </div>
+          )}
           <label className="sp-form">
             Invitation link
             <input

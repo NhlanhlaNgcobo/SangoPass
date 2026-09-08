@@ -1,3 +1,11 @@
+.sp-enrolment-summary {
+  background: #f0f5e7;
+  border: 1px solid #d7e4c7;
+  padding: 16px;
+  border-radius: 10px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
 .sp-shell {
   --sp-forest: #143e35;
   --sp-lime: #d5ed9f;
