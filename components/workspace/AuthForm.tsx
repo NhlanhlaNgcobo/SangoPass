@@ -3,18 +3,21 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import type { InvitationDetails } from "@/lib/server/enrolment";
+import type { InvitationDetails } from "@/lib/server/notifications";
 import Brand from "@/components/ui/Brand";
 export default function AuthForm({
   mode,
   token = "",
   propertyCode = "",
   invitation,
+  showcase = false,
 }: {
   mode: "login" | "register" | "join" | "tenant-login";
   propertyCode?: string;
   invitation?: InvitationDetails;
   token?: string;
+  /** Showcase deployment: accounts are not stored, so say so up front. */
+  showcase?: boolean;
 }) {
   const router = useRouter();
   const isLogin = mode === "login" || mode === "tenant-login";
@@ -54,6 +57,14 @@ export default function AuthForm({
           <Brand />
         </Link>
         <div className="sp-auth-inner">
+          {showcase && (
+            <p className="sp-showcase-note" role="status">
+              This is a public demonstration of SangoPass. Accounts here are not
+              stored and sign-in is switched off.{" "}
+              <Link href="/demo">Open the interactive demo</Link> to see the
+              whole product with sample data.
+            </p>
+          )}
           <span className="sp-eyebrow">A better way to belong</span>
           <h1>
             {isLogin

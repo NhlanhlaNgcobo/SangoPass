@@ -1,5 +1,5 @@
 import AuthForm from "@/components/workspace/AuthForm";
-import { invitationDetails } from "@/lib/server/enrolment";
+import { invitationDetails } from "@/lib/server/notifications";
 import Link from "next/link";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export default async function JoinPage({
   searchParams: Promise<{ token?: string }>;
 }) {
   const token = (await searchParams).token || "";
-  const invitation = invitationDetails(token);
+  const invitation = await invitationDetails(token);
   if (!invitation)
     return (
       <main id="main-content" className="sp-shell" style={{ padding: 40 }}>

@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// SangoPass reaches Firestore only through the Firebase Admin SDK on its own
+// Node server, and Admin credentials bypass these rules entirely. No browser,
+// mobile client or third party is ever meant to read or write these documents
+// directly: every request has to pass the organisation membership check in
+// lib/server/workspace.ts first.
+//
+// So the correct rule set is a total denial. If you later add a client that
+// talks to Firestore directly, do not relax this file wholesale - add a narrow
+// match block for that one collection and keep the default deny below.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -20,11 +20,25 @@ import {
   Search,
   Check,
   Copy,
+  AlertTriangle,
 } from "lucide-react";
 import PassScanner from "./PassScanner";
 import Brand from "@/components/ui/Brand";
-import type { WorkspaceState, LiveVisitor } from "@/types/workspace";
-import { PLANS } from "@/lib/mock/plans";
+import type {
+  IdType,
+  LiveVisitor,
+  VisitType,
+  WorkspaceState,
+} from "@/types/workspace";
+import {
+  ALERTING,
+  TRADES,
+  URGENCY_HELP,
+  URGENCY_LABELS,
+  alerting,
+  type Urgency,
+} from "@/lib/shared/maintenance";
+import { PLAN_CARDS } from "@/lib/shared/plans";
 import { useDialog } from "@/lib/utils/useDialog";
 import { useMediaQuery } from "@/lib/utils/useMediaQuery";
 
@@ -35,6 +49,8 @@ const rand = (cents: number) =>
     maximumFractionDigits: 0,
   }).format(cents / 100);
 const label = (value: string) => value.replaceAll("_", " ");
+const idLabel = (type: IdType) =>
+  type === "sa_id" ? "SA ID" : type === "passport" ? "Passport" : "Student no.";
 const day = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(
     new Date(),
@@ -98,7 +114,27 @@ function Dialog({
     </div>
   );
 }
-export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
+/**
+ * Lets the demo run this exact component against an in-browser world instead
+ * of the API. Everything below is identical in both modes: the demo is the
+ * product, not a mock-up of it.
+ */
+export interface DemoDriver {
+  command(input: Record<string, unknown>): {
+    result: Record<string, unknown>;
+    state: WorkspaceState;
+  };
+  refresh(): WorkspaceState;
+  banner: ReactNode;
+}
+
+export default function WorkspaceApp({
+  initial,
+  demo,
+}: {
+  initial: WorkspaceState;
+  demo?: DemoDriver;
+}) {
   const [state, setState] = useState(initial),
     [view, setView] = useState<View>("overview"),
     [mobile, setMobile] = useState(false),
@@ -114,13 +150,19 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
     [selectedProperty, setSelectedProperty] = useState(
       initial.properties[0]?.id || "",
     ),
-    [inviteRole, setInviteRole] = useState("tenant");
+    [inviteRole, setInviteRole] = useState("tenant"),
+    [visitType, setVisitType] = useState<VisitType>("daily"),
+    [idType, setIdType] = useState<IdType>("sa_id"),
+    [urgency, setUrgency] = useState<Urgency>("normal");
   const router = useRouter();
   const compact = useMediaQuery("(max-width: 1023px)");
   const navigationOpen = compact && mobile;
   const navigationDialog = useDialog(navigationOpen, () => setMobile(false));
   const manager = state.membership.role === "manager",
-    security = state.membership.role === "security";
+    security = state.membership.role === "security",
+    // Only a resident hosts a guest. Managers set the limits instead.
+    tenant = state.membership.role === "tenant";
+  const allowance = state.allowance;
   const nav = [
     { id: "overview", title: "Overview", icon: LayoutDashboard },
     ...(manager
@@ -134,13 +176,23 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
       title: security ? "Gate register" : "Visitor passes",
       icon: Ticket,
     },
-    { id: "reports", title: "Reports", icon: ClipboardList },
+    {
+      id: "reports",
+      title: manager ? "Maintenance" : "Reports",
+      icon: ClipboardList,
+    },
     ...(manager ? [{ id: "billing", title: "Billing", icon: CreditCard }] : []),
   ];
   async function refresh(orgId = state.membership.orgId) {
     setBusy(true);
     setError("");
     try {
+      if (demo) {
+        const next = demo.refresh();
+        setState(next);
+        setSelectedProperty(next.properties[0]?.id || "");
+        return;
+      }
       const response = await fetch(
         `/api/workspace?org=${encodeURIComponent(orgId)}`,
         { cache: "no-store" },
@@ -160,13 +212,21 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
     setError("");
     setNotice("");
     try {
-      const response = await fetch("/api/workspace", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...input, orgId: state.membership.orgId }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      const data = demo
+        ? demo.command(input)
+        : await (async () => {
+            const response = await fetch("/api/workspace", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...input, orgId: state.membership.orgId }),
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error);
+            return payload as {
+              result: Record<string, unknown>;
+              state: WorkspaceState;
+            };
+          })();
       setState(data.state);
       setModal("");
       if (
@@ -176,20 +236,29 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
         setInviteLink(
           `${window.location.origin}/join?token=${data.result.token}`,
         );
-        setInviteUsername(data.result.username);
-        setEmailStatus(data.result.emailStatus);
+        setInviteUsername(
+          data.result.username == null ? null : String(data.result.username),
+        );
+        setEmailStatus(String(data.result.emailStatus || ""));
       }
       if (data.result.id && input.action === "visitor")
         setPass(
-          data.state.visitors.find((v: LiveVisitor) => v.id === data.result.id),
+          data.state.visitors.find((v) => v.id === data.result.id) ?? null,
         );
+      const guestPass = input.action === "visitor";
       setNotice(
         data.result.emailStatus === "sent"
-          ? "Enrolment saved. The welcome email has been sent to the email provider."
+          ? guestPass
+            ? "Guest pass created and emailed to you, so you can show it at the gate if your guest has no phone."
+            : "Enrolment saved. The welcome email has been sent to the email provider."
           : data.result.emailStatus === "failed"
-            ? "Enrolment saved, but the email could not be sent. Use Resend email in Pending invitations to retry."
+            ? guestPass
+              ? "Guest pass created, but the email could not be sent. Copy the pass link below instead."
+              : "Enrolment saved, but the email could not be sent. Use Resend email in Pending invitations to retry."
             : data.result.emailStatus === "not_configured"
-              ? "Enrolment saved. Email is not connected yet; the welcome email has not been sent."
+              ? guestPass
+                ? "Guest pass created. Email is not connected yet, so copy the pass link below."
+                : "Enrolment saved. Email is not connected yet; the welcome email has not been sent."
               : "Saved successfully.",
       );
       return true;
@@ -209,9 +278,20 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
       action: modal,
     });
   }
-  function open(action: string) {
-    setSelectedProperty(state.properties[0]?.id || "");
+  function open(action: string, propertyId?: string) {
+    const property = propertyId || state.properties[0]?.id || "";
+    setSelectedProperty(property);
     setInviteRole("tenant");
+    setVisitType("daily");
+    setUrgency("normal");
+    // A student residence usually identifies guests by student number; an
+    // apartment never does.
+    setIdType(
+      state.properties.find((p) => p.id === property)?.type ===
+        "student_accommodation"
+        ? "student_number"
+        : "sa_id",
+    );
     setError("");
     setNotice("");
     setModal(action);
@@ -296,6 +376,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
   );
   return (
     <div className="sp-shell">
+      {demo?.banner}
       <div
         className={`sp-navigation ${navigationOpen ? "is-open" : ""}`}
         {...(navigationOpen ? navigationDialog : { ref: navigationDialog.ref })}
@@ -472,14 +553,14 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                 <Plus size={17} />
                 Enrol someone
               </button>
-            ) : view === "visitors" && !security ? (
+            ) : view === "visitors" && tenant ? (
               <button
                 disabled={!state.properties.length}
                 className="sp-primary"
                 onClick={() => open("visitor")}
               >
                 <Plus size={17} />
-                Invite a visitor
+                Request a guest visit
               </button>
             ) : view === "reports" ? (
               <button
@@ -488,7 +569,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                 onClick={() => open("report")}
               >
                 <Plus size={17} />
-                New report
+                {manager ? "Log an issue" : "Report an issue"}
               </button>
             ) : null}
           </div>
@@ -682,29 +763,38 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                         <span className="sp-eyebrow">{label(p.type)}</span>
                         <h2>{p.name}</h2>
                         <p>{p.address}</p>
-                        <div className="sp-section-head">
-                          <small>
-                            {
-                              state.units.filter((u) => u.propertyId === p.id)
-                                .length
-                            }{" "}
-                            units ·{" "}
-                            {
-                              state.units.filter(
-                                (u) => u.propertyId === p.id && u.residentName,
-                              ).length
-                            }{" "}
-                            occupied
-                          </small>
+                        <small className="sp-block">
+                          {
+                            state.units.filter((u) => u.propertyId === p.id)
+                              .length
+                          }{" "}
+                          units ·{" "}
+                          {
+                            state.units.filter(
+                              (u) => u.propertyId === p.id && u.residentName,
+                            ).length
+                          }{" "}
+                          occupied
+                        </small>
+                        <small className="sp-block">
+                          Guests: {p.sleepoverNightsPerMonth} sleepover nights
+                          per unit each month · up to {p.maxConsecutiveNights}{" "}
+                          consecutive · {p.maxActiveGuests} active passes
+                        </small>
+                        <div className="sp-row">
                           <button
                             className="sp-secondary"
-                            onClick={() => {
-                              open("unit");
-                              setSelectedProperty(p.id);
-                            }}
+                            onClick={() => open("unit", p.id)}
                           >
                             <Plus size={15} />
                             Add unit
+                          </button>
+                          <button
+                            className="sp-secondary"
+                            onClick={() => open("propertyLimits", p.id)}
+                          >
+                            <Ticket size={15} />
+                            Visitor limits
                           </button>
                         </div>
                       </div>
@@ -997,8 +1087,12 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                           </td>
                           <td data-label="Visit · SAST" role="cell">
                             {v.visitDate}
+                            {v.nights > 0 ? ` → ${v.endDate}` : ""}
                             <small className="sp-block">
                               {v.arrival}–{v.departure}
+                              {v.nights > 0
+                                ? ` · ${v.nights} ${v.nights === 1 ? "night" : "nights"}`
+                                : " · day visit"}
                             </small>
                           </td>
                           <td data-label="Host / property" role="cell">
@@ -1007,6 +1101,11 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                               {v.propertyName}
                               {v.unitLabel ? ` / ${v.unitLabel}` : ""}
                             </small>
+                            <small className="sp-block">
+                              {v.idNumber
+                                ? `${idLabel(v.idType)} ${v.idNumber}`
+                                : "ID not recorded"}
+                            </small>
                           </td>
                           <td data-label="Status" role="cell">
                             <span
@@ -1014,7 +1113,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                             >
                               {v.status === "upcoming" &&
                               Date.parse(
-                                `${v.visitDate}T${v.departure}:00+02:00`,
+                                `${v.endDate}T${v.departure}:00+02:00`,
                               ) < Date.parse(state.asOf)
                                 ? "expired"
                                 : label(v.status)}
@@ -1081,51 +1180,238 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
             </section>
           )}
           {view === "reports" && (
-            <section className="sp-panel">
-              {!state.reports.length
-                ? empty(
-                    "All clear, for now.",
-                    "Maintenance, noise or security concern? Create a report so your manager can follow up.",
-                  )
-                : state.reports.map((r) => (
-                    <article className="sp-report" key={r.id}>
-                      <div className="sp-section-head">
-                        <span className="sp-badge">{r.category}</span>
-                        {manager ? (
-                          <label>
-                            <span className="sr-only">Report status</span>
-                            <select
-                              value={r.status}
-                              disabled={busy}
-                              onChange={(e) =>
-                                void act({
-                                  action: "reportStatus",
-                                  id: r.id,
-                                  status: e.target.value,
-                                })
-                              }
-                            >
-                              <option value="open">Open</option>
-                              <option value="in_progress">In progress</option>
-                              <option value="resolved">Resolved</option>
-                            </select>
-                          </label>
-                        ) : (
-                          <span className="sp-badge">{label(r.status)}</span>
-                        )}
+            <>
+              {manager &&
+                (() => {
+                  const open = state.reports.filter(
+                    (r) => r.status !== "resolved",
+                  );
+                  const raised = open.filter((r) => alerting(r.urgency));
+                  if (!raised.length) return null;
+                  const worst = raised.some((r) => r.urgency === "emergency");
+                  return (
+                    <section
+                      role="alert"
+                      className={`sp-alert ${worst ? "sp-alert-critical" : "sp-alert-amber"}`}
+                    >
+                      <AlertTriangle size={20} aria-hidden />
+                      <div>
+                        <strong>
+                          {raised.length}{" "}
+                          {raised.length === 1 ? "issue needs" : "issues need"}{" "}
+                          attention now
+                        </strong>
+                        <p>
+                          {ALERTING.map((level) => {
+                            const count = raised.filter(
+                              (r) => r.urgency === level,
+                            ).length;
+                            return count
+                              ? `${count} ${URGENCY_LABELS[level].toLowerCase()}`
+                              : null;
+                          })
+                            .filter(Boolean)
+                            .join(" · ")}
+                          {". "}
+                          {raised[0].unitLabel
+                            ? `Oldest open: ${raised[0].unitLabel}, ${raised[0].category.toLowerCase()}.`
+                            : ""}
+                        </p>
                       </div>
-                      <p className="sp-report-text">{r.description}</p>
-                      <small>
-                        {r.authorName} ·{" "}
-                        {
-                          state.properties.find((p) => p.id === r.propertyId)
-                            ?.name
-                        }{" "}
-                        · {new Date(r.createdAt).toLocaleDateString("en-ZA")}
-                      </small>
-                    </article>
-                  ))}
-            </section>
+                    </section>
+                  );
+                })()}
+
+              <section className="sp-panel">
+                <div className="sp-section-head">
+                  <h2>
+                    {manager
+                      ? "Maintenance & complaints"
+                      : "Your reported issues"}
+                  </h2>
+                  {manager && state.reports.length > 0 && (
+                    <small>
+                      {
+                        state.reports.filter((r) => r.status !== "resolved")
+                          .length
+                      }{" "}
+                      open · most urgent first
+                    </small>
+                  )}
+                </div>
+                {!state.reports.length
+                  ? empty(
+                      "All clear, for now.",
+                      manager
+                        ? "Maintenance issues and complaints logged by residents will appear here, most urgent first."
+                        : "Something broken, unsafe or disturbing? Log it and your property manager will see it, ranked by how urgent it is.",
+                    )
+                  : state.reports.map((r) => (
+                      <article
+                        className={`sp-report sp-urgency-${r.urgency}`}
+                        key={r.id}
+                      >
+                        <div className="sp-section-head">
+                          <span className="sp-row">
+                            <span
+                              className={`sp-badge sp-badge-${r.urgency}`}
+                              title={URGENCY_HELP[r.urgency]}
+                            >
+                              {URGENCY_LABELS[r.urgency]}
+                            </span>
+                            <span className="sp-badge">{r.category}</span>
+                          </span>
+                          {manager ? (
+                            <span className="sp-row">
+                              <label>
+                                <span className="sr-only">Urgency</span>
+                                <select
+                                  value={r.urgency}
+                                  disabled={busy}
+                                  onChange={(e) =>
+                                    void act({
+                                      action: "reportUrgency",
+                                      id: r.id,
+                                      urgency: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="emergency">Emergency</option>
+                                  <option value="urgent">Urgent</option>
+                                  <option value="normal">Normal</option>
+                                  <option value="low">Low</option>
+                                </select>
+                              </label>
+                              <label>
+                                <span className="sr-only">Report status</span>
+                                <select
+                                  value={r.status}
+                                  disabled={busy}
+                                  onChange={(e) =>
+                                    void act({
+                                      action: "reportStatus",
+                                      id: r.id,
+                                      status: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="open">Open</option>
+                                  <option value="in_progress">
+                                    In progress
+                                  </option>
+                                  <option value="resolved">Resolved</option>
+                                </select>
+                              </label>
+                            </span>
+                          ) : (
+                            <span className="sp-badge">{label(r.status)}</span>
+                          )}
+                        </div>
+                        <p className="sp-report-text">{r.description}</p>
+                        <small>
+                          {r.authorName}
+                          {r.unitLabel ? ` · ${r.unitLabel}` : ""} ·{" "}
+                          {
+                            state.properties.find((p) => p.id === r.propertyId)
+                              ?.name
+                          }{" "}
+                          · {new Date(r.createdAt).toLocaleDateString("en-ZA")}
+                        </small>
+                      </article>
+                    ))}
+              </section>
+
+              {manager && (
+                <section className="sp-panel">
+                  <div className="sp-section-head">
+                    <h2>Maintenance contacts</h2>
+                    <button
+                      className="sp-secondary"
+                      onClick={() => open("contractor")}
+                    >
+                      <Plus size={15} />
+                      Add a contact
+                    </button>
+                  </div>
+                  <p className="sp-muted">
+                    Your in-house people and outside contractors. A phone list,
+                    nothing more: none of these are accounts and none of them
+                    grant access.
+                  </p>
+                  {!state.contractors.length ? (
+                    empty(
+                      "No contacts yet.",
+                      "Add the plumber, the electrician and whoever holds the gate keys, so they are to hand when something breaks.",
+                    )
+                  ) : (
+                    <div className="sp-table-wrap">
+                      <table className="sp-responsive-table" role="table">
+                        <thead role="rowgroup">
+                          <tr role="row">
+                            <th role="columnheader" scope="col">
+                              Name
+                            </th>
+                            <th role="columnheader" scope="col">
+                              Trade
+                            </th>
+                            <th role="columnheader" scope="col">
+                              Contact
+                            </th>
+                            <th role="columnheader" scope="col">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody role="rowgroup">
+                          {state.contractors.map((c) => (
+                            <tr key={c.id} role="row">
+                              <td data-label="Name" role="cell">
+                                {c.name}
+                                <small className="sp-block">
+                                  {c.kind === "in_house"
+                                    ? "In-house"
+                                    : c.company || "Contractor"}
+                                </small>
+                              </td>
+                              <td data-label="Trade" role="cell">
+                                {c.trade}
+                                {c.notes ? (
+                                  <small className="sp-block">{c.notes}</small>
+                                ) : null}
+                              </td>
+                              <td data-label="Contact" role="cell">
+                                <a href={`tel:${c.phone.replace(/\s/g, "")}`}>
+                                  {c.phone}
+                                </a>
+                                {c.email ? (
+                                  <small className="sp-block">
+                                    <a href={`mailto:${c.email}`}>{c.email}</a>
+                                  </small>
+                                ) : null}
+                              </td>
+                              <td data-label="Actions" role="cell">
+                                <button
+                                  disabled={busy}
+                                  className="sp-text-button"
+                                  onClick={() =>
+                                    void act({
+                                      action: "contractorRemove",
+                                      id: c.id,
+                                    })
+                                  }
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              )}
+            </>
           )}
           {view === "billing" && (
             <>
@@ -1152,7 +1438,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                   "Payments will become available when the operator connects their PayFast merchant account."}
               </p>
               <div className="sp-plan-grid">
-                {PLANS.filter((p) => p.id !== "portfolio").map((p) => (
+                {PLAN_CARDS.filter((p) => p.id !== "portfolio").map((p) => (
                   <article
                     className={`sp-panel ${p.id === "growth" ? "sp-featured" : ""}`}
                     key={p.id}
@@ -1243,8 +1529,10 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
               property: "Add a property",
               unit: "Add a unit",
               invite: "Enrol someone",
-              visitor: "Invite a visitor",
-              report: "Create a report",
+              visitor: "Request a guest visit",
+              propertyLimits: "Visitor limits",
+              report: "Log an issue",
+              contractor: "Add a maintenance contact",
             }[modal] || "New record"
           }
           close={() => {
@@ -1349,28 +1637,231 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                 )}
               </>
             )}
-            {modal === "visitor" && (
+            {modal === "visitor" &&
+              (() => {
+                const property = state.properties.find(
+                  (p) => p.id === selectedProperty,
+                );
+                const student = property?.type === "student_accommodation";
+                const sleepover = visitType !== "daily";
+                const nightsLeft = allowance
+                  ? allowance.sleepoverNightsPerMonth - allowance.nightsUsed
+                  : 0;
+                return (
+                  <>
+                    {propertySelect}
+                    <Field name="visitorName">Visitor’s full name</Field>
+                    <Field name="phone" type="tel">
+                      Visitor’s phone number
+                    </Field>
+                    <label>
+                      Visitor’s email address <em>(optional)</em>
+                      <input
+                        name="visitorEmail"
+                        type="email"
+                        maxLength={254}
+                        autoCapitalize="none"
+                        spellCheck={false}
+                      />
+                      <small>
+                        If you give it, your guest gets their own copy of the
+                        pass and can check they are on the system before they
+                        travel. Leave it blank and only you receive the pass.
+                      </small>
+                    </label>
+
+                    <label>
+                      Visitor’s identity document
+                      <select
+                        name="idType"
+                        value={idType}
+                        onChange={(e) => setIdType(e.target.value as IdType)}
+                      >
+                        {student && (
+                          <option value="student_number">Student number</option>
+                        )}
+                        <option value="sa_id">
+                          South African ID number
+                        </option>
+                        <option value="passport">Passport number</option>
+                      </select>
+                    </label>
+                    <label>
+                      {idType === "sa_id"
+                        ? "ID number"
+                        : idType === "passport"
+                          ? "Passport number"
+                          : "Student number"}
+                      <input
+                        name="idNumber"
+                        required
+                        maxLength={80}
+                        inputMode={idType === "sa_id" ? "numeric" : "text"}
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                      />
+                      <small>
+                        {idType === "sa_id"
+                          ? "13 digits, exactly as it appears on the document."
+                          : idType === "passport"
+                            ? "6 to 15 letters and digits."
+                            : "Their student number, keeping any leading zeroes."}{" "}
+                        Security checks this against the document your guest
+                        brings.
+                      </small>
+                    </label>
+
+                    <label>
+                      Visit type
+                      <select
+                        name="visitType"
+                        value={visitType}
+                        onChange={(e) =>
+                          setVisitType(e.target.value as VisitType)
+                        }
+                      >
+                        <option value="daily">Day visit</option>
+                        <option value="sleepover">Sleepover · one night</option>
+                        <option value="extended_sleepover">
+                          Extended sleepover · several nights
+                        </option>
+                      </select>
+                    </label>
+                    {visitType === "extended_sleepover" && (
+                      <label>
+                        Number of nights
+                        <input
+                          name="nights"
+                          type="number"
+                          required
+                          min={2}
+                          max={allowance?.maxConsecutiveNights || 31}
+                          step={1}
+                          defaultValue={2}
+                        />
+                      </label>
+                    )}
+
+                    <Field name="visitDate" type="date" defaultValue={day()}>
+                      {sleepover ? "Arrival date" : "Visit date"}
+                    </Field>
+                    <div className="sp-two-col">
+                      <Field
+                        name="arrival"
+                        type="time"
+                        defaultValue={sleepover ? "18:00" : "09:00"}
+                      >
+                        Arrival (SAST)
+                      </Field>
+                      <Field
+                        name="departure"
+                        type="time"
+                        defaultValue={sleepover ? "09:00" : "18:00"}
+                      >
+                        {sleepover ? "Departure, final day" : "Departure (SAST)"}
+                      </Field>
+                    </div>
+
+                    {allowance && (
+                      <p className="sp-muted">
+                        Your unit this month:{" "}
+                        <strong>
+                          {allowance.nightsUsed} of{" "}
+                          {allowance.sleepoverNightsPerMonth}
+                        </strong>{" "}
+                        sleepover nights used
+                        {nightsLeft > 0
+                          ? ` (${nightsLeft} left)`
+                          : " (none left)"}
+                        , <strong>{allowance.activeGuests}</strong> of{" "}
+                        {allowance.maxActiveGuests} guest passes active, and up
+                        to {allowance.maxConsecutiveNights} consecutive nights
+                        per sleepover. Your property manager sets these limits.
+                      </p>
+                    )}
+                    <label>
+                      Confirm with your password
+                      <input
+                        name="password"
+                        type="password"
+                        required
+                        maxLength={128}
+                        autoComplete="current-password"
+                      />
+                      <small>
+                        A guest enters the building in your name, so SangoPass
+                        checks it is really you asking, not someone using your
+                        unlocked phone.
+                      </small>
+                    </label>
+
+                    <small>
+                      Share the pass only with your intended guest. It is valid
+                      for one visit. Only the guard or reception can scan it.
+                    </small>
+                  </>
+                );
+              })()}
+
+            {modal === "propertyLimits" && (
               <>
                 {propertySelect}
-                <Field name="visitorName">Visitor’s full name</Field>
-                <Field name="phone" type="tel">
-                  Visitor’s phone number
-                </Field>
-                <Field name="visitDate" type="date" defaultValue={day()}>
-                  Visit date
-                </Field>
-                <div className="sp-two-col">
-                  <Field name="arrival" type="time" defaultValue="09:00">
-                    Arrival (SAST)
-                  </Field>
-                  <Field name="departure" type="time" defaultValue="18:00">
-                    Departure (SAST)
-                  </Field>
-                </div>
-                <small>
-                  Share a pass only with your intended guest. The pass is valid
-                  for one visit.
-                </small>
+                <label>
+                  Sleepover nights per unit each month
+                  <input
+                    key={`nights-${selectedProperty}`}
+                    name="sleepoverNightsPerMonth"
+                    type="number"
+                    required
+                    min={0}
+                    max={31}
+                    step={1}
+                    defaultValue={
+                      state.properties.find((p) => p.id === selectedProperty)
+                        ?.sleepoverNightsPerMonth ?? 8
+                    }
+                  />
+                  <small>
+                    Counted against the month a stay begins in. Set 0 to
+                    disallow sleepovers entirely.
+                  </small>
+                </label>
+                <label>
+                  Longest single sleepover, in nights
+                  <input
+                    key={`consec-${selectedProperty}`}
+                    name="maxConsecutiveNights"
+                    type="number"
+                    required
+                    min={0}
+                    max={31}
+                    step={1}
+                    defaultValue={
+                      state.properties.find((p) => p.id === selectedProperty)
+                        ?.maxConsecutiveNights ?? 3
+                    }
+                  />
+                </label>
+                <label>
+                  Guest passes a unit may hold at once
+                  <input
+                    key={`guests-${selectedProperty}`}
+                    name="maxActiveGuests"
+                    type="number"
+                    required
+                    min={1}
+                    max={20}
+                    step={1}
+                    defaultValue={
+                      state.properties.find((p) => p.id === selectedProperty)
+                        ?.maxActiveGuests ?? 2
+                    }
+                  />
+                  <small>
+                    Counts passes that are upcoming or checked in. Checked-out
+                    and cancelled passes free the slot.
+                  </small>
+                </label>
               </>
             )}
             {modal === "report" && (
@@ -1386,6 +1877,20 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                   </select>
                 </label>
                 <label>
+                  How urgent is it?
+                  <select
+                    name="urgency"
+                    value={urgency}
+                    onChange={(e) => setUrgency(e.target.value as Urgency)}
+                  >
+                    <option value="emergency">Emergency</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="normal">Normal</option>
+                    <option value="low">Low</option>
+                  </select>
+                  <small>{URGENCY_HELP[urgency]}</small>
+                </label>
+                <label>
                   What needs attention?
                   <textarea
                     name="description"
@@ -1394,6 +1899,43 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                     maxLength={3000}
                   />
                 </label>
+              </>
+            )}
+
+            {modal === "contractor" && (
+              <>
+                <Field name="name">Name</Field>
+                <label>
+                  Trade
+                  <select name="trade">
+                    {TRADES.map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  In-house or contractor
+                  <select name="kind">
+                    <option value="contractor">Outside contractor</option>
+                    <option value="in_house">In-house staff</option>
+                  </select>
+                </label>
+                <Field name="company" required={false}>
+                  Company <em>(optional)</em>
+                </Field>
+                <Field name="phone" type="tel">
+                  Phone number
+                </Field>
+                <Field name="email" type="email" required={false}>
+                  Email <em>(optional)</em>
+                </Field>
+                <Field name="notes" required={false}>
+                  Notes <em>(optional)</em>
+                </Field>
+                <small>
+                  A contact card only. Nobody signs in with this and it grants
+                  no access.
+                </small>
               </>
             )}
             {error && (
@@ -1455,7 +1997,26 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
             />
             <strong>{pass.reference}</strong>
             <p>
-              {pass.visitDate} · {pass.arrival}–{pass.departure} SAST
+              {pass.nights > 0 ? (
+                <>
+                  Arrive {pass.visitDate} · {pass.arrival}
+                  <br />
+                  Leave {pass.endDate} · {pass.departure} SAST
+                  <br />
+                  {pass.nights} {pass.nights === 1 ? "night" : "nights"}
+                </>
+              ) : (
+                <>
+                  {pass.visitDate} · {pass.arrival}–{pass.departure} SAST
+                  <br />
+                  Day visit
+                </>
+              )}
+            </p>
+            <p className="sp-muted">
+              {pass.idNumber
+                ? `${idLabel(pass.idType)} ${pass.idNumber}`
+                : "Identity not recorded"}
             </p>
             <span className="sp-badge">
               {label(
@@ -1479,6 +2040,13 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
             >
               Open printable pass <ArrowUpRight size={15} />
             </Link>
+            {tenant && (
+              <small>
+                A copy has been emailed to you, and to your guest if you gave
+                their address. Only the guard or reception can scan it: if your
+                guest has no phone, show this pass to them yourself.
+              </small>
+            )}
             {notice && <p role="status">{notice}</p>}
           </div>
         </Dialog>

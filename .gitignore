@@ -46,3 +46,12 @@ next-env.d.ts
 *.sqlite-shm
 *.sqlite-wal
 !.env.example
+
+# firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# verification builds
+/.next-verify/

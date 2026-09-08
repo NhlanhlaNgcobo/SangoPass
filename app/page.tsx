@@ -88,8 +88,8 @@ export default function LandingPage() {
               beautifully connected in one simple workspace.
             </p>
             <div className="hero-actions">
-              <Link href="/register" className="link-button dark">
-                Start your free trial <ArrowUpRight size={18} />
+              <Link href="/demo" className="link-button dark">
+                Try the live demo <ArrowUpRight size={18} />
               </Link>
               <a href="#how-it-works" className="text-link">
                 See how it works <ArrowRight size={16} />

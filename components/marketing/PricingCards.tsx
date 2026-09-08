@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { ArrowUpRight, Check } from "lucide-react";
-import { PLANS } from "@/lib/mock/plans";
+import { PLAN_CARDS } from "@/lib/shared/plans";
 
 export default function PricingCards() {
   return (
     <>
       <div className="pricing-grid">
-        {PLANS.filter((plan) => plan.id !== "portfolio").map((plan) => (
+        {PLAN_CARDS.filter((plan) => plan.id !== "portfolio").map((plan) => (
           <article
             key={plan.id}
             className={

@@ -1,22 +1,68 @@
 "use client";
 import { QRCodeSVG } from "qrcode.react";
+import { BadgeCheck, CalendarClock, Moon, Sun, XCircle } from "lucide-react";
 import Brand from "@/components/ui/Brand";
+import type { IdType, VisitType } from "@/types/workspace";
+
+const ID_LABELS: Record<IdType, string> = {
+  sa_id: "SA ID number",
+  passport: "Passport",
+  student_number: "Student number",
+};
+
+export interface GuestPassView {
+  visitorName: string;
+  propertyName: string;
+  reference: string;
+  token: string;
+  idType: IdType;
+  /** Already masked by the server; only the last four characters. */
+  idNumber: string;
+  visitType: VisitType;
+  visitDate: string;
+  endDate: string;
+  arrival: string;
+  departure: string;
+  nights: number;
+  status: string;
+}
+
+function nightsLabel(nights: number) {
+  return `${nights} ${nights === 1 ? "night" : "nights"}`;
+}
+
 export default function GuestPass({
   pass,
   expired,
 }: {
   expired: boolean;
-  pass: {
-    visitorName: string;
-    propertyName: string;
-    reference: string;
-    token: string;
-    visitDate: string;
-    arrival: string;
-    departure: string;
-    status: string;
-  };
+  pass: GuestPassView;
 }) {
+  const sleepover = pass.visitType !== "daily";
+  const live = !expired && pass.status === "upcoming";
+  const admitted = pass.status === "checked_in";
+  const cancelled = pass.status === "cancelled";
+
+  const headline = cancelled
+    ? "This visit was cancelled"
+    : expired && pass.status === "upcoming"
+      ? "This pass has expired"
+      : pass.status === "checked_out"
+        ? "Visit complete"
+        : admitted
+          ? "You are checked in"
+          : "You are registered";
+
+  const explanation = cancelled
+    ? "Your host cancelled this visit. Ask them to send you a new pass."
+    : expired && pass.status === "upcoming"
+      ? "The visit window has passed. Ask your host for a new pass if you still need to visit."
+      : pass.status === "checked_out"
+        ? "You have been checked out. Thank you for visiting."
+        : admitted
+          ? "Security has admitted you. Keep this pass until you check out."
+          : "Your host has registered you and security can see your booking. Show this pass at the gate.";
+
   return (
     <main id="main-content" className="sp-shell sp-guest-page">
       <article
@@ -25,9 +71,57 @@ export default function GuestPass({
       >
         <Brand />
         <span className="sp-eyebrow">YOUR PERSONAL VISITOR PASS</span>
+
+        <p
+          className={cancelled || (expired && !admitted) ? "sp-error" : ""}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontWeight: 600,
+            margin: 0,
+          }}
+        >
+          {cancelled || (expired && pass.status === "upcoming") ? (
+            <XCircle size={18} aria-hidden />
+          ) : (
+            <BadgeCheck size={18} aria-hidden />
+          )}
+          {headline}
+        </p>
+
         <h1 style={{ fontSize: 28 }}>{pass.visitorName}</h1>
         <p>{pass.propertyName}</p>
-        {!expired && pass.status === "upcoming" ? (
+
+        <p className="sp-muted" style={{ margin: 0 }}>
+          {ID_LABELS[pass.idType]}{" "}
+          {pass.idNumber ? (
+            <strong style={{ letterSpacing: 1 }}>{pass.idNumber}</strong>
+          ) : (
+            <em>not recorded</em>
+          )}
+        </p>
+
+        <p
+          className="sp-muted"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            margin: 0,
+          }}
+        >
+          {sleepover ? (
+            <Moon size={16} aria-hidden />
+          ) : (
+            <Sun size={16} aria-hidden />
+          )}
+          {sleepover
+            ? `Sleepover · ${nightsLabel(pass.nights)}`
+            : "Day visit"}
+        </p>
+
+        {live ? (
           <QRCodeSVG
             value={`SANGOPASS-LIVE:${pass.reference}:${pass.token}`}
             size={220}
@@ -40,16 +134,32 @@ export default function GuestPass({
               : pass.status.replaceAll("_", " ")}
           </span>
         )}
+
         <strong>{pass.reference}</strong>
-        <p>
-          {pass.visitDate}
-          <br />
-          {pass.arrival}–{pass.departure} SAST
+
+        <p
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            justifyContent: "center",
+          }}
+        >
+          <CalendarClock size={16} aria-hidden style={{ marginTop: 4 }} />
+          <span>
+            Arrive {pass.visitDate} · {pass.arrival}
+            <br />
+            {sleepover ? `Leave ${pass.endDate} · ` : "Leave by "}
+            {pass.departure} SAST
+          </span>
         </p>
+
+        <small>{explanation}</small>
         <small>
-          Show this pass to security on arrival. Valid for one visit during the
-          stated time. Keep this link private.
+          Bring the identity document your host registered for you. Keep this
+          link private: anyone holding it can see this pass.
         </small>
+
         <button className="sp-primary" onClick={() => window.print()}>
           Print / save as PDF
         </button>

@@ -7,45 +7,49 @@ import {
   tenantLogin,
 } from "@/lib/server/auth";
 import { join } from "@/lib/server/workspace";
-import { authResponse, body, failure } from "@/lib/server/http";
+import { authResponse, body, context, failure } from "@/lib/server/http";
 import { AppError } from "@/lib/server/validation";
 import { requestReset, resetPassword } from "@/lib/server/recovery";
-export const runtime = "nodejs";
+
 export async function POST(
   request: Request,
-  context: { params: Promise<{ action: string }> },
+  route: { params: Promise<{ action: string }> },
 ) {
   try {
     const input = await body(request);
-    const { action } = await context.params;
+    const { action } = await route.params;
+    const caller = context(request);
+
     if (action === "forgot") {
-      await requestReset(input);
+      await requestReset(input, caller);
       return Response.json({ ok: true });
     }
     if (action === "reset") {
       await resetPassword(input);
-      return authResponse();
+      return authResponse(undefined, undefined, request);
     }
     if (action === "logout") {
-      endSession((await cookies()).get(cookieName)?.value);
-      return authResponse();
+      await endSession((await cookies()).get(cookieName)?.value);
+      return authResponse(undefined, undefined, request);
     }
     if (action === "tenant-login") {
-      const result = await tenantLogin(input);
-      return authResponse(result.token, result.orgId);
+      const result = await tenantLogin(input, caller);
+      return authResponse(result.token, result.orgId, request);
     }
+
     const result =
       action === "register"
-        ? await register(input)
+        ? await register(input, caller)
         : action === "login"
-          ? await login(input)
+          ? await login(input, caller)
           : action === "join"
-            ? await join(input)
+            ? await join(input, caller)
             : null;
     if (!result) throw new AppError("Unknown action.", 404);
     return authResponse(
       result.token,
       "orgId" in result ? String(result.orgId) : undefined,
+      request,
     );
   } catch (error) {
     return failure(error);

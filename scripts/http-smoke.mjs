@@ -68,6 +68,10 @@ try {
     "/login",
     "/register",
     "/demo",
+    "/demo/manager",
+    "/demo/tenant",
+    "/demo/security",
+    "/dashboard/manager",
     "/forgot",
     "/brand/community-sa.webp",
     "/brand/sangopass-mark.svg",
@@ -78,6 +82,19 @@ try {
     (await fetch(origin + "/workspace", { redirect: "manual" })).status,
     307,
   );
+  // The retired mock dashboard now lands on the real demo.
+  assert.equal(
+    (await fetch(origin + "/dashboard/admin", { redirect: "manual" })).status,
+    307,
+  );
+  const demoHtml = await (await fetch(origin + "/demo/manager")).text();
+  // The demo is server-rendered with its seeded world, so a prospect sees the
+  // product immediately rather than an empty shell that fills in later.
+  assert.ok(demoHtml.includes("Ubuntu Living"), "seeded organisation");
+  assert.ok(demoHtml.includes("Nomsa Dlamini"), "seeded persona");
+  assert.ok(demoHtml.includes("DEMO"), "the demo banner is present");
+  const residentHtml = await (await fetch(origin + "/demo/tenant")).text();
+  assert.ok(residentHtml.includes("Aisha Petersen"));
   assert.equal((await api("/api/workspace")).status, 401);
   const owner = await api("/api/auth/register", {
     name: "Thandi QA",
@@ -169,7 +186,7 @@ try {
   );
   const visitDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Johannesburg",
-  }).format(new Date(Date.now() + 86400000));
+  }).format(new Date());
   const visitor = await api(
     "/api/workspace",
     {
@@ -178,9 +195,13 @@ try {
       propertyId,
       visitorName: "Pieter QA",
       phone: "0821234567",
+      password,
+      idType: "sa_id",
+      idNumber: "8001015009087",
+      visitType: "sleepover",
       visitDate,
-      arrival: "09:00",
-      departure: "18:00",
+      arrival: "00:01",
+      departure: "23:59",
     },
     resident.cookie,
   );
@@ -190,6 +211,71 @@ try {
   const html = await pass.text();
   assert.ok(html.includes("Pieter QA"));
   assert.ok(!html.includes("0821234567"));
+  // The visitor can confirm they are on the system, and the pass says so.
+  assert.ok(html.includes("You are registered"));
+  assert.ok(html.includes("Sleepover"));
+  // Only the last four characters of the identity document are ever rendered.
+  assert.ok(!html.includes("8001015009087"));
+  assert.ok(html.includes("9087"));
+
+  // A manager may not book a guest; only the resident may.
+  assert.equal(
+    (
+      await api(
+        "/api/workspace",
+        {
+          orgId,
+          action: "visitor",
+          propertyId,
+          visitorName: "Manager QA",
+          phone: "0821234567",
+          password,
+          idType: "sa_id",
+          idNumber: "8001015009087",
+          visitType: "daily",
+          visitDate,
+          arrival: "09:00",
+          departure: "18:00",
+        },
+        owner.cookie,
+      )
+    ).status,
+    403,
+  );
+
+  // Only the guard or reception records an arrival. The resident holds a copy
+  // of the pass so a guest with no phone has something to present.
+  assert.equal(
+    (
+      await api(
+        "/api/workspace",
+        {
+          orgId,
+          action: "visitorStatus",
+          id: visitor.data.result.id,
+          status: "checked_in",
+        },
+        resident.cookie,
+      )
+    ).status,
+    403,
+  );
+  const signIn = await api(
+    "/api/workspace",
+    {
+      orgId,
+      action: "visitorStatus",
+      id: visitor.data.result.id,
+      status: "checked_in",
+    },
+    owner.cookie,
+  );
+  assert.equal(signIn.status, 200);
+  assert.equal(signIn.data.state.visitors[0].status, "checked_in");
+
+  const health = await fetch(origin + "/api/health");
+  assert.equal(health.status, 200);
+  assert.equal((await health.json()).ok, true);
   const foreign = await api("/api/auth/register", {
     name: "Other QA",
     email: "other@example.test",

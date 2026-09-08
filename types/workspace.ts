@@ -12,7 +12,17 @@ export interface Membership {
   propertyId: string | null;
   unitId: string | null;
 }
-export interface LiveProperty {
+export type VisitType = "daily" | "sleepover" | "extended_sleepover";
+export type IdType = "sa_id" | "passport" | "student_number";
+
+/** Visitor limits a property manager sets for each property. */
+export interface VisitLimits {
+  sleepoverNightsPerMonth: number;
+  maxConsecutiveNights: number;
+  maxActiveGuests: number;
+}
+
+export interface LiveProperty extends VisitLimits {
   loginCode: string;
   id: string;
   orgId: string;
@@ -41,14 +51,24 @@ export interface LiveMember {
 export interface LiveVisitor {
   id: string;
   propertyId: string;
+  unitId: string | null;
   hostId: string;
   visitorName: string;
   phone: string;
+  /** Present when the visitor was given their own copy of the pass. */
+  visitorEmail: string | null;
+  idType: IdType;
+  /** Masked for transport: only the last four characters are ever sent. */
+  idNumber: string;
   reference: string;
   token: string;
+  visitType: VisitType;
+  /** Arrival date. A sleepover departs on endDate instead. */
   visitDate: string;
+  endDate: string;
   arrival: string;
   departure: string;
+  nights: number;
   status: "upcoming" | "checked_in" | "checked_out" | "cancelled";
   createdAt: string;
   checkedInAt: string | null;
@@ -57,6 +77,8 @@ export interface LiveVisitor {
   hostName: string;
   unitLabel: string | null;
 }
+export type Urgency = "low" | "normal" | "urgent" | "emergency";
+
 export interface LiveReport {
   id: string;
   propertyId: string;
@@ -64,8 +86,22 @@ export interface LiveReport {
   authorName: string;
   category: string;
   description: string;
+  urgency: Urgency;
   status: string;
   createdAt: string;
+  unitLabel: string | null;
+}
+
+/** A maintenance contact in the property manager's directory. */
+export interface LiveContractor {
+  id: string;
+  name: string;
+  trade: string;
+  company: string | null;
+  phone: string;
+  email: string | null;
+  kind: "in_house" | "contractor";
+  notes: string | null;
 }
 export interface LiveInvoice {
   id: string;
@@ -92,6 +128,8 @@ export interface WorkspaceState {
   members: LiveMember[];
   visitors: LiveVisitor[];
   reports: LiveReport[];
+  /** Maintenance contacts. Managers only; empty for everyone else. */
+  contractors: LiveContractor[];
   invoices: LiveInvoice[];
   invitations: {
     id: string;
@@ -104,7 +142,21 @@ export interface WorkspaceState {
     propertyId: string | null;
     unitId: string | null;
   }[];
+  /**
+   * What this resident's unit has left this month. Null for managers and
+   * security, who do not host guests.
+   */
+  allowance:
+    | (VisitLimits & {
+        /** YYYY-MM in SAST. */
+        month: string;
+        activeGuests: number;
+        nightsUsed: number;
+      })
+    | null;
   billingConfigured: boolean;
   billingMode: "sandbox" | "live";
   emailConfigured: boolean;
+  /** Which storage backend answered this request. */
+  backend: "sqlite" | "firebase";
 }

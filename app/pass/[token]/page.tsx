@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { now } from "@/lib/server/auth";
-import { one } from "@/lib/server/db";
-import GuestPass from "@/components/workspace/GuestPass";
+import { store } from "@/lib/server/store";
+import type { VisitorRecord } from "@/lib/server/store";
+import { endsAt, maskIdNumber } from "@/lib/server/visits";
+import GuestPass, { type GuestPassView } from "@/components/workspace/GuestPass";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -16,26 +18,36 @@ export default async function PassPage({
 }) {
   const { token } = await params;
   if (!/^[a-f0-9]{64}$/.test(token)) notFound();
-  const pass = one<{
-    visitorName: string;
-    propertyName: string;
-    reference: string;
-    token: string;
-    visitDate: string;
-    arrival: string;
-    departure: string;
-    status: string;
-  }>(
-    "SELECT v.visitorName,p.name propertyName,v.reference,v.token,v.visitDate,v.arrival,v.departure,v.status FROM visitors v JOIN properties p ON p.id=v.propertyId WHERE v.token=?",
-    token,
-  );
-  if (!pass) notFound();
+  const visit = await store().first<VisitorRecord>("visitors", {
+    where: [["token", "==", token]],
+  });
+  if (!visit) notFound();
+
+  // This page exists so the invited visitor can confirm they are on the
+  // system. It deliberately omits the visitor's phone number, every host
+  // account detail, and all but the last four characters of the identity
+  // document, because the link is a capability that can be forwarded.
+  const endDate = visit.endDate || visit.visitDate;
+  const pass: GuestPassView = {
+    visitorName: visit.visitorName,
+    propertyName: visit.propertyName,
+    reference: visit.reference,
+    token: visit.token,
+    idType: visit.idType || "sa_id",
+    idNumber: visit.idNumber ? maskIdNumber(visit.idNumber) : "",
+    visitType: visit.visitType || "daily",
+    visitDate: visit.visitDate,
+    endDate,
+    arrival: visit.arrival,
+    departure: visit.departure,
+    nights: visit.nights || 0,
+    status: visit.status,
+  };
   return (
     <GuestPass
       pass={pass}
       expired={
-        Date.parse(`${pass.visitDate}T${pass.departure}:00+02:00`) <=
-        Date.parse(now())
+        endsAt({ endDate, departure: visit.departure }) <= Date.parse(now())
       }
     />
   );

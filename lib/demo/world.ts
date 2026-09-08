@@ -1,0 +1,569 @@
+import { limitsOf, monthBounds, nightsUsed, sastToday } from "@/lib/server/visits";
+import { rank } from "@/lib/shared/maintenance";
+import type {
+  LiveContractor,
+  LiveInvoice,
+  LiveMember,
+  LiveProperty,
+  LiveReport,
+  LiveUnit,
+  LiveVisitor,
+  WorkspaceState,
+} from "@/types/workspace";
+
+/**
+ * A self-contained sample organisation, held in the browser.
+ *
+ * The demo runs the real workspace against this world instead of the API, so a
+ * prospect sees the actual product and the actual rules - visitor limits, the
+ * urgency queue, role scoping - without an account, a database or a backend.
+ * Nothing here ever reaches a server, and a reload starts a fresh world.
+ */
+export const DEMO_ORG_ID = "demo-org";
+export const DEMO_PASSWORD = "sangopass";
+
+export type DemoRole = "manager" | "tenant" | "security";
+
+export interface DemoPersona {
+  id: string;
+  name: string;
+  email: string;
+  role: DemoRole;
+  title: string;
+  blurb: string;
+  propertyId: string | null;
+  unitId: string | null;
+  username: string | null;
+}
+
+export interface DemoWorld {
+  organisation: WorkspaceState["organisation"];
+  properties: LiveProperty[];
+  units: LiveUnit[];
+  members: LiveMember[];
+  visitors: LiveVisitor[];
+  reports: LiveReport[];
+  contractors: LiveContractor[];
+  invoices: LiveInvoice[];
+  invitations: WorkspaceState["invitations"];
+  seq: number;
+}
+
+const COURT = "demo-property-court";
+const CAMPUS = "demo-property-campus";
+
+export const PERSONAS: DemoPersona[] = [
+  {
+    id: "demo-manager",
+    name: "Nomsa Dlamini",
+    email: "nomsa@ubuntuliving.demo",
+    role: "manager",
+    title: "Property manager",
+    blurb:
+      "Two properties, the maintenance queue, visitor limits and billing.",
+    propertyId: null,
+    unitId: null,
+    username: null,
+  },
+  {
+    id: "demo-resident",
+    name: "Aisha Petersen",
+    email: "aisha@ubuntuliving.demo",
+    role: "tenant",
+    title: "Resident",
+    blurb: "Request a guest, see your allowance, log an issue.",
+    propertyId: COURT,
+    unitId: "demo-unit-a204",
+    username: "SP-A204-7F2C91B4",
+  },
+  {
+    id: "demo-guard",
+    name: "Sibusiso Khumalo",
+    email: "sibusiso@ubuntuliving.demo",
+    role: "security",
+    title: "Security",
+    blurb: "Scan a pass, check arrivals in and out at Ubuntu Court.",
+    propertyId: COURT,
+    unitId: null,
+    username: null,
+  },
+];
+
+const day = (offset: number) =>
+  new Date(Date.parse(`${sastToday()}T00:00:00Z`) + offset * 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+const stamp = (offsetDays: number) =>
+  new Date(Date.now() + offsetDays * 86400000).toISOString();
+
+// Deterministic-looking tokens: long enough to be realistic in a QR code, and
+// obviously sample data on inspection.
+const token = (n: number) =>
+  (n.toString(16).padStart(4, "0") + "d3m0").repeat(8).slice(0, 64);
+
+function unit(
+  id: string,
+  propertyId: string,
+  label: string,
+  rentCents: number,
+  residentName: string | null = null,
+  rentPaid = 1,
+): LiveUnit {
+  return {
+    id,
+    propertyId,
+    label,
+    rentCents,
+    rentPaid,
+    frequency: "monthly",
+    residentName,
+  };
+}
+
+export function seedWorld(): DemoWorld {
+  const properties: LiveProperty[] = [
+    {
+      id: COURT,
+      orgId: DEMO_ORG_ID,
+      name: "Ubuntu Court",
+      address: "12 Bree Street, Cape Town",
+      type: "apartment",
+      loginCode: "ubuntu2026a",
+      sleepoverNightsPerMonth: 8,
+      maxConsecutiveNights: 3,
+      maxActiveGuests: 2,
+    },
+    {
+      id: CAMPUS,
+      orgId: DEMO_ORG_ID,
+      name: "Jacaranda Campus House",
+      address: "88 Stiemens Street, Braamfontein",
+      type: "student_accommodation",
+      loginCode: "jacaranda26",
+      sleepoverNightsPerMonth: 4,
+      maxConsecutiveNights: 2,
+      maxActiveGuests: 1,
+    },
+  ];
+
+  const units: LiveUnit[] = [
+    unit("demo-unit-a101", COURT, "A-101", 780000, "Thabo Molefe"),
+    unit("demo-unit-a204", COURT, "A-204", 810000, "Aisha Petersen"),
+    unit("demo-unit-a205", COURT, "A-205", 810000, null, 0),
+    unit("demo-unit-b102", COURT, "B-102", 690000, "Riaan van Wyk", 0),
+    unit("demo-unit-s01", CAMPUS, "S-01", 425000, "Lerato Mokoena"),
+    unit("demo-unit-s02", CAMPUS, "S-02", 425000, "Yusuf Adams"),
+    unit("demo-unit-s03", CAMPUS, "S-03", 425000, null, 0),
+  ];
+
+  const members: LiveMember[] = [
+    {
+      id: "demo-manager",
+      name: "Nomsa Dlamini",
+      email: "nomsa@ubuntuliving.demo",
+      role: "manager",
+      propertyId: null,
+      unitId: null,
+      username: null,
+    },
+    {
+      id: "demo-resident",
+      name: "Aisha Petersen",
+      email: "aisha@ubuntuliving.demo",
+      role: "tenant",
+      propertyId: COURT,
+      unitId: "demo-unit-a204",
+      username: "SP-A204-7F2C91B4",
+    },
+    {
+      id: "demo-guard",
+      name: "Sibusiso Khumalo",
+      email: "sibusiso@ubuntuliving.demo",
+      role: "security",
+      propertyId: COURT,
+      unitId: null,
+      username: null,
+    },
+    {
+      id: "demo-thabo",
+      name: "Thabo Molefe",
+      email: "thabo@ubuntuliving.demo",
+      role: "tenant",
+      propertyId: COURT,
+      unitId: "demo-unit-a101",
+      username: "SP-A101-3B7E20DD",
+    },
+    {
+      id: "demo-lerato",
+      name: "Lerato Mokoena",
+      email: "lerato@ubuntuliving.demo",
+      role: "tenant",
+      propertyId: CAMPUS,
+      unitId: "demo-unit-s01",
+      username: "20241187",
+    },
+    {
+      id: "demo-yusuf",
+      name: "Yusuf Adams",
+      email: "yusuf@ubuntuliving.demo",
+      role: "tenant",
+      propertyId: CAMPUS,
+      unitId: "demo-unit-s02",
+      username: "20239954",
+    },
+  ];
+
+  const visitors: LiveVisitor[] = [
+    {
+      id: "demo-visit-1",
+      propertyId: COURT,
+      unitId: "demo-unit-a204",
+      hostId: "demo-resident",
+      visitorName: "Lebo Ndlovu",
+      phone: "+27 82 441 9087",
+      visitorEmail: "lebo@example.co.za",
+      idType: "sa_id",
+      idNumber: "•••••••••9087",
+      reference: "SP-4K7QP2M9XA",
+      token: token(1),
+      visitType: "daily",
+      visitDate: day(0),
+      endDate: day(0),
+      arrival: "09:00",
+      departure: "18:00",
+      nights: 0,
+      status: "checked_in",
+      createdAt: stamp(-1),
+      checkedInAt: stamp(-0.2),
+      checkedOutAt: null,
+      propertyName: "Ubuntu Court",
+      hostName: "Aisha Petersen",
+      unitLabel: "A-204",
+    },
+    {
+      id: "demo-visit-2",
+      propertyId: COURT,
+      unitId: "demo-unit-a101",
+      hostId: "demo-thabo",
+      visitorName: "Karabo Sithole",
+      phone: "+27 71 220 4413",
+      visitorEmail: null,
+      idType: "sa_id",
+      idNumber: "•••••••••4413",
+      reference: "SP-9WD3TB6RLE",
+      token: token(2),
+      visitType: "sleepover",
+      visitDate: day(1),
+      endDate: day(2),
+      arrival: "18:30",
+      departure: "08:00",
+      nights: 1,
+      status: "upcoming",
+      createdAt: stamp(-0.5),
+      checkedInAt: null,
+      checkedOutAt: null,
+      propertyName: "Ubuntu Court",
+      hostName: "Thabo Molefe",
+      unitLabel: "A-101",
+    },
+    {
+      id: "demo-visit-3",
+      propertyId: CAMPUS,
+      unitId: "demo-unit-s01",
+      hostId: "demo-lerato",
+      visitorName: "Zanele Mahlangu",
+      phone: "+27 63 887 1120",
+      visitorEmail: "zanele@example.co.za",
+      idType: "student_number",
+      idNumber: "••••1120",
+      reference: "SP-2CJ8RN5VQK",
+      token: token(3),
+      visitType: "extended_sleepover",
+      visitDate: day(3),
+      endDate: day(5),
+      arrival: "17:00",
+      departure: "09:30",
+      nights: 2,
+      status: "upcoming",
+      createdAt: stamp(-2),
+      checkedInAt: null,
+      checkedOutAt: null,
+      propertyName: "Jacaranda Campus House",
+      hostName: "Lerato Mokoena",
+      unitLabel: "S-01",
+    },
+    {
+      id: "demo-visit-4",
+      propertyId: COURT,
+      unitId: "demo-unit-b102",
+      hostId: "demo-riaan",
+      visitorName: "Pieter Coetzee",
+      phone: "+27 84 662 3390",
+      visitorEmail: null,
+      idType: "passport",
+      idNumber: "••••3390",
+      reference: "SP-7HM4XZ1PDW",
+      token: token(4),
+      visitType: "daily",
+      visitDate: day(-2),
+      endDate: day(-2),
+      arrival: "10:00",
+      departure: "16:00",
+      nights: 0,
+      status: "checked_out",
+      createdAt: stamp(-3),
+      checkedInAt: stamp(-2.3),
+      checkedOutAt: stamp(-2.1),
+      propertyName: "Ubuntu Court",
+      hostName: "Riaan van Wyk",
+      unitLabel: "B-102",
+    },
+  ];
+
+  const reports: LiveReport[] = [
+    {
+      id: "demo-report-1",
+      propertyId: COURT,
+      authorId: "demo-thabo",
+      authorName: "Thabo Molefe",
+      category: "Maintenance",
+      description:
+        "Burst geyser in the ceiling above the A-101 bathroom. Water is coming through the light fitting and I have switched the power off at the board.",
+      urgency: "emergency",
+      status: "open",
+      createdAt: stamp(-0.1),
+      unitLabel: "A-101",
+    },
+    {
+      id: "demo-report-2",
+      propertyId: COURT,
+      authorId: "demo-resident",
+      authorName: "Aisha Petersen",
+      category: "Security",
+      description:
+        "The pedestrian gate latch does not catch, so the gate stands open after everyone walks through.",
+      urgency: "urgent",
+      status: "in_progress",
+      createdAt: stamp(-1.4),
+      unitLabel: "A-204",
+    },
+    {
+      id: "demo-report-3",
+      propertyId: CAMPUS,
+      authorId: "demo-lerato",
+      authorName: "Lerato Mokoena",
+      category: "Noise",
+      description:
+        "Music from the courtyard past midnight on Thursday and Friday. It is hard to study.",
+      urgency: "normal",
+      status: "open",
+      createdAt: stamp(-3),
+      unitLabel: "S-01",
+    },
+    {
+      id: "demo-report-4",
+      propertyId: COURT,
+      authorId: "demo-resident",
+      authorName: "Aisha Petersen",
+      category: "Maintenance",
+      description: "Passage light outside A-204 has been flickering for a week.",
+      urgency: "low",
+      status: "resolved",
+      createdAt: stamp(-9),
+      unitLabel: "A-204",
+    },
+  ];
+
+  const contractors: LiveContractor[] = [
+    {
+      id: "demo-contact-1",
+      name: "Sipho Ndlovu",
+      trade: "Plumbing",
+      company: "Ndlovu Plumbing CC",
+      phone: "+27 82 555 1234",
+      email: "sipho@ndlovuplumbing.demo",
+      kind: "contractor",
+      notes: "24-hour call-out. Geysers and burst pipes.",
+    },
+    {
+      id: "demo-contact-2",
+      name: "Anna Mokoena",
+      trade: "Gardening",
+      company: null,
+      phone: "+27 83 771 0092",
+      email: null,
+      kind: "in_house",
+      notes: "On site Tuesdays and Fridays.",
+    },
+    {
+      id: "demo-contact-3",
+      name: "Dev Naidoo",
+      trade: "Electrical",
+      company: "Naidoo Electrical",
+      phone: "+27 71 404 8821",
+      email: "dev@naidooelectrical.demo",
+      kind: "contractor",
+      notes: "Certificate of compliance work.",
+    },
+    {
+      id: "demo-contact-4",
+      name: "Johannes Botha",
+      trade: "Gate & access",
+      company: "Gatewise",
+      phone: "+27 82 116 7745",
+      email: "service@gatewise.demo",
+      kind: "contractor",
+      notes: null,
+    },
+  ];
+
+  return {
+    organisation: {
+      id: DEMO_ORG_ID,
+      name: "Ubuntu Living",
+      plan: "growth",
+      trialUntil: stamp(-30),
+      paidUntil: stamp(19),
+      active: true,
+    },
+    properties,
+    units,
+    members,
+    visitors,
+    reports,
+    contractors,
+    invoices: [
+      {
+        id: "demo-invoice-1",
+        plan: "growth",
+        amountCents: 129900,
+        status: "paid",
+        createdAt: stamp(-11),
+      },
+      {
+        id: "demo-invoice-2",
+        plan: "growth",
+        amountCents: 129900,
+        status: "paid",
+        createdAt: stamp(-41),
+      },
+    ],
+    invitations: [
+      {
+        id: "demo-invitation-1",
+        email: "newresident@example.co.za",
+        role: "tenant",
+        expiresAt: stamp(5),
+        username: "SP-A205-91DE4C0A",
+        emailStatus: "sent",
+        emailSentAt: stamp(-2),
+        propertyId: COURT,
+        unitId: "demo-unit-a205",
+      },
+    ],
+    seq: 1,
+  };
+}
+
+/**
+ * Derives the state one persona sees, applying exactly the scoping rules the
+ * server applies in lib/server/workspace.ts. Switching roles in the demo shows
+ * real isolation, not a different set of fixtures.
+ */
+export function viewFor(world: DemoWorld, persona: DemoPersona): WorkspaceState {
+  const isManager = persona.role === "manager";
+  const isSecurity = persona.role === "security";
+
+  const properties = isManager
+    ? world.properties
+    : world.properties.filter((p) => p.id === persona.propertyId);
+
+  const units = isSecurity
+    ? []
+    : isManager
+      ? world.units
+      : world.units.filter((u) => u.id === persona.unitId);
+
+  const visitors = isManager
+    ? world.visitors
+    : isSecurity
+      ? world.visitors.filter((v) => v.propertyId === persona.propertyId)
+      : world.visitors.filter((v) => v.hostId === persona.id);
+
+  const reports = isManager
+    ? world.reports
+    : isSecurity
+      ? world.reports.filter((r) => r.propertyId === persona.propertyId)
+      : world.reports.filter((r) => r.authorId === persona.id);
+
+  let allowance: WorkspaceState["allowance"] = null;
+  if (persona.role === "tenant" && persona.unitId && persona.propertyId) {
+    const limits = limitsOf(
+      world.properties.find((p) => p.id === persona.propertyId) || {},
+    );
+    const month = monthBounds(sastToday());
+    const mine = world.visitors.filter((v) => v.unitId === persona.unitId);
+    allowance = {
+      month: month.start.slice(0, 7),
+      activeGuests: mine.filter(
+        (v) => v.status === "upcoming" || v.status === "checked_in",
+      ).length,
+      nightsUsed: nightsUsed(
+        mine.filter(
+          (v) => v.visitDate >= month.start && v.visitDate <= month.end,
+        ),
+      ),
+      ...limits,
+    };
+  }
+
+  return {
+    asOf: new Date().toISOString(),
+    user: { id: persona.id, name: persona.name, email: persona.email },
+    memberships: [
+      {
+        orgId: DEMO_ORG_ID,
+        orgName: world.organisation.name,
+        role: persona.role,
+        propertyId: persona.propertyId,
+        unitId: persona.unitId,
+        username: persona.username,
+      },
+    ],
+    membership: {
+      orgId: DEMO_ORG_ID,
+      orgName: world.organisation.name,
+      role: persona.role,
+      propertyId: persona.propertyId,
+      unitId: persona.unitId,
+      username: persona.username,
+    },
+    organisation: world.organisation,
+    properties,
+    units: [...units].sort((a, b) => a.label.localeCompare(b.label)),
+    members: isManager
+      ? [...world.members].sort((a, b) => a.name.localeCompare(b.name))
+      : [],
+    visitors: [...visitors].sort(
+      (a, b) =>
+        b.visitDate.localeCompare(a.visitDate) ||
+        b.arrival.localeCompare(a.arrival),
+    ),
+    reports: [...reports].sort(
+      (a, b) =>
+        rank(a.urgency) - rank(b.urgency) ||
+        b.createdAt.localeCompare(a.createdAt),
+    ),
+    contractors: isManager
+      ? [...world.contractors].sort((a, b) => a.name.localeCompare(b.name))
+      : [],
+    invoices: isManager ? world.invoices : [],
+    invitations: isManager ? world.invitations : [],
+    allowance,
+    billingConfigured: false,
+    billingMode: "sandbox",
+    emailConfigured: false,
+    backend: "sqlite",
+  };
+}

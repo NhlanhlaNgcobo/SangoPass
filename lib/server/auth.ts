@@ -1,174 +1,281 @@
-import {
-  createHash,
-  randomBytes,
-  randomUUID,
-  scrypt as derive,
-  timingSafeEqual,
-} from "node:crypto";
-import { promisify } from "node:util";
-import { all, one, run, transaction } from "./db";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { identity } from "./identity";
+import { BACKSTOPS, bucket, throttle } from "./ratelimit";
+import { store } from "./store";
+import type {
+  MembershipRecord,
+  PropertyRecord,
+  SessionRecord,
+  UserRecord,
+} from "./store";
 import { AppError, email, password, text } from "./validation";
 import type { Account, Membership } from "@/types/workspace";
-const scrypt = promisify(derive);
+
 export const cookieName = "sangopass_session";
+export const SESSION_DAYS = 7;
+
 export const hashToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 export const newToken = () => randomBytes(32).toString("hex");
 export const now = () => new Date().toISOString();
-export async function hashPassword(value: string) {
-  const salt = randomBytes(16).toString("hex");
-  const hash = (await scrypt(value, salt, 64)) as Buffer;
-  return `${salt}:${hash.toString("hex")}`;
+
+export interface RequestContext {
+  ip?: string;
 }
-export async function verifyPassword(value: string, stored: string) {
-  const [salt, digest] = stored.split(":");
-  const expected = Buffer.from(digest, "hex");
-  const actual = (await scrypt(value, salt, 64)) as Buffer;
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-export function throttle(key: string, limit = 10) {
-  const bucket = hashToken(key);
-  const time = Date.now();
-  transaction(() => {
-    run("DELETE FROM rate_limits WHERE resetsAt < ?", time);
-    const row = one<{ count: number }>(
-      "SELECT count FROM rate_limits WHERE key=?",
-      bucket,
-    );
-    if (row && row.count >= limit)
-      throw new AppError(
-        "Too many attempts. Please try again in 15 minutes.",
-        429,
-      );
-    run(
-      "INSERT INTO rate_limits(key,count,resetsAt) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1",
-      bucket,
-      time + 900000,
-    );
-  });
-}
-export function memberships(userId: string) {
-  return all<Membership>(
-    "SELECT m.orgId,o.name orgName,m.role,m.propertyId,m.unitId,m.username FROM memberships m JOIN organisations o ON o.id=m.orgId WHERE m.userId=? ORDER BY o.name",
-    userId,
-  );
-}
-export function session(token?: string): Account | undefined {
-  if (!token || !/^[a-f0-9]{64}$/.test(token)) return;
-  return one<Account>(
-    "SELECT u.id,u.name,u.email FROM sessions s JOIN users u ON u.id=s.userId WHERE s.hash=? AND s.expiresAt>?",
-    hashToken(token),
-    now(),
-  );
-}
-export function createSession(userId: string) {
+
+const address = (context?: RequestContext) => context?.ip || "unknown";
+
+/* ------------------------------------------------------------------ */
+/* Sessions                                                            */
+/* ------------------------------------------------------------------ */
+
+export async function createSession(userId: string) {
   const token = newToken();
-  run("DELETE FROM sessions WHERE expiresAt<?", now());
-  run(
-    "INSERT INTO sessions VALUES(?,?,?)",
-    hashToken(token),
-    userId,
-    new Date(Date.now() + 7 * 86400000).toISOString(),
-  );
+  await store().tx(async (t) => {
+    t.set("sessions", hashToken(token), {
+      userId,
+      expiresAt: new Date(Date.now() + SESSION_DAYS * 86400000).toISOString(),
+    });
+  });
   return token;
 }
-export function endSession(token?: string) {
-  if (token) run("DELETE FROM sessions WHERE hash=?", hashToken(token));
+
+export async function session(token?: string): Promise<Account | undefined> {
+  if (!token || !/^[a-f0-9]{64}$/.test(token)) return;
+  const record = await store().get<SessionRecord>("sessions", hashToken(token));
+  if (!record || record.expiresAt <= now()) return;
+  const user = await store().get<UserRecord>("users", record.userId);
+  if (!user) return;
+  return { id: user.id, name: user.name, email: user.email };
 }
-export async function register(input: Record<string, unknown>) {
-  const address = email(input.email);
+
+export async function endSession(token?: string) {
+  if (!token || !/^[a-f0-9]{64}$/.test(token)) return;
+  await store().tx(async (t) => {
+    t.remove("sessions", hashToken(token));
+  });
+}
+
+export async function endAllSessions(userId: string) {
+  await store().removeWhere("sessions", { where: [["userId", "==", userId]] });
+  await identity().revoke(userId);
+}
+
+/* ------------------------------------------------------------------ */
+/* Memberships                                                         */
+/* ------------------------------------------------------------------ */
+
+export function toMembership(record: MembershipRecord): Membership {
+  return {
+    orgId: record.orgId,
+    orgName: record.orgName,
+    role: record.role,
+    propertyId: record.propertyId,
+    unitId: record.unitId,
+    username: record.username,
+  };
+}
+
+export async function memberships(userId: string): Promise<Membership[]> {
+  const rows = await store().find<MembershipRecord>("memberships", {
+    where: [["userId", "==", userId]],
+  });
+  return rows
+    .sort((a, b) => a.orgName.localeCompare(b.orgName))
+    .map(toMembership);
+}
+
+export const membershipId = (userId: string, orgId: string) =>
+  `${userId}__${orgId}`;
+
+/* ------------------------------------------------------------------ */
+/* Accounts                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Creates the credential with the active identity backend and hands back the
+ * value to persist on the user record. The caller commits the user document;
+ * on failure it must call rollbackAccount so Firebase Authentication is not
+ * left holding an orphan.
+ */
+export async function prepareAccount(input: {
+  id: string;
+  email: string;
+  name: string;
+  password: string;
+}) {
+  const credential = await identity().createUser(input);
+  const secret = await identity().secret(input.password);
+  return { credential, secret };
+}
+
+export async function rollbackAccount(id: string) {
+  await identity()
+    .deleteUser(id)
+    .catch(() => undefined);
+}
+
+export async function register(
+  input: Record<string, unknown>,
+  context?: RequestContext,
+) {
+  const emailAddress = email(input.email);
   const name = text(input.name, "name", 100);
   const organisation = text(input.organisation, "organisation name", 120);
-  const pass = password(input.password);
-  throttle("register:" + address, 5);
-  throttle("registrations", 100);
-  const digest = await hashPassword(pass);
-  const userId = randomUUID(),
-    orgId = randomUUID();
-  transaction(() => {
-    if (one("SELECT id FROM users WHERE email=?", address))
-      throw new AppError(
-        "An account already exists for this email. Please sign in.",
-        409,
-      );
-    run(
-      "INSERT INTO users VALUES(?,?,?,?,?)",
-      userId,
-      address,
-      name,
-      digest,
-      now(),
+  const secretValue = password(input.password);
+  await throttle([
+    bucket(`register:${emailAddress}`, 5),
+    bucket(`register:ip:${address(context)}`, 10),
+    BACKSTOPS.registrations,
+  ]);
+
+  if (await store().first<UserRecord>("users", {
+    where: [["email", "==", emailAddress]],
+  }))
+    throw new AppError(
+      "An account already exists for this email. Please sign in.",
+      409,
     );
-    run(
-      "INSERT INTO organisations(id,name,trialUntil,createdAt) VALUES(?,?,?,?)",
-      orgId,
-      organisation,
-      new Date(Date.now() + 14 * 86400000).toISOString(),
-      now(),
-    );
-    run(
-      "INSERT INTO memberships(userId,orgId,role) VALUES(?,?,'manager')",
-      userId,
-      orgId,
-    );
+
+  const userId = randomUUID();
+  const orgId = randomUUID();
+  const { secret } = await prepareAccount({
+    id: userId,
+    email: emailAddress,
+    name,
+    password: secretValue,
   });
+  const timestamp = now();
+  try {
+    await store().tx(async (t) => {
+      const clash = await t.first<UserRecord>("users", {
+        where: [["email", "==", emailAddress]],
+      });
+      if (clash)
+        throw new AppError(
+          "An account already exists for this email. Please sign in.",
+          409,
+        );
+      t.reserve(`userEmail:${emailAddress}`, userId);
+      t.create("users", userId, {
+        email: emailAddress,
+        name,
+        password: secret,
+        createdAt: timestamp,
+      });
+      t.create("organisations", orgId, {
+        name: organisation,
+        plan: "starter",
+        trialUntil: new Date(Date.now() + 14 * 86400000).toISOString(),
+        paidUntil: null,
+        createdAt: timestamp,
+      });
+      t.create("memberships", membershipId(userId, orgId), {
+        userId,
+        orgId,
+        role: "manager",
+        propertyId: null,
+        unitId: null,
+        username: null,
+        usernameKey: null,
+        orgName: organisation,
+        memberName: name,
+        userEmail: emailAddress,
+      });
+    });
+  } catch (error) {
+    await rollbackAccount(userId);
+    throw error;
+  }
   return {
-    token: createSession(userId),
-    user: { id: userId, name, email: address },
+    token: await createSession(userId),
+    user: { id: userId, name, email: emailAddress },
     orgId,
   };
 }
-export async function login(input: Record<string, unknown>) {
-  const address = email(input.email);
-  const pass =
+
+export async function login(
+  input: Record<string, unknown>,
+  context?: RequestContext,
+) {
+  const emailAddress = email(input.email);
+  const supplied =
     typeof input.password === "string" && input.password.length <= 128
       ? input.password
       : "";
-  throttle("login:" + address);
-  throttle("logins", 300);
-  const user = one<Account & { password: string }>(
-    "SELECT id,name,email,password FROM users WHERE email=?",
-    address,
-  );
-  // Perform a password derivation even when the account is unknown.
-  const digest =
-    user?.password || "00000000000000000000000000000000:" + "00".repeat(64);
-  if (!(await verifyPassword(pass, digest)) || !user)
-    throw new AppError("Email or password is incorrect.", 401);
+  await throttle([
+    bucket(`login:${emailAddress}`, 10),
+    bucket(`login:ip:${address(context)}`, 30),
+    BACKSTOPS.logins,
+  ]);
+  const credential = await identity().verifyPassword(emailAddress, supplied);
+  if (!credential) throw new AppError("Email or password is incorrect.", 401);
+  const user = await store().get<UserRecord>("users", credential.id);
+  if (!user) throw new AppError("Email or password is incorrect.", 401);
   return {
-    token: createSession(user.id),
+    token: await createSession(user.id),
     user: { id: user.id, name: user.name, email: user.email },
   };
 }
 
-export async function tenantLogin(input: Record<string, unknown>) {
+export async function tenantLogin(
+  input: Record<string, unknown>,
+  context?: RequestContext,
+) {
   const username = text(
     input.username,
     "username or student number",
     80,
   ).toLowerCase();
-  const propertyCode = text(
-    input.propertyCode,
-    "property code",
-    40,
-  ).toLowerCase();
-  throttle("tenant-login:" + propertyCode + ":" + username);
-  throttle("logins", 300);
-  const user = one<Account & { password: string; orgId: string }>(
-    "SELECT u.id,u.name,u.email,u.password,m.orgId FROM memberships m JOIN users u ON u.id=m.userId JOIN properties p ON p.id=m.propertyId WHERE p.loginCode=? AND m.username=? AND m.role='tenant'",
-    propertyCode,
-    username,
-  );
-  const pass =
+  const propertyCode = text(input.propertyCode, "property code", 40)
+    .toLowerCase()
+    .trim();
+  const supplied =
     typeof input.password === "string" && input.password.length <= 128
       ? input.password
       : "";
-  const digest =
-    user?.password || "00000000000000000000000000000000:" + "00".repeat(64);
-  if (!(await verifyPassword(pass, digest)) || !user)
-    throw new AppError(
-      "Property code, username or password is incorrect.",
-      401,
-    );
-  return { token: createSession(user.id), orgId: user.orgId };
+  await throttle([
+    bucket(`tenant-login:${propertyCode}:${username}`, 10),
+    bucket(`tenant-login:property:${propertyCode}`, 200),
+    bucket(`login:ip:${address(context)}`, 30),
+    BACKSTOPS.logins,
+  ]);
+
+  const rejection = new AppError(
+    "Property code, username or password is incorrect.",
+    401,
+  );
+  const property = await store().first<PropertyRecord>("properties", {
+    where: [["loginCode", "==", propertyCode]],
+  });
+  if (!property) throw rejection;
+  const membership = await store().first<MembershipRecord>("memberships", {
+    where: [
+      ["propertyId", "==", property.id],
+      ["usernameKey", "==", username],
+      ["role", "==", "tenant"],
+    ],
+  });
+  if (!membership) throw rejection;
+  const credential = await identity().verifyPassword(
+    membership.userEmail,
+    supplied,
+  );
+  if (!credential || credential.id !== membership.userId) throw rejection;
+  return {
+    token: await createSession(membership.userId),
+    orgId: membership.orgId,
+  };
+}
+
+/** Removes elapsed sessions and reset tokens. Called by maintenance. */
+export async function sweepSessions() {
+  const cutoff = now();
+  const sessions = await store().removeWhere("sessions", {
+    where: [["expiresAt", "<", cutoff]],
+  });
+  const resets = await store().removeWhere("resetTokens", {
+    where: [["expiresAt", "<", cutoff]],
+  });
+  return { sessions, resets };
 }

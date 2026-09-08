@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { cookieName, session, memberships } from "@/lib/server/auth";
+import { cookieName, memberships, session } from "@/lib/server/auth";
 import { workspace } from "@/lib/server/workspace";
 import WorkspaceApp from "@/components/workspace/WorkspaceApp";
 export const runtime = "nodejs";
@@ -10,9 +10,10 @@ export default async function WorkspacePage({
 }: {
   searchParams: Promise<{ org?: string }>;
 }) {
-  const user = session((await cookies()).get(cookieName)?.value);
+  const user = await session((await cookies()).get(cookieName)?.value);
   if (!user) redirect("/login");
-  if (!memberships(user.id).length)
+  const belongs = await memberships(user.id);
+  if (!belongs.length)
     return (
       <main id="main-content" className="sp-shell" style={{ padding: 40 }}>
         <section className="sp-panel">
@@ -29,12 +30,9 @@ export default async function WorkspacePage({
       </main>
     );
   const { org } = await searchParams;
-  return (
-    <WorkspaceApp
-      initial={workspace(
-        user,
-        memberships(user.id).some((m) => m.orgId === org) ? org : undefined,
-      )}
-    />
+  const initial = await workspace(
+    user,
+    belongs.some((m) => m.orgId === org) ? org : undefined,
   );
+  return <WorkspaceApp initial={initial} />;
 }

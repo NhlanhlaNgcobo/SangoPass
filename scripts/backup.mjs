@@ -1,6 +1,19 @@
 import { DatabaseSync, backup } from "node:sqlite";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
+
+// SQLite backend only. On Firebase, backups are scheduled in Google Cloud:
+// Firestore > Backups, or `gcloud firestore backups schedules create`.
+const chosen = (process.env.SANGOPASS_BACKEND || "").toLowerCase();
+if (chosen === "firebase" || chosen === "firestore") {
+  console.error(
+    "SANGOPASS_BACKEND is firebase: this script backs up the SQLite file only.\n" +
+      "Configure Firestore backups in the Google Cloud console, or run:\n" +
+      "  gcloud firestore backups schedules create --database='(default)' --retention=7d --recurrence=daily",
+  );
+  process.exit(1);
+}
+
 const source = resolve(
   process.env.SANGOPASS_DATABASE_PATH || "data/sangopass.sqlite",
 );
