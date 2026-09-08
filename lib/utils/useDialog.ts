@@ -16,7 +16,7 @@ export function useDialog(open: boolean, onClose: () => void) {
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const selectable =
-      'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]';
+      'button:not([disabled]):not([tabindex="-1"]),a[href]:not([tabindex="-1"]),input:not([disabled]):not([tabindex="-1"]),select:not([disabled]):not([tabindex="-1"]),textarea:not([disabled]):not([tabindex="-1"]),[tabindex="0"]';
     const first = panel.querySelector<HTMLElement>(selectable);
     (first ?? panel).focus();
     const keydown = (event: KeyboardEvent) => {

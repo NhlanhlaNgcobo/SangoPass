@@ -26,6 +26,7 @@ import Brand from "@/components/ui/Brand";
 import type { WorkspaceState, LiveVisitor } from "@/types/workspace";
 import { PLANS } from "@/lib/mock/plans";
 import { useDialog } from "@/lib/utils/useDialog";
+import { useMediaQuery } from "@/lib/utils/useMediaQuery";
 
 const rand = (cents: number) =>
   new Intl.NumberFormat("en-ZA", {
@@ -115,6 +116,9 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
     ),
     [inviteRole, setInviteRole] = useState("tenant");
   const router = useRouter();
+  const compact = useMediaQuery("(max-width: 1023px)");
+  const navigationOpen = compact && mobile;
+  const navigationDialog = useDialog(navigationOpen, () => setMobile(false));
   const manager = state.membership.role === "manager",
     security = state.membership.role === "security";
   const nav = [
@@ -292,98 +296,116 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
   );
   return (
     <div className="sp-shell">
-      <aside className={`sp-sidebar ${mobile ? "is-open" : ""}`}>
-        <Link href="/" aria-label="SangoPass home">
-          <Brand light />
-        </Link>
+      <div
+        className={`sp-navigation ${navigationOpen ? "is-open" : ""}`}
+        {...(navigationOpen ? navigationDialog : { ref: navigationDialog.ref })}
+        aria-label={navigationOpen ? "Workspace navigation" : undefined}
+      >
         <button
-          className="sp-mobile-close sp-icon"
+          className="sp-nav-backdrop"
           onClick={() => setMobile(false)}
           aria-label="Close navigation"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+        <aside
+          id="workspace-navigation"
+          className={`sp-sidebar ${navigationOpen ? "is-open" : ""}`}
         >
-          <X />
-        </button>
-        <div className="sp-workspace-label">YOUR WORKSPACE</div>
-        <label className="sp-org-select">
-          <span className="sr-only">Organisation</span>
-          <select
-            value={state.membership.orgId}
-            onChange={(e) => {
-              setView("overview");
-              void refresh(e.target.value);
-            }}
+          <Link href="/" aria-label="SangoPass home">
+            <Brand light />
+          </Link>
+          <button
+            className="sp-mobile-close sp-icon"
+            onClick={() => setMobile(false)}
+            aria-label="Close navigation"
           >
-            {state.memberships.map((m) => (
-              <option key={m.orgId} value={m.orgId}>
-                {m.orgName}
-              </option>
-            ))}
-          </select>
-          <small>
-            {state.membership.role === "tenant"
-              ? "Resident"
-              : label(state.membership.role)}{" "}
-            workspace
-          </small>
-        </label>
-        <nav aria-label="Workspace">
-          {nav.map((item) => (
-            <button
-              key={item.id}
-              aria-current={view === item.id ? "page" : undefined}
-              onClick={() => {
-                setView(item.id as View);
-                setMobile(false);
-                setSearch("");
+            <X />
+          </button>
+          <div className="sp-workspace-label">YOUR WORKSPACE</div>
+          <label className="sp-org-select">
+            <span className="sr-only">Organisation</span>
+            <select
+              value={state.membership.orgId}
+              onChange={(e) => {
+                setView("overview");
+                void refresh(e.target.value);
               }}
             >
-              <item.icon size={19} />
-              {item.title}
-              {item.id === "reports" &&
-                state.reports.some((r) => r.status !== "resolved") && (
-                  <span className="sp-nav-dot" />
-                )}
+              {state.memberships.map((m) => (
+                <option key={m.orgId} value={m.orgId}>
+                  {m.orgName}
+                </option>
+              ))}
+            </select>
+            <small>
+              {state.membership.role === "tenant"
+                ? "Resident"
+                : label(state.membership.role)}{" "}
+              workspace
+            </small>
+          </label>
+          <nav aria-label="Workspace">
+            {nav.map((item) => (
+              <button
+                key={item.id}
+                aria-current={view === item.id ? "page" : undefined}
+                onClick={() => {
+                  setView(item.id as View);
+                  setMobile(false);
+                  setSearch("");
+                }}
+              >
+                <item.icon size={19} />
+                {item.title}
+                {item.id === "reports" &&
+                  state.reports.some((r) => r.status !== "resolved") && (
+                    <span className="sp-nav-dot" />
+                  )}
+              </button>
+            ))}
+          </nav>
+          <div className="sp-sidebar-bottom">
+            <p>
+              One community.
+              <br />
+              Every welcome.
+            </p>
+            <small>Made for South African living.</small>
+            <button
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const r = await fetch("/api/auth/logout", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: "{}",
+                  });
+                  if (!r.ok) throw new Error();
+                  router.push("/login");
+                  router.refresh();
+                } catch {
+                  setBusy(false);
+                  setError("Could not sign out. Try again.");
+                }
+              }}
+            >
+              <LogOut size={17} />
+              Sign out
             </button>
-          ))}
-        </nav>
-        <div className="sp-sidebar-bottom">
-          <p>
-            One community.
-            <br />
-            Every welcome.
-          </p>
-          <small>Made for South African living.</small>
-          <button
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                const r = await fetch("/api/auth/logout", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: "{}",
-                });
-                if (!r.ok) throw new Error();
-                router.push("/login");
-                router.refresh();
-              } catch {
-                setBusy(false);
-                setError("Could not sign out. Try again.");
-              }
-            }}
-          >
-            <LogOut size={17} />
-            Sign out
-          </button>
-        </div>
-      </aside>
-      <div className="sp-main">
+          </div>
+        </aside>
+      </div>
+      <div className="sp-main" inert={navigationOpen}>
         <header className="sp-topbar">
           <div className="sp-row">
             <button
               className="sp-mobile-toggle sp-icon"
               onClick={() => setMobile(true)}
               aria-label="Open navigation"
+              aria-expanded={navigationOpen}
+              aria-controls="workspace-navigation"
             >
               <Menu />
             </button>
@@ -698,32 +720,46 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                     separate.
                   </p>
                   <div className="sp-table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Unit</th>
-                          <th>Property</th>
-                          <th>Resident</th>
-                          <th>Monthly rent</th>
-                          <th>This period</th>
+                    <table className="sp-responsive-table" role="table">
+                      <thead role="rowgroup">
+                        <tr role="row">
+                          <th role="columnheader" scope="col">
+                            Unit
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Property
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Resident
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Monthly rent
+                          </th>
+                          <th role="columnheader" scope="col">
+                            This period
+                          </th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody role="rowgroup">
                         {state.units.map((u) => (
-                          <tr key={u.id}>
-                            <td>
+                          <tr key={u.id} role="row">
+                            <td data-label="Unit" role="cell">
                               <strong>{u.label}</strong>
                             </td>
-                            <td>
+                            <td data-label="Property" role="cell">
                               {
                                 state.properties.find(
                                   (p) => p.id === u.propertyId,
                                 )?.name
                               }
                             </td>
-                            <td>{u.residentName || "Vacant"}</td>
-                            <td>{rand(u.rentCents)}</td>
-                            <td>
+                            <td data-label="Resident" role="cell">
+                              {u.residentName || "Vacant"}
+                            </td>
+                            <td data-label="Monthly rent" role="cell">
+                              {rand(u.rentCents)}
+                            </td>
+                            <td data-label="This period" role="cell">
                               <button
                                 disabled={busy}
                                 className={`sp-badge ${u.rentPaid ? "success" : ""}`}
@@ -755,37 +791,56 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                   <span className="sp-muted">({state.members.length})</span>
                 </h2>
                 <div className="sp-table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Username / student number</th>
-                        <th>Role</th>
-                        <th>Property / unit</th>
-                        <th>Access</th>
+                  <table className="sp-responsive-table" role="table">
+                    <thead role="rowgroup">
+                      <tr role="row">
+                        <th role="columnheader" scope="col">
+                          Name
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Email
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Username / student number
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Role
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Property / unit
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Access
+                        </th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody role="rowgroup">
                       {state.members.map((m) => (
-                        <tr key={m.id}>
-                          <td>
+                        <tr key={m.id} role="row">
+                          <td data-label="Name" role="cell">
                             <strong>{m.name}</strong>
                           </td>
-                          <td>{m.email}</td>
-                          <td>{m.username || "Email sign-in"}</td>
-                          <td>
+                          <td data-label="Email" role="cell">
+                            {m.email}
+                          </td>
+                          <td
+                            data-label="Username / student number"
+                            role="cell"
+                          >
+                            {m.username || "Email sign-in"}
+                          </td>
+                          <td data-label="Role" role="cell">
                             <span className="sp-badge">
                               {m.role === "tenant" ? "Resident" : m.role}
                             </span>
                           </td>
-                          <td>
+                          <td data-label="Property / unit" role="cell">
                             {state.properties.find((p) => p.id === m.propertyId)
                               ?.name || "All properties"}
                             {m.unitId &&
                               ` / ${state.units.find((u) => u.id === m.unitId)?.label}`}
                           </td>
-                          <td>
+                          <td data-label="Access" role="cell">
                             {m.id !== state.user.id && (
                               <button
                                 disabled={busy}
@@ -908,20 +963,30 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                 )
               ) : (
                 <div className="sp-table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Visitor</th>
-                        <th>Visit · SAST</th>
-                        <th>Host / property</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                  <table className="sp-responsive-table" role="table">
+                    <thead role="rowgroup">
+                      <tr role="row">
+                        <th role="columnheader" scope="col">
+                          Visitor
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Visit · SAST
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Host / property
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Status
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody role="rowgroup">
                       {visitors.map((v) => (
-                        <tr key={v.id}>
-                          <td>
+                        <tr key={v.id} role="row">
+                          <td data-label="Visitor" role="cell">
                             <button
                               className="sp-text-button"
                               onClick={() => setPass(v)}
@@ -930,20 +995,20 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                             </button>
                             <small className="sp-block">{v.reference}</small>
                           </td>
-                          <td>
+                          <td data-label="Visit · SAST" role="cell">
                             {v.visitDate}
                             <small className="sp-block">
                               {v.arrival}–{v.departure}
                             </small>
                           </td>
-                          <td>
+                          <td data-label="Host / property" role="cell">
                             {v.hostName}
                             <small className="sp-block">
                               {v.propertyName}
                               {v.unitLabel ? ` / ${v.unitLabel}` : ""}
                             </small>
                           </td>
-                          <td>
+                          <td data-label="Status" role="cell">
                             <span
                               className={`sp-badge ${v.status === "checked_in" ? "success" : ""}`}
                             >
@@ -955,7 +1020,7 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                                 : label(v.status)}
                             </span>
                           </td>
-                          <td>
+                          <td data-label="Actions" role="cell">
                             <div className="sp-row">
                               {v.status === "upcoming" && (
                                 <>
@@ -1124,22 +1189,38 @@ export default function WorkspaceApp({ initial }: { initial: WorkspaceState }) {
                   </p>
                 ) : (
                   <div className="sp-table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Reference</th>
-                          <th>Plan</th>
-                          <th>Amount</th>
-                          <th>Status</th>
+                    <table className="sp-responsive-table" role="table">
+                      <thead role="rowgroup">
+                        <tr role="row">
+                          <th role="columnheader" scope="col">
+                            Reference
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Plan
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Amount
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Status
+                          </th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody role="rowgroup">
                         {state.invoices.map((i) => (
-                          <tr key={i.id}>
-                            <td>{i.id.slice(0, 8)}</td>
-                            <td>{i.plan}</td>
-                            <td>{rand(i.amountCents)}</td>
-                            <td>{label(i.status)}</td>
+                          <tr key={i.id} role="row">
+                            <td data-label="Reference" role="cell">
+                              {i.id.slice(0, 8)}
+                            </td>
+                            <td data-label="Plan" role="cell">
+                              {i.plan}
+                            </td>
+                            <td data-label="Amount" role="cell">
+                              {rand(i.amountCents)}
+                            </td>
+                            <td data-label="Status" role="cell">
+                              {label(i.status)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

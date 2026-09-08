@@ -18,14 +18,10 @@ export default function GuestPass({
   };
 }) {
   return (
-    <main
-      id="main-content"
-      className="sp-shell"
-      style={{ display: "grid", placeItems: "center", padding: 24 }}
-    >
+    <main id="main-content" className="sp-shell sp-guest-page">
       <article
         className="sp-panel sp-pass"
-        style={{ width: "100%", maxWidth: 420, padding: 36 }}
+        style={{ width: "100%", maxWidth: 420 }}
       >
         <Brand />
         <span className="sp-eyebrow">YOUR PERSONAL VISITOR PASS</span>
