@@ -1,6 +1,9 @@
 import { parseContractor, parseUrgency } from "@/lib/server/maintenance";
 import { rank } from "@/lib/shared/maintenance";
-import { AppError, choice, money, text } from "@/lib/server/validation";
+import { AppError, choice, colour, money, text } from "@/lib/server/validation";
+import { themeReadable } from "@/lib/shared/theme";
+import { currentPeriod } from "@/lib/shared/money";
+import { parseLedgerEntry } from "@/lib/server/finance";
 import {
   DEFAULT_LIMITS,
   endsAt,
@@ -22,6 +25,7 @@ import type {
 } from "@/types/workspace";
 import {
   DEMO_ORG_ID,
+  demoGateCode,
   DEMO_PASSWORD,
   type DemoPersona,
   type DemoWorld,
@@ -53,6 +57,25 @@ const reference = (n: number) =>
 const passToken = (n: number) =>
   (n.toString(16).padStart(4, "0") + "d3m0").repeat(8).slice(0, 64);
 
+/**
+ * The gate code for a pass booked inside the demo.
+ *
+ * The server claims every code with a uniqueness reservation, so no two passes
+ * can ever carry the same one. The demo has no reservations, so it walks to
+ * the next free code instead - the guarantee a prospect sees is the guarantee
+ * the product makes.
+ */
+function gateCode(world: DemoWorld, seq: number): string {
+  let code = demoGateCode(seq);
+  for (
+    let step = 1;
+    step < 64 && world.visitors.some((v) => v.entryCode === code);
+    step += 1
+  )
+    code = demoGateCode(seq + step * 97);
+  return code;
+}
+
 function requireManager(persona: DemoPersona) {
   if (persona.role !== "manager")
     throw new AppError("A manager account is required.", 403);
@@ -83,6 +106,7 @@ export function apply(
     ...world,
     properties: [...world.properties],
     units: [...world.units],
+    ledger: [...world.ledger],
     members: [...world.members],
     visitors: [...world.visitors],
     reports: [...world.reports],
@@ -118,9 +142,141 @@ export function apply(
           ),
           loginCode: `demo${draft.seq}code`,
           ...DEFAULT_LIMITS,
+          archivedAt: null,
         },
       ];
       result = { id };
+      break;
+    }
+
+    // Held on the demo organisation exactly as the server holds it, so
+    // switching to the tenant or security persona shows the manager's colours
+    // already applied - which is the whole point of the feature.
+    case "branding": {
+      requireManager(persona);
+      const theme = {
+        primary: colour(input.primary, "primary colour"),
+        accent: colour(input.accent, "accent colour"),
+      };
+      if (!themeReadable(theme))
+        throw new AppError(
+          "Those colours would leave text hard to read. Use a darker primary, a lighter accent, or a stronger contrast between the two.",
+        );
+      draft.organisation = { ...draft.organisation, theme };
+      result = { ...theme };
+      break;
+    }
+
+    case "unitUpdate": {
+      requireManager(persona);
+      const id = text(input.id, "unit");
+      const target = draft.units.find((u) => u.id === id);
+      if (!target) throw new AppError("Unit not found.", 404);
+      const label = text(input.label, "unit label", 50);
+      const rentCents = money(input.rent);
+      if (
+        draft.units.some(
+          (u) =>
+            u.id !== id &&
+            u.propertyId === target.propertyId &&
+            u.label.toLowerCase() === label.toLowerCase(),
+        )
+      )
+        throw new AppError("That record already exists.", 409);
+      draft.units = draft.units.map((u) =>
+        u.id === id ? { ...u, label, rentCents } : u,
+      );
+      // A pass not yet used names the door a guard sends the visitor to.
+      draft.visitors = draft.visitors.map((v) =>
+        v.unitId === id && (v.status === "upcoming" || v.status === "checked_in")
+          ? { ...v, unitLabel: label }
+          : v,
+      );
+      result = { id, label, rentCents };
+      break;
+    }
+
+    case "unitArchive": {
+      requireManager(persona);
+      const id = text(input.id, "unit");
+      const target = draft.units.find((u) => u.id === id);
+      if (!target) throw new AppError("Unit not found.", 404);
+      const archive = input.archived !== false;
+      if (archive && target.residentName)
+        throw new AppError(
+          `${target.residentName} still lives in ${target.label}. Remove them from People first.`,
+          409,
+        );
+      draft.units = draft.units.map((u) =>
+        u.id === id
+          ? {
+              ...u,
+              archivedAt: archive ? now() : null,
+              archivedWithProperty: false,
+              ...(archive ? { rentPaid: 0, rentPaidPeriod: "" } : {}),
+            }
+          : u,
+      );
+      result = { id, archived: archive };
+      break;
+    }
+
+    case "propertyUpdate": {
+      requireManager(persona);
+      const property = requireProperty(draft, persona, input.id);
+      const name = text(input.name, "property name", 100);
+      if (
+        draft.properties.some(
+          (p) => p.id !== property.id && p.name.toLowerCase() === name.toLowerCase(),
+        )
+      )
+        throw new AppError("That record already exists.", 409);
+      const type = choice(
+        input.type,
+        ["apartment", "student_accommodation"] as const,
+        "property type",
+      );
+      const address = text(input.address, "address", 250);
+      draft.properties = draft.properties.map((p) =>
+        p.id === property.id ? { ...p, name, address, type } : p,
+      );
+      result = { id: property.id, name };
+      break;
+    }
+
+    case "propertyArchive": {
+      requireManager(persona);
+      const property = requireProperty(draft, persona, input.id);
+      const archive = input.archived !== false;
+      const units = draft.units.filter((u) => u.propertyId === property.id);
+      if (archive) {
+        const occupied = units.filter((u) => !u.archivedAt && u.residentName);
+        if (occupied.length)
+          throw new AppError(
+            `${occupied.length} ${occupied.length === 1 ? "unit is" : "units are"} still occupied at ${property.name}. Remove those residents from People first.`,
+            409,
+          );
+      }
+      const stamp = now();
+      // Only the units this building took with it come back with it, matched
+      // by the timestamp they were archived under.
+      const follows = (u: LiveUnit) =>
+        u.propertyId === property.id &&
+        (archive ? !u.archivedAt : u.archivedAt && u.archivedWithProperty);
+      draft.units = draft.units.map((u) =>
+        follows(u)
+          ? {
+              ...u,
+              archivedAt: archive ? stamp : null,
+              archivedWithProperty: archive,
+              ...(archive ? { rentPaid: 0, rentPaidPeriod: "" } : {}),
+            }
+          : u,
+      );
+      draft.properties = draft.properties.map((p) =>
+        p.id === property.id ? { ...p, archivedAt: archive ? stamp : null } : p,
+      );
+      result = { id: property.id, archived: archive };
       break;
     }
 
@@ -156,6 +312,9 @@ export function apply(
           label,
           rentCents: money(input.rent),
           rentPaid: 0,
+          rentPaidPeriod: "",
+          archivedAt: null,
+          archivedWithProperty: false,
           frequency: "monthly",
           residentName: null,
         },
@@ -164,14 +323,86 @@ export function apply(
       break;
     }
 
+    /**
+     * Marking rent paid also writes the receipt into the books, exactly as the
+     * server does, so a prospect who marks a unit paid watches the money
+     * screen move. Unmarking takes it off again.
+     */
     case "rent": {
       requireManager(persona);
       const id = text(input.unitId, "unit");
-      if (!draft.units.some((u) => u.id === id))
-        throw new AppError("Unit not found.", 404);
+      const target = draft.units.find((u) => u.id === id);
+      if (!target) throw new AppError("Unit not found.", 404);
+      const period = currentPeriod();
+      const paid = input.paid === true;
       draft.units = draft.units.map((u) =>
-        u.id === id ? { ...u, rentPaid: input.paid === true ? 1 : 0 } : u,
+        u.id === id
+          ? { ...u, rentPaid: paid ? 1 : 0, rentPaidPeriod: paid ? period : "" }
+          : u,
       );
+      draft.ledger = draft.ledger.filter(
+        (entry) =>
+          !(entry.unitId === id && entry.period === period && entry.category === "rent"),
+      );
+      if (paid && target.rentCents > 0) {
+        const property = draft.properties.find((p) => p.id === target.propertyId);
+        draft.ledger = [
+          {
+            id: next(draft, "ledger"),
+            period,
+            kind: "income",
+            category: "rent",
+            nature: "fixed",
+            amountCents: target.rentCents,
+            description: `Rent received — ${target.label}`,
+            propertyId: target.propertyId,
+            propertyName: property?.name ?? "",
+            unitId: target.id,
+            unitLabel: target.label,
+            recordedBy: persona.name,
+            createdAt: now(),
+          },
+          ...draft.ledger,
+        ];
+      }
+      break;
+    }
+
+    case "ledgerEntry": {
+      requireManager(persona);
+      const entry = parseLedgerEntry(input);
+      const property = input.propertyId
+        ? requireProperty(draft, persona, input.propertyId)
+        : undefined;
+      const id = next(draft, "ledger");
+      draft.ledger = [
+        {
+          id,
+          ...entry,
+          propertyId: property?.id ?? null,
+          propertyName: property?.name ?? "",
+          unitId: null,
+          unitLabel: null,
+          recordedBy: persona.name,
+          createdAt: now(),
+        },
+        ...draft.ledger,
+      ];
+      result = { id };
+      break;
+    }
+
+    case "ledgerRemove": {
+      requireManager(persona);
+      const id = text(input.id, "entry");
+      const entry = draft.ledger.find((e) => e.id === id);
+      if (!entry) throw new AppError("Entry not found.", 404);
+      if (entry.unitId)
+        throw new AppError(
+          "This is a rent receipt. Unmark the unit in Properties to take it off the books.",
+          409,
+        );
+      draft.ledger = draft.ledger.filter((e) => e.id !== id);
       break;
     }
 
@@ -260,7 +491,9 @@ export function apply(
       draft.members = draft.members.filter((m) => m.id !== id);
       if (member.unitId)
         draft.units = draft.units.map((u) =>
-          u.id === member.unitId ? { ...u, residentName: null } : u,
+          u.id === member.unitId
+            ? { ...u, residentName: null, rentPaid: 0, rentPaidPeriod: "" }
+            : u,
         );
       draft.visitors = draft.visitors.map((v) =>
         v.hostId === id && v.status === "upcoming"
@@ -334,6 +567,7 @@ export function apply(
         idNumber: maskIdNumber(identity.idNumber),
         reference: reference(draft.seq),
         token: passToken(draft.seq),
+        entryCode: gateCode(draft, draft.seq),
         visitType: window.visitType,
         visitDate: window.visitDate,
         endDate: window.endDate,
@@ -353,8 +587,13 @@ export function apply(
         id,
         token: visit.token,
         reference: visit.reference,
+        entryCode: visit.entryCode,
         emailStatus: "not_configured",
         visitorEmailed: false,
+        // The demo sends nothing at all, but a prospect needs to see what a
+        // configured deployment does: the guest is texted their gate code.
+        // Simulated alongside persistence and identity, and nothing else is.
+        smsStatus: "sent",
       };
       break;
     }

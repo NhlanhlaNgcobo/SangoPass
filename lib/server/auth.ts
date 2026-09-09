@@ -9,6 +9,7 @@ import type {
   UserRecord,
 } from "./store";
 import { AppError, email, password, text } from "./validation";
+import { DEFAULT_THEME } from "@/lib/shared/theme";
 import type { Account, Membership } from "@/types/workspace";
 
 export const cookieName = "sangopass_session";
@@ -168,6 +169,8 @@ export async function register(
         plan: "starter",
         trialUntil: new Date(Date.now() + 14 * 86400000).toISOString(),
         paidUntil: null,
+        brandPrimary: DEFAULT_THEME.primary,
+        brandAccent: DEFAULT_THEME.accent,
         createdAt: timestamp,
       });
       t.create("memberships", membershipId(userId, orgId), {

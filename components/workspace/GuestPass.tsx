@@ -2,6 +2,7 @@
 import { QRCodeSVG } from "qrcode.react";
 import { BadgeCheck, CalendarClock, Moon, Sun, XCircle } from "lucide-react";
 import Brand from "@/components/ui/Brand";
+import { formatEntryCode } from "@/lib/shared/passcode";
 import type { IdType, VisitType } from "@/types/workspace";
 
 const ID_LABELS: Record<IdType, string> = {
@@ -15,6 +16,8 @@ export interface GuestPassView {
   propertyName: string;
   reference: string;
   token: string;
+  /** The gate code. Empty on a pass issued before entry codes existed. */
+  entryCode: string;
   idType: IdType;
   /** Already masked by the server; only the last four characters. */
   idNumber: string;
@@ -136,6 +139,22 @@ export default function GuestPass({
         )}
 
         <strong>{pass.reference}</strong>
+
+        {/*
+          The whole reason this exists: a guest who arrives without a
+          smartphone has nothing to scan. The code is theirs to say out loud,
+          so it is set as large as the QR and never abbreviated.
+        */}
+        {live && pass.entryCode && (
+          <div className="sp-gate-code">
+            <span className="sp-eyebrow">GATE CODE · NO PHONE NEEDED</span>
+            <strong>{formatEntryCode(pass.entryCode)}</strong>
+            <small>
+              Give this code and your identity document at the gate. It works
+              on its own — you do not have to show anything on a screen.
+            </small>
+          </div>
+        )}
 
         <p
           style={{

@@ -18,6 +18,8 @@ import {
   ephemeralHost,
   firebase,
   firebaseConfigured,
+  sms,
+  smsConfigured,
 } from "../lib/server/config";
 import { store } from "../lib/server/store";
 import { identity } from "../lib/server/identity";
@@ -135,6 +137,19 @@ async function main() {
   if (!emailConfigured())
     warnings.push(
       "Without email, residents cannot reset a password and guest passes must be copied by hand.",
+    );
+
+  /* SMS -------------------------------------------------------------- */
+  report(
+    "SMS (BulkSMS)",
+    smsConfigured(),
+    smsConfigured()
+      ? `gate codes sent${sms().sender ? ` from ${sms().sender}` : ""}`
+      : "not connected — gate codes are created but never texted",
+  );
+  if (!smsConfigured())
+    warnings.push(
+      "Without SMS, a visitor arriving with no smartphone has to be read their gate code by their host. The pass and its code are still created either way.",
     );
 
   /* Scheduled work --------------------------------------------------- */

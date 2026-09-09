@@ -14,6 +14,12 @@ import {
   type DemoWorld,
 } from "../lib/demo/world";
 import { sastToday } from "../lib/server/visits";
+import { DEFAULT_THEME } from "../lib/shared/theme";
+import { currentPeriod, summarise } from "../lib/shared/money";
+import {
+  normaliseEntryCode,
+  sameEntryCode,
+} from "../lib/shared/passcode";
 
 const manager = PERSONAS.find((p) => p.role === "manager")!;
 const resident = PERSONAS.find((p) => p.role === "tenant")!;
@@ -322,4 +328,176 @@ test("a rejected command changes nothing", () => {
     }),
   );
   assert.equal(JSON.stringify(world), snapshot);
+});
+
+test("the manager's colours follow every persona", () => {
+  let world = seedWorld();
+  assert.deepEqual(viewFor(world, resident).organisation.theme, DEFAULT_THEME);
+
+  world = apply(world, manager, {
+    action: "branding",
+    primary: "#3D1F42",
+    accent: "#E7C6F0",
+  }).world;
+
+  // The whole point of the feature: a prospect switches to the resident or the
+  // guard and finds the manager's brand already applied.
+  for (const persona of PERSONAS)
+    assert.deepEqual(viewFor(world, persona).organisation.theme, {
+      primary: "#3D1F42",
+      accent: "#E7C6F0",
+    });
+
+  // The demo runs the server's rules, so it refuses what the server refuses.
+  assert.throws(
+    () =>
+      apply(world, resident, {
+        action: "branding",
+        primary: "#3D1F42",
+        accent: "#E7C6F0",
+      }),
+    /manager account is required/,
+  );
+  assert.throws(
+    () =>
+      apply(world, manager, {
+        action: "branding",
+        primary: "#F0F0F0",
+        accent: "#FFFFFF",
+      }),
+    /hard to read/,
+  );
+});
+
+test("the demo issues a gate code for a guest with no smartphone", () => {
+  let world = seedWorld();
+  // Every sample pass already carries one, so a prospect switching to the
+  // guard has something to try before booking anything themselves.
+  for (const visit of viewFor(world, manager).visitors)
+    assert.equal(
+      normaliseEntryCode(visit.entryCode),
+      visit.entryCode,
+      `${visit.visitorName}: ${visit.entryCode}`,
+    );
+
+  const booked = apply(world, resident, guestRequest());
+  world = booked.world;
+  const code = String(booked.result.entryCode);
+  assert.equal(normaliseEntryCode(code), code);
+  assert.notEqual(code, booked.result.reference);
+
+  // The guard sees the code on the pass they are about to admit, which is what
+  // lets them match a code recited at the gate.
+  const atTheGate = viewFor(world, guard).visitors.find(
+    (v) => v.id === booked.result.id,
+  );
+  assert.ok(atTheGate);
+  assert.ok(sameEntryCode(atTheGate.entryCode, `${code.slice(0, 4)}-${code.slice(4)}`));
+
+  // No two sample passes share a code.
+  const codes = viewFor(world, manager).visitors.map((v) => v.entryCode);
+  assert.equal(new Set(codes).size, codes.length);
+});
+
+test("the demo keeps books a prospect can actually read", async (t) => {
+  let world = seedWorld();
+
+  await t.test("a manager sees a month with money in it", () => {
+    const state = viewFor(world, manager);
+    assert.ok(state.ledger.length > 0);
+    const totals = summarise(currentPeriod(), state.ledger, 0);
+    assert.ok(totals.expensesCents > 0, "the sample estate has running costs");
+    assert.ok(totals.fixedCents > 0 && totals.variableCents > 0);
+  });
+
+  await t.test("nobody else sees them at all", () => {
+    for (const persona of [resident, guard])
+      assert.deepEqual(viewFor(world, persona).ledger, []);
+    assert.throws(
+      () =>
+        apply(world, resident, {
+          action: "ledgerEntry",
+          kind: "expense",
+          category: "utilities",
+          nature: "variable",
+          amount: 100,
+          description: "Not mine to record",
+          period: currentPeriod(),
+        }),
+      /manager account is required/,
+    );
+  });
+
+  await t.test("marking rent paid puts the receipt in the books", () => {
+    const before = viewFor(world, manager);
+    const unpaid = before.units.find((u) => u.residentName && !u.rentPaid);
+    assert.ok(unpaid, "the sample estate has a unit still to pay");
+    world = apply(world, manager, {
+      action: "rent",
+      unitId: unpaid.id,
+      paid: true,
+    }).world;
+    const after = viewFor(world, manager);
+    const receipt = after.ledger.find(
+      (e) => e.unitId === unpaid.id && e.category === "rent",
+    );
+    assert.ok(receipt, "the receipt was recorded");
+    assert.equal(receipt.amountCents, unpaid.rentCents);
+    assert.equal(receipt.kind, "income");
+    // And unmarking takes it straight back off, as it does on the server.
+    world = apply(world, manager, {
+      action: "rent",
+      unitId: unpaid.id,
+      paid: false,
+    }).world;
+    assert.equal(
+      viewFor(world, manager).ledger.some((e) => e.unitId === unpaid.id),
+      false,
+    );
+  });
+
+  await t.test("the same validation the server runs applies here", () => {
+    assert.throws(
+      () =>
+        apply(world, manager, {
+          action: "ledgerEntry",
+          kind: "expense",
+          category: "rent",
+          nature: "fixed",
+          amount: 100,
+          description: "Rent as a cost",
+          period: currentPeriod(),
+        }),
+      /money coming in/,
+    );
+  });
+});
+
+test("the demo books reconcile: what is marked paid is what was collected", () => {
+  const world = seedWorld();
+  const state = viewFor(world, manager);
+  const open = state.units.filter((u) => !u.archivedAt);
+  const paid = open.filter((u) => u.residentName && u.rentPaid);
+  const totals = summarise(
+    currentPeriod(),
+    state.ledger,
+    open.filter((u) => u.residentName).reduce((t, u) => t + u.rentCents, 0),
+    open.filter((u) => !u.residentName).reduce((t, u) => t + u.rentCents, 0),
+  );
+  // The sample estate must not show four units marked paid and nothing
+  // collected: the register and the books are the same statement.
+  assert.ok(paid.length > 0, "the sample estate has rent coming in");
+  assert.equal(
+    totals.rentCollectedCents,
+    paid.reduce((t, u) => t + u.rentCents, 0),
+  );
+  // And it shows every state a prospect should see: paid, owing, empty, filed.
+  assert.ok(open.some((u) => u.residentName && !u.rentPaid), "one still owing");
+  assert.ok(open.some((u) => !u.residentName), "one empty");
+  assert.ok(totals.vacancyCents > 0);
+  assert.ok(state.units.some((u) => u.archivedAt), "one archived");
+  // An archived unit is neither owed nor vacancy.
+  const archived = state.units.filter((u) => u.archivedAt);
+  for (const unit of archived)
+    assert.ok(!open.includes(unit), "archived units are out of the month");
 });

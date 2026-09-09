@@ -1,5 +1,7 @@
 import { hashToken, now } from "./auth";
 import { emailConfigured } from "./config";
+import { guestPassSms, sendSms } from "./sms";
+import { formatEntryCode } from "@/lib/shared/passcode";
 import { store } from "./store";
 import type {
   InvitationRecord,
@@ -110,6 +112,7 @@ export function visitorPassEmail(
     hostName: string;
     reference: string;
     token: string;
+    entryCode: string;
     visitType: string;
     visitDate: string;
     endDate: string;
@@ -121,6 +124,10 @@ export function visitorPassEmail(
   recipient: "host" | "visitor" = "host",
 ) {
   const passUrl = new URL(`/pass/${visit.token}`, origin).href;
+  // The gate code, spelled out for a guest who will read it off a screen
+  // and say it out loud. Omitted entirely on a pass issued before entry
+  // codes existed, rather than printed as an empty box.
+  const code = formatEntryCode(visit.entryCode);
   const workspaceUrl = new URL("/workspace", origin).href;
   const when =
     visit.nights > 0
@@ -130,14 +137,14 @@ export function visitorPassEmail(
   if (recipient === "visitor") {
     const subject = `Your visit to ${visit.propertyName} — ${visit.reference}`;
     const lead = `${visit.hostName} has registered you as a guest at ${visit.propertyName}.`;
-    const text = `You are on the system.\n\n${lead}\n${when}\nReference: ${visit.reference}\n\nOpen your pass:\n${passUrl}\n\nShow the QR code on this pass to the guard or reception when you arrive, and bring the identity document your host registered for you. Only the guard or reception can scan it.\n\nKeep this link private.\n\nSangoPass. A better way to belong.`;
-    const html = `<!doctype html><html><body style="margin:0;background:#f6f7f3;font-family:Arial,sans-serif;color:#203b33"><main style="max-width:540px;margin:32px auto;background:white;border:1px solid #e2e7de;border-radius:16px;overflow:hidden"><div style="background:#143e35;color:#d5ed9f;padding:28px;font-size:26px;font-weight:bold">SangoPass.</div><div style="padding:28px"><p style="font-size:11px;letter-spacing:2px;color:#69796e">YOU ARE ON THE SYSTEM</p><h1 style="font-size:28px;font-weight:500">${escape(visit.visitorName)}</h1><p style="line-height:1.7">${escape(lead)}<br>${escape(when)}</p><div style="padding:18px;background:#f0f5e7;border-radius:10px;font-size:20px;letter-spacing:1px"><strong>${escape(visit.reference)}</strong></div><p style="margin:28px 0"><a href="${escape(passUrl)}" style="display:inline-block;background:#143e35;color:white;text-decoration:none;padding:14px 22px;border-radius:8px">Open your pass</a></p><p style="line-height:1.7">Show the QR code to the guard or reception when you arrive, and bring the identity document your host registered for you.</p><p style="font-size:12px;color:#69796e;line-height:1.7">Keep this link private: anyone holding it can see your pass.</p></div></main></body></html>`;
+    const text = `You are on the system.\n\n${lead}\n${when}\nReference: ${visit.reference}${code ? `\nGate code: ${code}` : ""}\n\nOpen your pass:\n${passUrl}\n\nShow the QR code on this pass to the guard or reception when you arrive, and bring the identity document your host registered for you. Only the guard or reception can scan it.${code ? ` If you arrive without a phone, give the gate code above instead: it works on its own.` : ""}\n\nKeep this link and code private.\n\nSangoPass. A better way to belong.`;
+    const html = `<!doctype html><html><body style="margin:0;background:#f6f7f3;font-family:Arial,sans-serif;color:#203b33"><main style="max-width:540px;margin:32px auto;background:white;border:1px solid #e2e7de;border-radius:16px;overflow:hidden"><div style="background:#143e35;color:#d5ed9f;padding:28px;font-size:26px;font-weight:bold">SangoPass.</div><div style="padding:28px"><p style="font-size:11px;letter-spacing:2px;color:#69796e">YOU ARE ON THE SYSTEM</p><h1 style="font-size:28px;font-weight:500">${escape(visit.visitorName)}</h1><p style="line-height:1.7">${escape(lead)}<br>${escape(when)}</p><div style="padding:18px;background:#f0f5e7;border-radius:10px;font-size:20px;letter-spacing:1px"><strong>${escape(visit.reference)}</strong></div>${code ? `<p style="line-height:1.7;margin-top:22px">No smartphone with you? Give this code at the gate instead.</p><div style="padding:18px;background:#143e35;color:#d5ed9f;border-radius:10px;font-size:28px;letter-spacing:4px;text-align:center;font-family:monospace"><strong>${escape(code)}</strong></div>` : ""}<p style="margin:28px 0"><a href="${escape(passUrl)}" style="display:inline-block;background:#143e35;color:white;text-decoration:none;padding:14px 22px;border-radius:8px">Open your pass</a></p><p style="line-height:1.7">Show the QR code to the guard or reception when you arrive, and bring the identity document your host registered for you.</p><p style="font-size:12px;color:#69796e;line-height:1.7">Keep this link private: anyone holding it can see your pass.</p></div></main></body></html>`;
     return { subject, text, html };
   }
 
   const subject = `Guest pass for ${visit.visitorName} — ${visit.reference}`;
-  const text = `Your guest pass is ready.\n\n${visit.visitorName} is expected at ${visit.propertyName}.\n${when}\nReference: ${visit.reference}\n\nOpen the pass:\n${passUrl}\n\nKeep this link private. If your guest does not have a phone, show this pass to the guard or reception yourself when they arrive — only the guard or reception can scan it. You can also cancel the visit from your SangoPass workspace:\n${workspaceUrl}\n\nRemind your guest to bring the identity document you registered for them.\n\nSangoPass. A better way to belong.`;
-  const html = `<!doctype html><html><body style="margin:0;background:#f6f7f3;font-family:Arial,sans-serif;color:#203b33"><main style="max-width:540px;margin:32px auto;background:white;border:1px solid #e2e7de;border-radius:16px;overflow:hidden"><div style="background:#143e35;color:#d5ed9f;padding:28px;font-size:26px;font-weight:bold">SangoPass.</div><div style="padding:28px"><p style="font-size:11px;letter-spacing:2px;color:#69796e">YOUR GUEST PASS</p><h1 style="font-size:28px;font-weight:500">${escape(visit.visitorName)}</h1><p style="line-height:1.7">Expected at ${escape(visit.propertyName)}.<br>${escape(when)}</p><div style="padding:18px;background:#f0f5e7;border-radius:10px;font-size:20px;letter-spacing:1px"><strong>${escape(visit.reference)}</strong></div><p style="margin:28px 0"><a href="${escape(passUrl)}" style="display:inline-block;background:#143e35;color:white;text-decoration:none;padding:14px 22px;border-radius:8px">Open the guest pass</a></p><p style="line-height:1.7">If your guest does not have a phone, show this pass to the guard or reception yourself when they arrive. You can cancel the visit from your <a href="${escape(workspaceUrl)}" style="color:#285e45">SangoPass workspace</a>.</p><p style="font-size:12px;color:#69796e;line-height:1.7">Keep this link private: anyone holding it can see the pass. Remind your guest to bring the identity document you registered for them.</p></div></main></body></html>`;
+  const text = `Your guest pass is ready.\n\n${visit.visitorName} is expected at ${visit.propertyName}.\n${when}\nReference: ${visit.reference}${code ? `\nGate code: ${code}` : ""}\n\nOpen the pass:\n${passUrl}\n\n${code ? `Your guest has been texted the gate code above. If it did not reach them, read it to them: with the identity document you registered, it is all they need.\n\n` : ""}Keep this link private. If your guest does not have a phone at all, show this pass to the guard or reception yourself when they arrive — only the guard or reception can admit them. You can also cancel the visit from your SangoPass workspace:\n${workspaceUrl}\n\nRemind your guest to bring the identity document you registered for them.\n\nSangoPass. A better way to belong.`;
+  const html = `<!doctype html><html><body style="margin:0;background:#f6f7f3;font-family:Arial,sans-serif;color:#203b33"><main style="max-width:540px;margin:32px auto;background:white;border:1px solid #e2e7de;border-radius:16px;overflow:hidden"><div style="background:#143e35;color:#d5ed9f;padding:28px;font-size:26px;font-weight:bold">SangoPass.</div><div style="padding:28px"><p style="font-size:11px;letter-spacing:2px;color:#69796e">YOUR GUEST PASS</p><h1 style="font-size:28px;font-weight:500">${escape(visit.visitorName)}</h1><p style="line-height:1.7">Expected at ${escape(visit.propertyName)}.<br>${escape(when)}</p><div style="padding:18px;background:#f0f5e7;border-radius:10px;font-size:20px;letter-spacing:1px"><strong>${escape(visit.reference)}</strong></div>${code ? `<p style="line-height:1.7;margin-top:22px">Your guest's gate code, texted to them:</p><div style="padding:18px;background:#143e35;color:#d5ed9f;border-radius:10px;font-size:28px;letter-spacing:4px;text-align:center;font-family:monospace"><strong>${escape(code)}</strong></div>` : ""}<p style="margin:28px 0"><a href="${escape(passUrl)}" style="display:inline-block;background:#143e35;color:white;text-decoration:none;padding:14px 22px;border-radius:8px">Open the guest pass</a></p><p style="line-height:1.7">${code ? "If the text did not reach them, read the code to them: with their identity document, it is all they need. " : ""}If your guest does not have a phone at all, show this pass to the guard or reception yourself when they arrive. You can cancel the visit from your <a href="${escape(workspaceUrl)}" style="color:#285e45">SangoPass workspace</a>.</p><p style="font-size:12px;color:#69796e;line-height:1.7">Keep this link private: anyone holding it can see the pass. Remind your guest to bring the identity document you registered for them.</p></div></main></body></html>`;
   return { subject, text, html };
 }
 
@@ -161,8 +168,26 @@ export async function commandAndNotify(
       String(result.id),
     );
     if (!visit) return result;
+
+    // The SMS is not a copy of the email, and does not depend on it. Email
+    // reaches a visitor who has an inbox; this reaches the one who does not,
+    // and it is the only channel that works for a guest without a smartphone.
+    // It is attempted whether or not email is configured, and its outcome is
+    // reported separately, because the resident's next action differs: an
+    // unsent code is one they have to read out themselves.
+    const smsStatus = await sendSms(
+      visit.phone,
+      guestPassSms(visit),
+      send,
+    );
+
     if (!emailConfigured())
-      return { ...result, emailStatus: "not_configured", visitorEmailed: false };
+      return {
+        ...result,
+        emailStatus: "not_configured",
+        visitorEmailed: false,
+        smsStatus,
+      };
 
     // Two copies, addressed differently: the resident gets one so a guest
     // without a phone still has something to present at the gate, and the
@@ -203,6 +228,7 @@ export async function commandAndNotify(
       ...result,
       emailStatus: toHost ? "sent" : "failed",
       visitorEmailed: toVisitor,
+      smsStatus,
     };
   }
 

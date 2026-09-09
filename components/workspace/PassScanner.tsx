@@ -1,13 +1,23 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { Camera, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Camera, KeyRound, Upload, X } from "lucide-react";
+import { formatEntryCode, normaliseEntryCode } from "@/lib/shared/passcode";
 export default function PassScanner({
   onScan,
+  onCode,
 }: {
   onScan: (value: string) => boolean;
+  /**
+   * A guest with no smartphone has no QR to show, only the code they were
+   * texted. Verifying it is the same act as scanning - confirm this pass
+   * belongs here, then decide - so it sits beside the camera rather than
+   * hidden behind the search box.
+   */
+  onCode: (code: string) => boolean;
 }) {
   const [camera, setCamera] = useState(false),
     [error, setError] = useState(""),
+    [typed, setTyped] = useState(""),
     [busy, setBusy] = useState(false);
   const video = useRef<HTMLVideoElement>(null),
     input = useRef<HTMLInputElement>(null),
@@ -123,6 +133,24 @@ export default function PassScanner({
       if (input.current) input.current.value = "";
     }
   }
+  function verify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const code = normaliseEntryCode(typed);
+    if (!code) {
+      setError(
+        "A gate code is eight characters, like 4XKD-9PWH. Check what your visitor is reading out.",
+      );
+      return;
+    }
+    if (!onCode(code)) {
+      setError(
+        `No pass at this property has the code ${formatEntryCode(code)}. Check the code, or search by the visitor's name.`,
+      );
+      return;
+    }
+    setTyped("");
+  }
   return (
     <div style={{ marginBottom: 20 }}>
       <div className="sp-row">
@@ -154,6 +182,28 @@ export default function PassScanner({
           onChange={(e) => void upload(e.target.files?.[0])}
         />
       </div>
+      <form className="sp-code-check" onSubmit={verify}>
+        <label>
+          <span>Gate code</span>
+          <input
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder="4XKD-9PWH"
+            aria-label="Gate code the visitor is presenting"
+            autoCapitalize="characters"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={12}
+          />
+        </label>
+        <button className="sp-secondary" type="submit" disabled={!typed.trim()}>
+          <KeyRound size={15} />
+          Check code
+        </button>
+        <small className="sp-muted">
+          For a guest arriving without a phone. Their host can read it to them.
+        </small>
+      </form>
       {camera && (
         <video
           ref={video}

@@ -1,3 +1,5 @@
+import type { BrandTheme } from "@/lib/shared/theme";
+import type { LedgerEntry } from "@/lib/shared/money";
 export type MemberRole = "manager" | "tenant" | "security";
 export interface Account {
   id: string;
@@ -29,6 +31,12 @@ export interface LiveProperty extends VisitLimits {
   name: string;
   address: string;
   type: "apartment" | "student_accommodation";
+  /**
+   * Set once the property is out of use. Archived properties are still sent,
+   * so a visitor row or a report can still name the building it happened at;
+   * the interface hides them everywhere a manager picks one.
+   */
+  archivedAt: string | null;
 }
 export interface LiveUnit {
   id: string;
@@ -36,9 +44,21 @@ export interface LiveUnit {
   label: string;
   rentCents: number;
   rentPaid: number;
+  /** The month rentPaid refers to, YYYY-MM; empty when never marked. */
+  rentPaidPeriod: string;
   frequency: string;
   residentName: string | null;
+  /** Set once the unit is out of use. Still sent, so history reads. */
+  archivedAt: string | null;
+  /** True when the unit was archived by its property, not on its own. */
+  archivedWithProperty: boolean;
 }
+/**
+ * A line in the organisation's own books. Managers only: it never reaches a
+ * resident or a guard, because the read model does not send it to them.
+ */
+export type LiveLedgerEntry = LedgerEntry;
+
 export interface LiveMember {
   username: string | null;
   id: string;
@@ -62,6 +82,13 @@ export interface LiveVisitor {
   idNumber: string;
   reference: string;
   token: string;
+  /**
+   * The gate code the visitor presents when they have no smartphone. Held by
+   * the people who can already open this pass, so security can confirm a
+   * recited code offline the same way they confirm a scanned QR. Empty on a
+   * pass issued before entry codes existed.
+   */
+  entryCode: string;
   visitType: VisitType;
   /** Arrival date. A sleepover departs on endDate instead. */
   visitDate: string;
@@ -122,6 +149,11 @@ export interface WorkspaceState {
     trialUntil: string;
     paidUntil: string | null;
     active: boolean;
+    /**
+     * The company's brand colours. Set by a manager and sent to every role, so
+     * a tenant's dashboard carries the same colours as their manager's.
+     */
+    theme: BrandTheme;
   };
   properties: LiveProperty[];
   units: LiveUnit[];
@@ -130,6 +162,8 @@ export interface WorkspaceState {
   reports: LiveReport[];
   /** Maintenance contacts. Managers only; empty for everyone else. */
   contractors: LiveContractor[];
+  /** The organisation's own money. Empty for every role but manager. */
+  ledger: LiveLedgerEntry[];
   invoices: LiveInvoice[];
   invitations: {
     id: string;

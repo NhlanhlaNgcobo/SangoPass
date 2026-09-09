@@ -1,3 +1,4 @@
+import { normaliseHex } from "@/lib/shared/theme";
 export class AppError extends Error {
   constructor(
     message: string,
@@ -30,6 +31,11 @@ export function choice<T extends string>(
   if (!options.includes(value as T))
     throw new AppError(`Choose a valid ${label}.`);
   return value as T;
+}
+export function colour(value: unknown, label: string): string {
+  const hex = normaliseHex(value);
+  if (!hex) throw new AppError(`Enter a valid ${label} as a hex code.`);
+  return hex;
 }
 export function money(value: unknown): number {
   const amount = Number(value);

@@ -14,6 +14,7 @@ import { command, join, workspace } from "../lib/server/workspace";
 import { store } from "../lib/server/store";
 import type { OrganisationRecord, UnitRecord, UserRecord } from "../lib/server/store";
 import { checkout, notification, signature } from "../lib/server/billing";
+import { PLANS } from "../lib/server/plans";
 import { activity } from "../lib/server/audit";
 import { deleteTenant, exportTenant, listTenants } from "../lib/server/tenancy";
 import { body } from "../lib/server/http";
@@ -444,14 +445,17 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
       process.env.PAYFAST_PASSPHRASE = "test secret";
       process.env.PAYFAST_MODE = "sandbox";
 
+      // Read from the plan table rather than repeated here: a price change
+      // must not be able to pass a test that still asserts the old one.
+      const growth = (PLANS.growth.priceCents / 100).toFixed(2);
       const sandbox = await checkout(a.user, a.orgId, "growth");
-      assert.equal(sandbox.fields.amount, "1299.00");
+      assert.equal(sandbox.fields.amount, growth);
 
       const fields: Record<string, string> = {
         m_payment_id: sandbox.fields.m_payment_id,
         pf_payment_id: "payment-sandbox-1",
         payment_status: "COMPLETE",
-        amount_gross: "1299.00",
+        amount_gross: growth,
         merchant_id: "10000100",
       };
       fields.signature = signature(fields, "test secret");

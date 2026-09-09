@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, Check } from "lucide-react";
-import { PLAN_CARDS } from "@/lib/shared/plans";
+import { PLAN_CARDS, UNIVERSAL_RULES } from "@/lib/shared/plans";
 
 export default function PricingCards() {
   return (
@@ -19,16 +19,12 @@ export default function PricingCards() {
                 <span className="pricing-tag">Room to grow</span>
               )}
             </div>
-            <p className="pricing-description">
-              {plan.id === "starter"
-                ? "A simpler start for a smaller community."
-                : plan.id === "growth"
-                  ? "More space for a growing portfolio."
-                  : "For teams managing at a bigger scale."}
-            </p>
+            {/* Who it is for, before what it costs: a manager should recognise
+                themselves in one line and stop reading the other two. */}
+            <p className="pricing-description">{plan.audience}</p>
             <p className="pricing-price">
               {plan.priceLabel.split("/")[0]}
-              <span>/month</span>
+              <span>/month, VAT included</span>
             </p>
             <Link
               href="/register"
@@ -39,16 +35,10 @@ export default function PricingCards() {
               Start free trial <ArrowUpRight size={16} />
             </Link>
             <ul>
-              {[
-                `Up to ${plan.unitCap} units`,
-                `${plan.seatCap} property manager ${plan.seatCap === 1 ? "seat" : "seats"}`,
-                "Visitor invitations & QR passes",
-                "Rent & maintenance tracking",
-                `${plan.support} support`,
-              ].map((feature) => (
-                <li key={feature}>
+              {plan.rules.map((rule) => (
+                <li key={rule}>
                   <Check size={15} />
-                  {feature}
+                  {rule}
                 </li>
               ))}
             </ul>
@@ -59,18 +49,31 @@ export default function PricingCards() {
         <div>
           <h3>A bigger community? Let’s make room.</h3>
           <p>
-            Portfolio brings custom unit capacity, dedicated support and a
-            tailored plan.
+            {PLAN_CARDS.find((plan) => plan.id === "portfolio")?.audience}{" "}
+            Portfolio is quoted directly, with unit capacity, manager sign-ins
+            and support agreed with you.
           </p>
         </div>
         <Link href="/register" className="text-link">
           Explore Portfolio <ArrowUpRight size={17} />
         </Link>
       </div>
+      <section className="pricing-rules">
+        <h3>How the pricing works</h3>
+        <ul>
+          {UNIVERSAL_RULES.map((rule) => (
+            <li key={rule}>
+              <Check size={15} />
+              {rule}
+            </li>
+          ))}
+        </ul>
+      </section>
       <p className="pricing-footnote">
-        Monthly pricing in South African rand. Start with a 14-day Starter
-        trial, no card required. Paid access is renewed manually through
-        PayFast. The total amount is shown before payment.
+        Monthly pricing in South African rand, VAT included. Gate-code texts
+        beyond the monthly allowance are billed at R0.60 each and we will always
+        raise it with you before it appears on an invoice. The total amount is
+        shown before payment.
       </p>
     </>
   );

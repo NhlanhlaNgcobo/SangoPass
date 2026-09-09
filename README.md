@@ -15,15 +15,15 @@ Open http://localhost:3000 and choose **Start your free trial**. Create your org
 
 - /register creates a real account and organisation with a 14-day Starter trial.
 - /login signs in to the live /workspace using a server session.
-- Managers manage properties, units, invitations, visitor movements, rent status, reports and billing.
+- Managers manage properties, units, invitations, visitor movements, rent status, maintenance, maintenance contacts, the property's own books under **Money**, brand colours and billing.
 - Managers enrol residents by email and vacant unit. Apartment residents receive a generated unit-linked username; student accommodation requires their student number, preserved exactly (including leading zeroes).
 - The welcome email provides the username, property/unit and a one-use password-setup link. Tenant sign-in is at /tenant/login. The emailed login link pre-fills the property code so matching student numbers at different properties remain separate.
 - Residents activate their account by setting their own password, then request and cancel guest visits and submit reports. Existing account holders confirm their existing password instead of having it overwritten.
 - Security joins with an assigned property, scans QR passes, checks visitors in/out and submits reports.
-- /pass/[token] is a private guest pass with a printable QR code, emailed to the resident and to the visitor when an address is given. Its purpose is to let the invited visitor confirm they are on the system before they travel. It omits the visitor phone number, all host account details, and all but the last four characters of the identity document.
+- /pass/[token] is a private guest pass with a printable QR code and a gate code for a guest with no smartphone, emailed to the resident and to the visitor when an address is given, and texted to the visitor when SMS is configured. Its purpose is to let the invited visitor confirm they are on the system before they travel. It omits the visitor phone number, all host account details, and all but the last four characters of the identity document.
 - /demo is a full interactive demonstration: the real workspace running against a sample estate held in the visitor's browser. Pick a role, switch between them, and the data follows. Nothing is stored, nothing is sent, and no account is created. /dashboard now redirects there.
 
-All visit times use Africa/Johannesburg (SAST). Camera scanning needs HTTPS or localhost. QR-image upload and reference search are also available. Rent status is a manually maintained register; this app does not collect residents' rent or automatically reset the reporting period.
+All visit times use Africa/Johannesburg (SAST). Camera scanning needs HTTPS or localhost. QR-image upload, gate-code entry and reference search are also available. Rent status is a manually maintained register: this app does not collect residents' rent. The paid flag is now tied to the month it was set in, so it does not carry over into the next one, and marking a unit paid records the receipt in **Money**.
 
 ## Guest visits
 
@@ -50,6 +50,14 @@ A sleepover's check-in window runs from the arrival time on the first date to th
 
 **The pass goes to both the resident and the visitor.** The resident always receives it: they are the reliable delivery address, and plenty of guests do not carry a smartphone. If the resident also gives the visitor's email address — optional — the visitor receives their own copy, so they can confirm they are on the system before travelling. Without email configured the pass is still created and the resident copies the link by hand.
 
+**Every pass carries a gate code for a guest with no smartphone.** Alongside the QR, each pass gets its own eight-character code — `4XKD-9PWH` — texted to the visitor's phone, printed on the pass, and shown to the resident so they can read it out if the message never arrived. Security types it into **Gate code** beside the scanner, or into the search box; the workspace confirms which pass it belongs to. Typing is forgiving: case, spaces and the hyphen do not matter, and because the alphabet contains no I, L, O or U, an `O` read as a zero or an `I` read as a one lands on the character that was actually issued.
+
+The gate code is deliberately **not** the pass reference. The reference is printed in every register listing and is what managers and security already search by, so a visitor reciting it would prove nothing. The code goes only to the people holding the pass.
+
+Codes verify; they do not admit. Security confirms the code, then still reads the status, the arrival window and the identity document before checking anyone in — the same as after a scan. Passes created before this feature have no code and are unaffected: their QR and reference work as they always did.
+
+**Text messages are optional.** Without `BULKSMS_TOKEN_ID` and `BULKSMS_TOKEN_SECRET` the pass and its code are still created, and the resident is told to read the code to their guest. The provider is [BulkSMS](https://www.bulksms.com/); everything provider-specific is one function in `lib/server/sms.ts`, so swapping to SMSPortal, Clickatell or an aggregator is that function and a set of environment variables. Numbers are normalised to E.164 against South Africa, so `082 441 9087`, `+27 82 441 9087` and `0027824419087` are one number, and a number that cannot be texted says so rather than failing quietly. No SMS credentials were available during implementation: the request follows BulkSMS's published JSON API and has not been exercised against a live account.
+
 **Only the guard or reception scans the QR code.** Check-in and check-out are recorded by a security or manager account at the property. A resident holds a copy of the pass so a guest with no phone still has something to present, and can cancel a pass they created, but never records the arrival themselves. The arrival window and the one-way status transitions apply to everyone equally.
 
 **The property manager sets three limits per property**, from Properties → Visitor limits:
@@ -60,6 +68,20 @@ A sleepover's check-in window runs from the arrival time on the first date to th
 
 Limits are enforced per unit, not per person, and enforced on the server. The resident sees where their unit stands for the current month before filling in the form.
 
+## Editing and archiving
+
+Properties and units can be corrected after they are created, and taken out of use when they are no longer real — but never deleted, because both are named in the books, the visitor register and the audit trail, and all three have to keep reading correctly.
+
+**Edit** on a property changes its name, address and type. Its login code does not move, because residents sign in with it, and its visitor limits are left as the manager set them. Changing the type changes what future residents are enrolled with and which identity documents their guests may present; residents already enrolled keep the usernames they have.
+
+**Edit** on a unit changes its label and its rent. Rent changes every year, and until this existed the only route was to create a second unit and abandon the first — which left the abandoned one showing as vacant income the property was failing to earn, forever. Rent already received keeps the amount it was received at, so past months do not move. A rename follows through to any pass not yet used, so a guard is sent to the door that exists now; closed passes keep the label the unit had at the time.
+
+**Archive** takes a unit or a whole property out of use. An archived unit stops being offered when enrolling a resident, stops counting as vacancy, and stops using up a unit on your plan — a manager who has closed a wing should not be paying for it. An archived property stops appearing anywhere a manager picks one, and its empty units are archived with it, so nobody has to file away twenty units by hand.
+
+Two things are refused rather than done quietly: **a unit somebody lives in cannot be archived**, and **a property with residents still in it cannot be archived**. Those are tenancy questions, and they are answered in People by removing the resident first. Everything archived can be restored, and restoring a property brings its units back with it.
+
+Archived records stay in the read model so a visitor row or a report can still name the building it happened at; the interface hides them everywhere a manager chooses something, and the units register has a **Show archived** toggle.
+
 ## Maintenance and complaints
 
 Residents log maintenance issues, security concerns, noise and anything else from **Reports**, choosing how urgent it is: **Emergency**, **Urgent**, **Normal** or **Low**. Each level carries a plain description of what it means, so "emergency" keeps meaning emergency.
@@ -68,7 +90,7 @@ The property manager's **Maintenance** screen shows every report in the organisa
 
 Ordering is by a stored numeric rank, not by string, so one query sorts identically on SQLite and Firestore.
 
-Alongside it, **Maintenance contacts** is the manager's directory of in-house staff and outside contractors: name, trade, company, phone, email and a note. It is a phone list and nothing more — no contact is an account, none of them can sign in, and none of them grants any access.
+**Maintenance contacts** is its own screen in the manager's sidebar: a directory of in-house staff and outside contractors with name, trade, company, phone, email and a note, searchable by any of them. Phone numbers and email addresses are tappable, because the next thing a manager does after finding the plumber is call the plumber. It is a phone list and nothing more — no contact is an account, none of them can sign in, and none of them grants any access.
 
 ## The demo
 
@@ -121,7 +143,7 @@ Passwords use salted scrypt on the SQLite backend and Firebase Authentication on
 
 Rate limits are scoped per account, per property and per caller address, with global buckets kept only as a backstop far above any single tenant's traffic. One organisation's sign-in traffic cannot lock another organisation out.
 
-The v3 migration rebuilds a v1 or v2 database on the current shape. It preserves existing passwords, unit assignments, login codes, usernames and email sign-in, and backfills the denormalised fields from the old joins. The v5 migration adds report urgency with the numeric rank the manager queue sorts on, the maintenance contacts directory, and the optional visitor email address; existing reports become "normal", which is exactly what they were. The v4 migration adds visit types, sleepover windows, visitor identity documents and the per-property limits: existing passes become day visits ending on the date they started, their guest slot is released if they are already closed, and their host's unit is derived from the membership. No identity number is invented for a pass taken before the upgrade — it reads as "not recorded". Existing student records without a stored student number still need re-enrolment with the student number; it cannot be inferred.
+The v3 migration rebuilds a v1 or v2 database on the current shape. It preserves existing passwords, unit assignments, login codes, usernames and email sign-in, and backfills the denormalised fields from the old joins. The v5 migration adds report urgency with the numeric rank the manager queue sorts on, the maintenance contacts directory, and the optional visitor email address; existing reports become "normal", which is exactly what they were. The v7 migration adds the visitor gate code: no code is invented for a pass issued before it, exactly as no identity number was invented at v4, and those passes still work by QR and reference. The v8 migration adds the finance ledger and the month a unit rent flag belongs to; no month is claimed for a flag that was never period-aware, so a unit marked paid under the old schema reads as unpaid until it is marked again. The v9 migration adds archiving for properties and units, and everything that already exists is in use. The v4 migration adds visit types, sleepover windows, visitor identity documents and the per-property limits: existing passes become day visits ending on the date they started, their guest slot is released if they are already closed, and their host's unit is derived from the membership. No identity number is invented for a pass taken before the upgrade — it reads as "not recorded". Existing student records without a stored student number still need re-enrolment with the student number; it cannot be inferred.
 
 One account can belong to multiple organisations through invitations; switch between them in the workspace menu. Public signup creates a manager only, never a platform administrator. The platform administration screens under /dashboard remain explicitly labelled demo screens; there is no public route to cross-organisation production access.
 
@@ -129,9 +151,48 @@ Password recovery supports Resend when RESEND_API_KEY, EMAIL_FROM and APP_URL ar
 
 Every mutation writes an audit row, and managers can read their own organisation's trail at `GET /api/activity?org=<id>`. Rows older than `AUDIT_RETENTION_DAYS` are pruned by maintenance.
 
+## Money
+
+**Money** is the manager's own books, and has nothing to do with Billing — that is what the organisation pays SangoPass. This is what the property earns and what it costs to run, one month at a time, and only managers can see it: the read model never sends a line of it to a resident or a guard.
+
+Every amount is stored as an integer number of cents. Rands appear only where a person types one or reads one.
+
+**Rent is recorded once, not twice.** Marking a unit paid in Properties writes the receipt straight into the books, and unmarking takes it off again, so the rent register and the accounts cannot disagree. The paid flag now carries the month it refers to: a unit marked in September reads as unpaid in October, where before it stayed green forever and made "rent outstanding" meaningless the moment a month turned over.
+
+**A vacant unit owes nothing.** It is excluded from rent expected and never counted as arrears — nobody owes rent on an empty flat. What it is instead is income the property is not earning, so it is reported on its own line: **Vacancy**, with the empty units named and priced, and **Rent if fully let** beside it. Removing a resident clears that unit's rent flag along with the tenancy, so the next tenant does not move in already marked paid for the month; the departing resident's receipt stays on the books, because that money really was received.
+
+**Costs go in by hand**, under the five things a residential property actually spends money on — **utilities, staff, maintenance, security** and **other** (rates, insurance, levies) — each marked **fixed** (the same every month: wages, a guarding contract, insurance) or **variable** (a repair, a water bill, overtime). Six categories rather than forty, because a manager choosing from six categorises consistently. An entry can be filed against an earlier month, since catching up on last month is the ordinary case; a future month is refused, because an amount filed against next March is a typo every time.
+
+The screen shows rent expected, collected and outstanding, total costs split fixed against variable, the net for the month, a breakdown by category, and the units still to pay — one click from marking any of them paid. Rent expected and outstanding are shown for the **month in progress only**: the rent register states how things stand today, not how they stood in a closed month, so measuring August against today's tenants and today's rents would produce a number that means nothing. Earlier months report what was actually recorded, and say so.
+
+**Download spreadsheet** returns the month as CSV, which opens directly in Excel, Numbers and Google Sheets and can be handed to a bookkeeper or an accounting package with nothing in between. The file leads with the summary — that is the part forwarded to an owner or a body corporate — then arrears, then every line behind the totals. Costs are written negative so a manager's own `SUM` over the amount column lands on the same net figure as the summary. Cells beginning with `=`, `+`, `-` or `@` are prefixed so a description cannot execute as a formula when the file is opened, while genuine negative amounts stay numeric. Only a manager of that organisation can export it, and it is generated by the same code the screen reads.
+
+Not gated on billing. The trial gate exists to stop an unpaid organisation growing — more properties, units, people, passes — and blocking a manager from recording money that has already moved would not prompt payment, it would corrupt their records.
+
 ## Pricing and PayFast
 
-Starter: R499/month, 25 units, 1 manager. Growth: R1,299/month, 150 units, 5 managers. Premium: R2,499/month, 300 units, 10 managers. Portfolio remains a custom commercial offering, outside self-service checkout. Prices and limits have a single definition in `lib/server/plans.ts`; enforcement at creation time and at checkout read the same table.
+**Every published price includes 15% VAT.** Registration is compulsory above R1m of turnover in twelve months, which this business reaches at roughly seventy paying organisations, so the VAT inside the price was never the seller's to keep. What a customer sees is what they pay.
+
+| Tier | Price | Units | Managers | Gate-code texts | For |
+| --- | --- | --- | --- | --- | --- |
+| Starter | R699/mo | 25 | 1 | 75/mo | One block, one person running it |
+| Growth | R1,499/mo | 150 | 5 | 450/mo | An agent with several buildings, or an estate with a team |
+| Premium | R2,899/mo | 300 | 10 | 900/mo | A larger estate or a full agency |
+| Portfolio | Quoted | Custom | Custom | Custom | Above 300 units, or needing its own terms and an SLA |
+
+The rules that hold on every tier:
+
+- **Units are counted while they are in use.** Archive a unit and it stops counting the same day — a manager who has closed a wing should not be paying for it, and should not be allowed for it either.
+- **Properties, residents, security accounts and guest passes are unlimited.** Only units and manager sign-ins are capped, because those are what the price is measured in.
+- **Gate-code texts carry an allowance of three per unit per month.** SMS is the only cost that scales with how hard a customer uses the product rather than with how many customers there are, so it is the one thing with a stated limit. Beyond it, R0.60 each, raised with the customer before it reaches an invoice. Nothing is blocked at the gate: a guest who needs a code gets one.
+- **A 14-day Starter trial**, no card, nothing to cancel.
+- **Paid access runs for a month and is renewed by hand.** Nothing recurs on a card.
+- **When access lapses, nothing is taken away.** Every record stays readable and the gate keeps working; only new properties, units, enrolments and guest passes wait for renewal.
+- **The organisation's data is exportable at any time**, in full.
+
+Billing shows a manager exactly where they stand — units in use against the cap, manager seats used, and this month's gate-code texts against the allowance — so a cap is visible before it stops anyone. That usage panel counts passes created this month from the loaded register: it is a guide, not a meter, and no automatic overage billing exists.
+
+Prices, caps, allowances and the wording of every rule have a single definition in `lib/shared/plans.ts`. Enforcement at creation time, the checkout guard, the pricing page and the billing screen all read that table, and a test asserts the advertised caps are the enforced ones.
 
 Copy .env.example to .env and set your own PayFast merchant credentials. PAYFAST_MODE defaults to sandbox. Checkout also requires APP_URL to be a publicly reachable HTTPS origin so PayFast can deliver its notification to /api/billing/notify. The app uses one-off monthly payments with manual renewal, not automatic recurring subscriptions. The amount shown is the checkout total; no extra tax is added by the application.
 
@@ -208,7 +269,7 @@ npm run build
 npm run test:http
 ~~~
 
-The automated suite covers real tenant isolation on the live backend, role denial, invitation replay prevention, SAST visit windows, password reset/session revocation, signed and idempotent payment callbacks with mocked PayFast confirmation, audit-trail scoping, tenant export and erasure, per-tenant rate-limit scoping, the store contract shared by both backends (uniqueness reservations, read-before-write transactions, rollback, query translation), refusal to boot on unsafe deployments, every schema migration from v1 through v4, and the guest-visit rules: SA ID checksum validation, passport and student-number acceptance per property type, identity masking, residents-only booking, day/sleepover/extended windows, each of the three manager-set limits including the release of nights and slots on cancellation, the pass reaching both the resident and the visitor, check-in being refused to a resident and accepted from reception, password re-authentication on every guest request, report urgency ordering and manager re-triage, and the contacts directory including its organisation scoping. Plus the original demo's QR encode/decode and workflows. The HTTP smoke test starts an isolated production server, exercises account creation, invitations, a resident-only guest request with identity capture, the visitor-facing pass page and its masking, a resident signing their own guest in and out, the health probe, cross-tenant/CSRF denial and SSR, then restarts the server to verify database and session persistence. It uses generated test accounts and a temporary database, never the application database.
+The automated suite covers real tenant isolation on the live backend, role denial, invitation replay prevention, SAST visit windows, password reset/session revocation, signed and idempotent payment callbacks with mocked PayFast confirmation, audit-trail scoping, tenant export and erasure, per-tenant rate-limit scoping, the store contract shared by both backends (uniqueness reservations, read-before-write transactions, rollback, query translation), refusal to boot on unsafe deployments, every schema migration from v1 through v4, and the guest-visit rules: SA ID checksum validation, passport and student-number acceptance per property type, identity masking, residents-only booking, day/sleepover/extended windows, each of the three manager-set limits including the release of nights and slots on cancellation, the pass reaching both the resident and the visitor, the gate code (its alphabet, the mistyped O and I a guard actually produces, uniqueness, and that it is never the pass reference), South African phone numbers normalised to E.164, the SMS gateway being called correctly and every unsent outcome reported rather than thrown, check-in being refused to a resident and accepted from reception, password re-authentication on every guest request, report urgency ordering and manager re-triage, and the contacts directory including its organisation scoping, and the books: the totals in cents, rent receipts written and withdrawn by the register, manager-only access, one organisation never seeing another, refusal of a future month or a cost filed as rent, vacancy reported apart from arrears and a vacated unit not carrying its rent flag to the next tenant, editing and archiving (a repriced unit leaving past receipts alone, a rename reaching an unused pass, name reservations released and re-held, an occupied unit or a tenanted property refused, archived units freeing a plan slot and leaving vacancy, and restoration bringing a building and its units back), and a spreadsheet that cannot execute a formula while its negative amounts still sum. Plus the original demo's QR encode/decode and workflows. The HTTP smoke test starts an isolated production server, exercises account creation, invitations, a resident-only guest request with identity capture, the visitor-facing pass page and its masking, a resident signing their own guest in and out, the health probe, cross-tenant/CSRF denial and SSR, then restarts the server to verify database and session persistence. It uses generated test accounts and a temporary database, never the application database.
 
 `NEXT_DIST_DIR` builds into an alternate directory, so a verification build can run while another server is serving `.next`.
 

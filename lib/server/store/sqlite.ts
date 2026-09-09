@@ -20,7 +20,16 @@ import {
 // queries as Firestore, which cannot join.
 export const FIELDS: Record<Collection, readonly string[]> = {
   users: ["id", "email", "name", "password", "createdAt"],
-  organisations: ["id", "name", "plan", "trialUntil", "paidUntil", "createdAt"],
+  organisations: [
+    "id",
+    "name",
+    "plan",
+    "trialUntil",
+    "paidUntil",
+    "brandPrimary",
+    "brandAccent",
+    "createdAt",
+  ],
   memberships: [
     "id",
     "userId",
@@ -44,6 +53,7 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "sleepoverNightsPerMonth",
     "maxConsecutiveNights",
     "maxActiveGuests",
+    "archivedAt",
   ],
   units: [
     "id",
@@ -55,6 +65,9 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "frequency",
     "residentId",
     "residentName",
+    "rentPaidPeriod",
+    "archivedAt",
+    "archivedWithProperty",
   ],
   invitations: [
     "id",
@@ -84,6 +97,7 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "idNumber",
     "reference",
     "token",
+    "entryCode",
     "visitType",
     "visitDate",
     "endDate",
@@ -125,6 +139,22 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "notes",
     "createdAt",
   ],
+  ledger: [
+    "id",
+    "orgId",
+    "period",
+    "kind",
+    "category",
+    "nature",
+    "amountCents",
+    "description",
+    "propertyId",
+    "propertyName",
+    "unitId",
+    "unitLabel",
+    "recordedBy",
+    "createdAt",
+  ],
   invoices: [
     "id",
     "orgId",
@@ -143,14 +173,15 @@ export const FIELDS: Record<Collection, readonly string[]> = {
 
 const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL, password TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS organisations(id TEXT PRIMARY KEY, name TEXT NOT NULL, plan TEXT NOT NULL DEFAULT 'starter', trialUntil TEXT NOT NULL, paidUntil TEXT, createdAt TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS organisations(id TEXT PRIMARY KEY, name TEXT NOT NULL, plan TEXT NOT NULL DEFAULT 'starter', trialUntil TEXT NOT NULL, paidUntil TEXT, brandPrimary TEXT NOT NULL DEFAULT '#143E35', brandAccent TEXT NOT NULL DEFAULT '#D5ED9F', createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS memberships(id TEXT PRIMARY KEY, userId TEXT NOT NULL, orgId TEXT NOT NULL, role TEXT NOT NULL, propertyId TEXT, unitId TEXT, username TEXT, usernameKey TEXT, orgName TEXT NOT NULL DEFAULT '', memberName TEXT NOT NULL DEFAULT '', userEmail TEXT NOT NULL DEFAULT '')",
-  "CREATE TABLE IF NOT EXISTS properties(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, name TEXT NOT NULL, address TEXT NOT NULL, type TEXT NOT NULL, loginCode TEXT NOT NULL DEFAULT '', sleepoverNightsPerMonth INTEGER NOT NULL DEFAULT 8, maxConsecutiveNights INTEGER NOT NULL DEFAULT 3, maxActiveGuests INTEGER NOT NULL DEFAULT 2)",
-  "CREATE TABLE IF NOT EXISTS units(id TEXT PRIMARY KEY, orgId TEXT NOT NULL DEFAULT '', propertyId TEXT NOT NULL, label TEXT NOT NULL, rentCents INTEGER NOT NULL DEFAULT 0, rentPaid INTEGER NOT NULL DEFAULT 0, frequency TEXT NOT NULL DEFAULT 'monthly', residentId TEXT, residentName TEXT)",
+  "CREATE TABLE IF NOT EXISTS properties(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, name TEXT NOT NULL, address TEXT NOT NULL, type TEXT NOT NULL, loginCode TEXT NOT NULL DEFAULT '', sleepoverNightsPerMonth INTEGER NOT NULL DEFAULT 8, maxConsecutiveNights INTEGER NOT NULL DEFAULT 3, maxActiveGuests INTEGER NOT NULL DEFAULT 2, archivedAt TEXT)",
+  "CREATE TABLE IF NOT EXISTS units(id TEXT PRIMARY KEY, orgId TEXT NOT NULL DEFAULT '', propertyId TEXT NOT NULL, label TEXT NOT NULL, rentCents INTEGER NOT NULL DEFAULT 0, rentPaid INTEGER NOT NULL DEFAULT 0, frequency TEXT NOT NULL DEFAULT 'monthly', residentId TEXT, residentName TEXT, rentPaidPeriod TEXT NOT NULL DEFAULT '', archivedAt TEXT, archivedWithProperty INTEGER NOT NULL DEFAULT 0)",
   "CREATE TABLE IF NOT EXISTS invitations(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, propertyId TEXT, unitId TEXT, hash TEXT NOT NULL, expiresAt TEXT NOT NULL, acceptedAt TEXT, username TEXT, usernameKey TEXT, emailStatus TEXT NOT NULL DEFAULT 'not_sent', emailSentAt TEXT)",
-  "CREATE TABLE IF NOT EXISTS visitors(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, unitId TEXT, hostId TEXT NOT NULL, visitorName TEXT NOT NULL, phone TEXT NOT NULL, visitorEmail TEXT, idType TEXT NOT NULL DEFAULT 'sa_id', idNumber TEXT NOT NULL DEFAULT '', reference TEXT NOT NULL, token TEXT NOT NULL, visitType TEXT NOT NULL DEFAULT 'daily', visitDate TEXT NOT NULL, endDate TEXT NOT NULL DEFAULT '', arrival TEXT NOT NULL, departure TEXT NOT NULL, nights INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'upcoming', active INTEGER NOT NULL DEFAULT 1, createdAt TEXT NOT NULL, checkedInAt TEXT, checkedOutAt TEXT, propertyName TEXT NOT NULL DEFAULT '', hostName TEXT NOT NULL DEFAULT '', unitLabel TEXT)",
+  "CREATE TABLE IF NOT EXISTS visitors(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, unitId TEXT, hostId TEXT NOT NULL, visitorName TEXT NOT NULL, phone TEXT NOT NULL, visitorEmail TEXT, idType TEXT NOT NULL DEFAULT 'sa_id', idNumber TEXT NOT NULL DEFAULT '', reference TEXT NOT NULL, token TEXT NOT NULL, entryCode TEXT NOT NULL DEFAULT '', visitType TEXT NOT NULL DEFAULT 'daily', visitDate TEXT NOT NULL, endDate TEXT NOT NULL DEFAULT '', arrival TEXT NOT NULL, departure TEXT NOT NULL, nights INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'upcoming', active INTEGER NOT NULL DEFAULT 1, createdAt TEXT NOT NULL, checkedInAt TEXT, checkedOutAt TEXT, propertyName TEXT NOT NULL DEFAULT '', hostName TEXT NOT NULL DEFAULT '', unitLabel TEXT)",
   "CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, authorId TEXT NOT NULL, authorName TEXT NOT NULL DEFAULT '', category TEXT NOT NULL, description TEXT NOT NULL, urgency TEXT NOT NULL DEFAULT 'normal', urgencyRank INTEGER NOT NULL DEFAULT 2, status TEXT NOT NULL DEFAULT 'open', createdAt TEXT NOT NULL, unitLabel TEXT)",
   "CREATE TABLE IF NOT EXISTS contractors(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, name TEXT NOT NULL, trade TEXT NOT NULL, company TEXT, phone TEXT NOT NULL, email TEXT, kind TEXT NOT NULL DEFAULT 'contractor', notes TEXT, createdAt TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS ledger(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, period TEXT NOT NULL, kind TEXT NOT NULL, category TEXT NOT NULL, nature TEXT NOT NULL DEFAULT 'variable', amountCents INTEGER NOT NULL DEFAULT 0, description TEXT NOT NULL DEFAULT '', propertyId TEXT, propertyName TEXT NOT NULL DEFAULT '', unitId TEXT, unitLabel TEXT, recordedBy TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS invoices(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, plan TEXT NOT NULL, amountCents INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', paymentId TEXT, createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS audit(id TEXT PRIMARY KEY, orgId TEXT, userId TEXT, userName TEXT NOT NULL DEFAULT '', action TEXT NOT NULL, subject TEXT, createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY, userId TEXT NOT NULL, expiresAt TEXT NOT NULL)",
@@ -178,6 +209,8 @@ const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS report_property ON reports(orgId, propertyId, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS report_queue ON reports(orgId, urgencyRank, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS contractor_org ON contractors(orgId, name)",
+  "CREATE INDEX IF NOT EXISTS ledger_org ON ledger(orgId, period DESC, createdAt DESC)",
+  "CREATE INDEX IF NOT EXISTS ledger_unit ON ledger(unitId, period)",
   "CREATE INDEX IF NOT EXISTS invoice_org ON invoices(orgId, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS invoice_payment ON invoices(paymentId)",
   "CREATE INDEX IF NOT EXISTS audit_org ON audit(orgId, createdAt DESC)",
@@ -207,7 +240,41 @@ const REBUILT = [
 /* Migration                                                           */
 /* ------------------------------------------------------------------ */
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 9;
+
+// v9 lets a property or a unit be archived instead of deleted, so a sold
+// building or a unit that no longer exists leaves last year's books, the
+// visitor register and the audit trail exactly as they were. Null means in
+// use, which is what every existing row already is.
+const ALTERS_V9 = [
+  "ALTER TABLE properties ADD COLUMN archivedAt TEXT",
+  "ALTER TABLE units ADD COLUMN archivedAt TEXT",
+  "ALTER TABLE units ADD COLUMN archivedWithProperty INTEGER NOT NULL DEFAULT 0",
+];
+
+// v8 adds the organisation's own books - rent received and what the property
+// costs to run - and the month a unit's rent flag refers to. Existing units
+// carry an empty period, which reads as unpaid for the current month: the
+// flag was never period-aware, so no month can be claimed for it honestly.
+const ALTERS_V8 = [
+  "ALTER TABLE units ADD COLUMN rentPaidPeriod TEXT NOT NULL DEFAULT ''",
+];
+
+// v7 adds the visitor's entry code: the short code a guest without a
+// smartphone recites at the gate. A pass issued before this upgrade has none
+// and none is invented for it - its QR and reference still work, exactly as no
+// identity number was invented for a pass taken before v4.
+const ALTERS_V7 = [
+  "ALTER TABLE visitors ADD COLUMN entryCode TEXT NOT NULL DEFAULT ''",
+];
+
+// v6 adds the organisation's brand colours. The column defaults are the
+// SangoPass forest/lime pair, so every existing organisation keeps exactly the
+// look it had and no backfill statement is needed.
+const ALTERS_V6 = [
+  "ALTER TABLE organisations ADD COLUMN brandPrimary TEXT NOT NULL DEFAULT '#143E35'",
+  "ALTER TABLE organisations ADD COLUMN brandAccent TEXT NOT NULL DEFAULT '#D5ED9F'",
+];
 
 // v5 adds report urgency and the maintenance contacts directory. Existing
 // reports become "normal", which is exactly what they were: undifferentiated.
@@ -245,6 +312,12 @@ const BACKFILL_V4 = [
 // document, and the per-property visitor limits a manager sets.
 // v4 to v5 adds report urgency with a numeric rank the manager queue sorts on,
 // the maintenance contacts directory, and an optional visitor email address.
+// v5 to v6 adds the organisation's brand colours, defaulted to the SangoPass
+// pair so an upgraded database looks unchanged until a manager picks their own.
+// v6 to v7 adds the visitor entry code, empty on every existing pass.
+// v7 to v8 adds the finance ledger and the period a rent flag belongs to.
+// v8 to v9 adds archiving for properties and units; every existing row is in
+// use, which is what a null archivedAt means.
 function migrate(database: DatabaseSync) {
   const version = () =>
     (database.prepare("PRAGMA user_version").get() as { user_version: number })
@@ -269,10 +342,11 @@ function migrate(database: DatabaseSync) {
     return;
   }
 
-  // A database already on the v3 or v4 shape only needs the new columns.
-  if (version() === 3 || version() === 4) {
+  // A database already on the v3 shape or later only needs the new columns.
+  if (version() >= 3 && version() < SCHEMA_VERSION) {
+    const from = version();
     const steps: string[] = [];
-    if (version() < 4)
+    if (from < 4)
       steps.push(
         "ALTER TABLE properties ADD COLUMN sleepoverNightsPerMonth INTEGER NOT NULL DEFAULT 8",
         "ALTER TABLE properties ADD COLUMN maxConsecutiveNights INTEGER NOT NULL DEFAULT 3",
@@ -286,13 +360,15 @@ function migrate(database: DatabaseSync) {
         "ALTER TABLE visitors ADD COLUMN active INTEGER NOT NULL DEFAULT 1",
         BACKFILL_V4,
       );
-    steps.push(...ALTERS_V5);
+    if (from < 5) steps.push(...ALTERS_V5, BACKFILL_V5);
+    if (from < 6) steps.push(...ALTERS_V6);
+    if (from < 7) steps.push(...ALTERS_V7);
+    if (from < 8) steps.push(...ALTERS_V8);
+    if (from < 9) steps.push(...ALTERS_V9);
     database.exec("BEGIN IMMEDIATE");
     try {
       database.exec(
-        [...steps, BACKFILL_V5, `PRAGMA user_version=${SCHEMA_VERSION}`].join(
-          ";\n",
-        ),
+        [...steps, `PRAGMA user_version=${SCHEMA_VERSION}`].join(";\n"),
       );
       database.exec("COMMIT");
     } catch (error) {

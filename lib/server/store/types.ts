@@ -28,6 +28,7 @@ export const COLLECTIONS = [
   "invoices",
   "audit",
   "contractors",
+  "ledger",
   "sessions",
   "resetTokens",
   "rateLimits",
@@ -102,6 +103,13 @@ export interface OrganisationRecord {
   plan: string;
   trialUntil: string;
   paidUntil: string | null;
+  /**
+   * The company's brand colours, shared by every member of the organisation so
+   * a manager's choice reaches their tenants and security without a second
+   * setting. See lib/shared/theme.ts for what is derived from the pair.
+   */
+  brandPrimary: string;
+  brandAccent: string;
   createdAt: string;
 }
 
@@ -130,6 +138,15 @@ export interface PropertyRecord {
   sleepoverNightsPerMonth: number;
   maxConsecutiveNights: number;
   maxActiveGuests: number;
+  /**
+   * When the property was archived, or null while it is in use.
+   *
+   * Archived rather than deleted: a sold building still has to appear in last
+   * year's books, in the visitor register and in the audit trail. It drops out
+   * of everywhere a manager picks a property, and out of the money screen, and
+   * it can be restored.
+   */
+  archivedAt: string | null;
 }
 
 export interface UnitRecord {
@@ -142,6 +159,24 @@ export interface UnitRecord {
   frequency: string;
   residentId: string | null;
   residentName: string | null;
+  /** When the unit was archived, or null while it is in use. */
+  archivedAt: string | null;
+  /**
+   * 1 when this unit was archived by its property being archived, rather than
+   * on its own. Restoring the property brings back only these.
+   *
+   * Recorded rather than inferred: matching units to their property by a
+   * shared timestamp looks equivalent and is not, because two archivings a
+   * millisecond apart collide and a unit filed away on its own quietly comes
+   * back with the building.
+   */
+  archivedWithProperty: number;
+  /**
+   * The month rentPaid refers to, YYYY-MM. Without it a unit marked paid in
+   * September still reads as paid in October — exactly the quiet wrongness a
+   * rent register must not have.
+   */
+  rentPaidPeriod: string;
 }
 
 export interface InvitationRecord {
@@ -177,6 +212,13 @@ export interface VisitorRecord {
   idNumber: string;
   reference: string;
   token: string;
+  /**
+   * The short code a guest recites at the gate when they have no smartphone,
+   * texted to them when SMS is configured. Empty on passes issued before the
+   * v7 migration, which still work by QR and reference.
+   * See lib/shared/passcode.ts.
+   */
+  entryCode: string;
   visitType: "daily" | "sleepover" | "extended_sleepover";
   /** Arrival date; for a sleepover the departure falls on endDate instead. */
   visitDate: string;
@@ -223,6 +265,36 @@ export interface ContractorRecord {
   email: string | null;
   kind: "in_house" | "contractor";
   notes: string | null;
+  createdAt: string;
+}
+
+/**
+ * One movement of the organisation's own money: rent received, or a cost paid.
+ *
+ * Rent receipts are written by the rent register rather than typed a second
+ * time — a manager marking a unit paid records the receipt — so the books and
+ * the register can never disagree with each other. Costs are entered directly.
+ *
+ * Not to be confused with InvoiceRecord below, which is what the organisation
+ * pays SangoPass.
+ */
+export interface LedgerRecord {
+  id: string;
+  orgId: string;
+  /** The month it belongs to, YYYY-MM. See lib/shared/money.ts. */
+  period: string;
+  kind: "income" | "expense";
+  category: string;
+  nature: "fixed" | "variable";
+  amountCents: number;
+  description: string;
+  propertyId: string | null;
+  /** Denormalised so the spreadsheet needs no join, as Firestore cannot. */
+  propertyName: string;
+  unitId: string | null;
+  unitLabel: string | null;
+  /** Who recorded it, so a shared manager login is still accountable. */
+  recordedBy: string;
   createdAt: string;
 }
 

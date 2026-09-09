@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   createSession,
   hashToken,
@@ -20,6 +20,7 @@ import type {
   ContractorRecord,
   InvitationRecord,
   InvoiceRecord,
+  LedgerRecord,
   MembershipRecord,
   OrganisationRecord,
   PropertyRecord,
@@ -43,10 +44,23 @@ import {
   visitWindow,
   visitorIdentity,
 } from "./visits";
-import { AppError, choice, email, money, password, text } from "./validation";
+import {
+  AppError,
+  choice,
+  colour,
+  email,
+  money,
+  password,
+  text,
+} from "./validation";
+import { resolveTheme, themeReadable } from "@/lib/shared/theme";
+import { ENTRY_CODE_BYTES, encodeEntryCode } from "@/lib/shared/passcode";
+import { currentPeriod } from "@/lib/shared/money";
+import { LEDGER_LIMIT, parseLedgerEntry } from "./finance";
 import type {
   Account,
   LiveInvoice,
+  LiveLedgerEntry,
   LiveMember,
   LiveProperty,
   LiveReport,
@@ -87,6 +101,12 @@ function manager(m: MembershipRecord) {
     throw new AppError("A manager account is required.", 403);
 }
 
+/**
+ * A property this member may act on. Archived ones are still returned: a
+ * guard must be able to check out a guest who is already inside a building
+ * that was archived this morning, and a manager must be able to restore it.
+ * Anything that creates something new uses requireOpenProperty instead.
+ */
 async function requireProperty(
   reader: Reader,
   m: MembershipRecord,
@@ -102,6 +122,21 @@ async function requireProperty(
     (m.role !== "manager" && m.propertyId !== property.id)
   )
     throw new AppError("Property not available.", 404);
+  return property;
+}
+
+/** A property still in use, for anything that adds a record to it. */
+async function requireOpenProperty(
+  reader: Reader,
+  m: MembershipRecord,
+  id: unknown,
+): Promise<PropertyRecord> {
+  const property = await requireProperty(reader, m, id);
+  if (property.archivedAt)
+    throw new AppError(
+      `${property.name} is archived. Restore it from Properties before adding anything to it.`,
+      409,
+    );
   return property;
 }
 
@@ -165,6 +200,7 @@ export async function workspace(
     invoices,
     invitations,
     contractors,
+    ledger,
   ] = await Promise.all([
       m.role === "manager" || m.propertyId
         ? database.find<PropertyRecord>("properties", {
@@ -229,6 +265,19 @@ export async function workspace(
             orderBy: [{ field: "name" }],
           })
         : Promise.resolve([]),
+      // The organisation's own money. Managers only: a resident has no
+      // business seeing what the building costs to run, and neither has a
+      // guard. Newest month first, so the screen opens on the current one.
+      m.role === "manager"
+        ? database.find<LedgerRecord>("ledger", {
+            where: [["orgId", "==", m.orgId]],
+            orderBy: [
+              { field: "period", direction: "desc" },
+              { field: "createdAt", direction: "desc" },
+            ],
+            limit: LEDGER_LIMIT,
+          })
+        : Promise.resolve([]),
     ]);
 
   // What this resident has left this month, so the form can say so before they
@@ -274,6 +323,12 @@ export async function workspace(
       trialUntil: organisation.trialUntil,
       paidUntil: organisation.paidUntil,
       active: entitled(organisation),
+      // Sent to every role, not just managers: this is what makes a manager's
+      // choice show up on their tenants' and security's dashboards.
+      theme: resolveTheme({
+        primary: organisation.brandPrimary,
+        accent: organisation.brandAccent,
+      }),
     },
     properties: properties.map(
       (p): LiveProperty => ({
@@ -283,6 +338,7 @@ export async function workspace(
         address: p.address,
         type: p.type,
         loginCode: p.loginCode,
+        archivedAt: p.archivedAt ?? null,
         ...limitsOf(p),
       }),
     ),
@@ -296,6 +352,9 @@ export async function workspace(
           label: u.label,
           rentCents: u.rentCents,
           rentPaid: u.rentPaid,
+          rentPaidPeriod: u.rentPaidPeriod || "",
+          archivedAt: u.archivedAt ?? null,
+          archivedWithProperty: Boolean(u.archivedWithProperty),
           frequency: u.frequency,
           residentName: u.residentName,
         }),
@@ -328,6 +387,7 @@ export async function workspace(
         idNumber: v.idNumber ? maskIdNumber(v.idNumber) : "",
         reference: v.reference,
         token: v.token,
+        entryCode: v.entryCode || "",
         visitType: v.visitType || "daily",
         visitDate: v.visitDate,
         endDate: v.endDate || v.visitDate,
@@ -356,6 +416,23 @@ export async function workspace(
         status: r.status,
         createdAt: r.createdAt,
         unitLabel: r.unitLabel ?? null,
+      }),
+    ),
+    ledger: ledger.map(
+      (entry): LiveLedgerEntry => ({
+        id: entry.id,
+        period: entry.period,
+        kind: entry.kind,
+        category: entry.category as LiveLedgerEntry["category"],
+        nature: entry.nature,
+        amountCents: entry.amountCents,
+        description: entry.description,
+        propertyId: entry.propertyId ?? null,
+        propertyName: entry.propertyName || "",
+        unitId: entry.unitId ?? null,
+        unitLabel: entry.unitLabel ?? null,
+        recordedBy: entry.recordedBy || "",
+        createdAt: entry.createdAt,
       }),
     ),
     contractors: contractors.map((c) => ({
@@ -464,9 +541,213 @@ export async function command(
           type,
           loginCode,
           ...DEFAULT_LIMITS,
+          archivedAt: null,
         });
         result = { id };
         subject = id;
+        break;
+      }
+
+      /**
+       * The organisation's brand colours. Stored once on the organisation
+       * rather than per member, so a manager saving here re-themes the
+       * dashboards of every tenant and security account in the company on
+       * their next load. Not gated on billing: colours add no data, and
+       * locking a company out of its own branding at trial's end reads as a
+       * fault rather than a prompt to pay.
+       */
+      case "branding": {
+        manager(m);
+        const theme = {
+          primary: colour(input.primary, "primary colour"),
+          accent: colour(input.accent, "accent colour"),
+        };
+        if (!themeReadable(theme))
+          throw new AppError(
+            "Those colours would leave text hard to read. Use a darker primary, a lighter accent, or a stronger contrast between the two.",
+          );
+        t.update("organisations", orgId, {
+          brandPrimary: theme.primary,
+          brandAccent: theme.accent,
+        });
+        result = { ...theme };
+        subject = orgId;
+        break;
+      }
+
+      /**
+       * Renaming a unit, or repricing it.
+       *
+       * Rent changes every year, and until now the only way to reflect that
+       * was to create a second unit and abandon the first - which would leave
+       * the abandoned one showing as vacant potential income forever. The rent
+       * that has already been received is not touched: those receipts record
+       * what was actually paid, at the price that applied when it was paid.
+       */
+      case "unitUpdate": {
+        manager(m);
+        const unit = await t.get<UnitRecord>("units", text(input.id, "unit"));
+        if (!unit || unit.orgId !== orgId)
+          throw new AppError("Unit not found.", 404);
+        await requireProperty(t, m, unit.propertyId);
+        const label = text(input.label, "unit label", 50);
+        const rentCents = money(input.rent);
+        const renamed = label.toLowerCase() !== unit.label.toLowerCase();
+        // A pass that has not been used yet names the door a guard will send
+        // the visitor to, so a rename has to reach it. Passes already closed
+        // keep the label the unit had at the time, which is what history means.
+        const live = renamed
+          ? await t.find<VisitorRecord>("visitors", {
+              where: [
+                ["unitId", "==", unit.id],
+                ["active", "==", 1],
+              ],
+            })
+          : [];
+        if (renamed) {
+          t.reserve(`unit:${unit.propertyId}:${label.toLowerCase()}`, unit.id);
+          t.release(`unit:${unit.propertyId}:${unit.label.toLowerCase()}`);
+        }
+        t.update("units", unit.id, { label, rentCents });
+        for (const visit of live) t.update("visitors", visit.id, { unitLabel: label });
+        result = { id: unit.id, label, rentCents };
+        subject = unit.id;
+        break;
+      }
+
+      /**
+       * Taking a unit out of use, or bringing it back.
+       *
+       * Never deleted: the unit appears in last month's books, in the visitor
+       * register and in the audit trail, and those have to keep reading
+       * correctly. Archived, it stops counting towards the plan's unit limit,
+       * stops being offered when enrolling a resident, and stops appearing as
+       * vacant income the property is failing to earn.
+       */
+      case "unitArchive": {
+        manager(m);
+        const unit = await t.get<UnitRecord>("units", text(input.id, "unit"));
+        if (!unit || unit.orgId !== orgId)
+          throw new AppError("Unit not found.", 404);
+        await requireProperty(t, m, unit.propertyId);
+        const archive = input.archived !== false;
+        // Somebody lives there. Archiving it would hide a real tenancy.
+        if (archive && unit.residentId)
+          throw new AppError(
+            `${unit.residentName || "A resident"} still lives in ${unit.label}. Remove them from People first.`,
+            409,
+          );
+        if (!archive) {
+          const property = await t.get<PropertyRecord>(
+            "properties",
+            unit.propertyId,
+          );
+          if (property?.archivedAt)
+            throw new AppError(
+              "Restore the property first: a unit cannot be in use inside an archived property.",
+              409,
+            );
+          const limit = planFor(org.plan).units;
+          const units = await t.find<UnitRecord>("units", {
+            where: [["orgId", "==", orgId]],
+          });
+          if (units.filter((u) => !u.archivedAt).length >= limit)
+            throw new AppError(
+              "Your plan's unit limit has been reached. Upgrade from Billing, or archive another unit first.",
+              409,
+            );
+        }
+        t.update("units", unit.id, {
+          archivedAt: archive ? now() : null,
+          // Archived on its own, so restoring its property must not undo it.
+          archivedWithProperty: 0,
+          // An archived unit is not owed rent, so it carries no stale flag
+          // back with it if it is ever restored.
+          ...(archive ? { rentPaid: 0, rentPaidPeriod: "" } : {}),
+        });
+        result = { id: unit.id, archived: archive };
+        subject = unit.id;
+        break;
+      }
+
+      /** The property's own details. Its login code and limits are unchanged. */
+      case "propertyUpdate": {
+        manager(m);
+        const property = await requireProperty(t, m, input.id);
+        const name = text(input.name, "property name", 100);
+        const addressLine = text(input.address, "address", 250);
+        const type = choice(
+          input.type,
+          ["apartment", "student_accommodation"] as const,
+          "property type",
+        );
+        if (name.toLowerCase() !== property.name.toLowerCase()) {
+          t.reserve(`property:${orgId}:${name.toLowerCase()}`, property.id);
+          t.release(`property:${orgId}:${property.name.toLowerCase()}`);
+        }
+        t.update("properties", property.id, {
+          name,
+          address: addressLine,
+          type,
+        });
+        result = { id: property.id, name };
+        subject = property.id;
+        break;
+      }
+
+      /**
+       * Taking a whole property out of use, or bringing it back.
+       *
+       * A sold or handed-back building. Its vacant units go with it, so a
+       * manager does not have to archive twenty units by hand, but a property
+       * with residents still in it is refused: that is a tenancy question, not
+       * a filing one, and it has to be answered in People first.
+       */
+      case "propertyArchive": {
+        manager(m);
+        const property = await requireProperty(t, m, input.id);
+        const archive = input.archived !== false;
+        // The whole organisation's units: the plan cap is counted across
+        // every property, not within the one being restored.
+        const orgUnits = await t.find<UnitRecord>("units", {
+          where: [["orgId", "==", orgId]],
+        });
+        const units = orgUnits.filter((u) => u.propertyId === property.id);
+        if (archive) {
+          const occupied = units.filter((u) => !u.archivedAt && u.residentId);
+          if (occupied.length)
+            throw new AppError(
+              `${occupied.length} ${occupied.length === 1 ? "unit is" : "units are"} still occupied at ${property.name}. Remove those residents from People first.`,
+              409,
+            );
+        }
+        const stamp = now();
+        // Only the units this building took with it come back with it. A unit
+        // a manager archived by hand beforehand stays archived, because that
+        // was a separate decision about that unit.
+        const following = units.filter((u) =>
+          archive ? !u.archivedAt : u.archivedAt && u.archivedWithProperty,
+        );
+        if (!archive) {
+          const limit = planFor(org.plan).units;
+          const inUse = orgUnits.filter((u) => !u.archivedAt).length;
+          if (inUse + following.length > limit)
+            throw new AppError(
+              `Restoring ${property.name} would put you at ${inUse + following.length} units, past your plan's limit of ${limit}. Upgrade from Billing first.`,
+              409,
+            );
+        }
+        t.update("properties", property.id, {
+          archivedAt: archive ? stamp : null,
+        });
+        for (const unit of following)
+          t.update("units", unit.id, {
+            archivedAt: archive ? stamp : null,
+            archivedWithProperty: archive ? 1 : 0,
+            ...(archive ? { rentPaid: 0, rentPaidPeriod: "" } : {}),
+          });
+        result = { id: property.id, archived: archive };
+        subject = property.id;
         break;
       }
 
@@ -482,14 +763,18 @@ export async function command(
 
       case "unit": {
         manager(m);
-        const property = await requireProperty(t, m, input.propertyId);
+        const property = await requireOpenProperty(t, m, input.propertyId);
         const label = text(input.label, "unit label", 50);
         const rentCents = money(input.rent);
         const limit = planFor(org.plan).units;
-        const count = await t.count("units", {
+        // Archived units do not occupy a paid slot: a manager who has closed
+        // a wing should not be paying for it. Counted in memory rather than
+        // queried, because a missing field is not null in Firestore and the
+        // two backends must agree.
+        const all = await t.find<UnitRecord>("units", {
           where: [["orgId", "==", orgId]],
         });
-        if (count >= limit)
+        if (all.filter((u) => !u.archivedAt).length >= limit)
           throw new AppError(
             "Your plan's unit limit has been reached. Upgrade from Billing.",
             409,
@@ -502,23 +787,125 @@ export async function command(
           label,
           rentCents,
           rentPaid: 0,
+          rentPaidPeriod: "",
           frequency: "monthly",
           residentId: null,
           residentName: null,
+          archivedAt: null,
+          archivedWithProperty: 0,
         });
         result = { id };
         subject = id;
         break;
       }
 
+      /**
+       * Marking a unit's rent paid, or unmarking it.
+       *
+       * This also writes the receipt into the books, so a manager records rent
+       * once rather than twice and the register and the ledger can never
+       * disagree. Unmarking removes that month's receipt again — a mis-click
+       * must not leave money in the accounts that was never received.
+       *
+       * The flag now carries the month it refers to. Before that a unit marked
+       * paid in September still read as paid in October, which made "rent
+       * outstanding" meaningless the moment a month turned over.
+       */
       case "rent": {
         manager(m);
         const unit = await t.get<UnitRecord>("units", text(input.unitId, "unit"));
         if (!unit || unit.orgId !== orgId)
           throw new AppError("Unit not found.", 404);
-        await requireProperty(t, m, unit.propertyId);
-        t.update("units", unit.id, { rentPaid: input.paid === true ? 1 : 0 });
+        const property = await requireProperty(t, m, unit.propertyId);
+        const period = currentPeriod();
+        const paid = input.paid === true;
+        // Whatever this unit already has on the books for this month, so the
+        // receipt is replaced rather than duplicated by a second click.
+        const existing = await t.find<LedgerRecord>("ledger", {
+          where: [
+            ["unitId", "==", unit.id],
+            ["period", "==", period],
+          ],
+        });
+        for (const receipt of existing)
+          if (receipt.category === "rent") t.remove("ledger", receipt.id);
+        t.update("units", unit.id, {
+          rentPaid: paid ? 1 : 0,
+          rentPaidPeriod: paid ? period : "",
+        });
+        if (paid && unit.rentCents > 0)
+          t.create("ledger", randomUUID(), {
+            orgId,
+            period,
+            kind: "income",
+            category: "rent",
+            nature: "fixed",
+            amountCents: unit.rentCents,
+            description: `Rent received — ${unit.label}`,
+            propertyId: property.id,
+            propertyName: property.name,
+            unitId: unit.id,
+            unitLabel: unit.label,
+            recordedBy: user.name,
+            createdAt: now(),
+          });
         subject = unit.id;
+        break;
+      }
+
+      /**
+       * A line in the organisation's own books: a cost paid, or income that
+       * did not come through the rent register.
+       *
+       * Not gated on billing. The gate exists to stop an unpaid organisation
+       * growing — more properties, units, people, passes — and blocking a
+       * manager from recording money that has already moved would not prompt
+       * payment, it would corrupt their records.
+       */
+      case "ledgerEntry": {
+        manager(m);
+        const entry = parseLedgerEntry(input);
+        const property = input.propertyId
+          ? await requireProperty(t, m, input.propertyId)
+          : undefined;
+        const id = randomUUID();
+        t.create("ledger", id, {
+          orgId,
+          period: entry.period,
+          kind: entry.kind,
+          category: entry.category,
+          nature: entry.nature,
+          amountCents: entry.amountCents,
+          description: entry.description,
+          propertyId: property?.id ?? null,
+          propertyName: property?.name ?? "",
+          unitId: null,
+          unitLabel: null,
+          recordedBy: user.name,
+          createdAt: now(),
+        });
+        result = { id };
+        subject = id;
+        break;
+      }
+
+      case "ledgerRemove": {
+        manager(m);
+        const entry = await t.get<LedgerRecord>(
+          "ledger",
+          text(input.id, "entry"),
+        );
+        if (!entry || entry.orgId !== orgId)
+          throw new AppError("Entry not found.", 404);
+        // A rent receipt belongs to the register that created it, so it is
+        // taken off by unmarking the unit, not deleted from behind it.
+        if (entry.unitId)
+          throw new AppError(
+            "This is a rent receipt. Unmark the unit in Properties to take it off the books.",
+            409,
+          );
+        t.remove("ledger", entry.id);
+        subject = entry.id;
         break;
       }
 
@@ -536,7 +923,7 @@ export async function command(
         let property: PropertyRecord | undefined;
 
         if (role !== "manager") {
-          property = await requireProperty(t, m, input.propertyId);
+          property = await requireOpenProperty(t, m, input.propertyId);
           propertyId = property.id;
         }
 
@@ -570,7 +957,7 @@ export async function command(
             "units",
             text(input.unitId, "unit"),
           );
-          if (!unit || unit.propertyId !== propertyId)
+          if (!unit || unit.propertyId !== propertyId || unit.archivedAt)
             throw new AppError(
               "Choose a vacant unit without a pending invitation.",
               409,
@@ -719,9 +1106,15 @@ export async function command(
         t.remove("memberships", target.id);
         if (target.role === "tenant" && target.unitId) {
           t.release(`unitResident:${target.unitId}`);
+          // The rent flag belongs to the resident who was living there, not to
+          // the unit. Left set, the next tenant would move in already marked
+          // paid for the month. Their predecessor keeps the receipt they
+          // earned: the money was received, and the books say so.
           t.update("units", target.unitId, {
             residentId: null,
             residentName: null,
+            rentPaid: 0,
+            rentPaidPeriod: "",
           });
         }
         if (target.role === "tenant" && target.propertyId && target.usernameKey)
@@ -746,7 +1139,7 @@ export async function command(
             409,
           );
 
-        const property = await requireProperty(t, m, input.propertyId);
+        const property = await requireOpenProperty(t, m, input.propertyId);
         const limits = limitsOf(property);
         const identity = visitorIdentity(property.type, input);
         const window = visitWindow(input, limits.maxConsecutiveNights);
@@ -801,8 +1194,13 @@ export async function command(
         const id = randomUUID();
         const token = newToken();
         const reference = "SP-" + newToken().slice(0, 10).toUpperCase();
+        // The gate code. Separate from the reference on purpose: the reference
+        // is printed in every register listing and is the search key security
+        // already use, so a visitor reciting it would prove nothing.
+        const entryCode = encodeEntryCode(randomBytes(ENTRY_CODE_BYTES));
         t.reserve(`visitorRef:${reference}`, id);
         t.reserve(`visitorToken:${token}`, id);
+        t.reserve(`visitorCode:${entryCode}`, id);
         t.create("visitors", id, {
           orgId,
           propertyId: property.id,
@@ -815,6 +1213,7 @@ export async function command(
           idNumber: identity.idNumber,
           reference,
           token,
+          entryCode,
           visitType: window.visitType,
           visitDate: window.visitDate,
           endDate: window.endDate,
@@ -830,7 +1229,7 @@ export async function command(
           hostName: user.name,
           unitLabel: unit?.label ?? null,
         });
-        result = { id, token, reference };
+        result = { id, token, reference, entryCode };
         subject = id;
         break;
       }

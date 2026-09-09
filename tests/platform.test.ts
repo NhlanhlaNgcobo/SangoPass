@@ -7,7 +7,15 @@ import { login, register, tenantLogin } from "../lib/server/auth";
 import { BACKSTOPS, bucket, sweepRateLimits, throttle } from "../lib/server/ratelimit";
 import { ConflictError, store } from "../lib/server/store";
 import { SqliteStore } from "../lib/server/store/sqlite";
-import { PLANS } from "../lib/server/plans";
+import {
+  PLANS,
+  PLAN_CARDS,
+  PLAN_IDS,
+  exVatCents,
+  includedSms,
+  plan,
+  vatPortionCents,
+} from "../lib/server/plans";
 import { assertDeployable, ephemeralHost } from "../lib/server/config";
 
 const pass = "A long secure test phrase 2026!";
@@ -325,7 +333,39 @@ test("plan limits have exactly one definition", () => {
   assert.equal(PLANS.starter.managers, 1);
   assert.equal(PLANS.growth.managers, 5);
   assert.equal(PLANS.premium.managers, 10);
-  assert.equal(PLANS.starter.priceCents, 49900);
-  assert.equal(PLANS.growth.priceCents, 129900);
-  assert.equal(PLANS.premium.priceCents, 249900);
+  assert.equal(PLANS.starter.priceCents, 69900);
+  assert.equal(PLANS.growth.priceCents, 149900);
+  assert.equal(PLANS.premium.priceCents, 289900);
+
+  // Every published price includes VAT, so the portion inside it is the
+  // seller's to hand over rather than to keep.
+  assert.equal(vatPortionCents(69900), 9117);
+  assert.equal(exVatCents(69900) + vatPortionCents(69900), 69900);
+  for (const id of PLAN_IDS) {
+    const p = PLANS[id];
+    // A tier a customer cannot read is a tier they will not buy.
+    assert.ok(p.audience.length > 20, `${id} says who it is for`);
+    assert.ok(p.rules.length >= 4, `${id} lists its rules`);
+    // The advertised caps are the enforced caps: the cards read the table.
+    const card = PLAN_CARDS.find((c) => c.id === id)!;
+    assert.equal(card.unitCap, p.units);
+    assert.equal(card.seatCap, p.managers);
+    assert.ok(card.rules.some((rule) => rule.includes(String(p.units))));
+    // The stated text allowance is the one the allowance function returns.
+    assert.equal(includedSms(id, p.units), p.smsPerUnit * p.units);
+    assert.ok(
+      card.rules.some((rule) =>
+        rule.includes(String(includedSms(id, p.units))),
+      ),
+      `${id} advertises the allowance it grants`,
+    );
+  }
+  // Portfolio is quoted, never sold self-serve, so it has no caps.
+  const portfolio = PLAN_CARDS.find((c) => c.id === "portfolio")!;
+  assert.equal(portfolio.unitCap, null);
+  assert.equal(portfolio.seatCap, null);
+  assert.equal(plan("portfolio").id, "starter");
+  // Unknown or missing plans fall back to Starter rather than to no limits.
+  assert.equal(plan(undefined).units, PLANS.starter.units);
+  assert.equal(plan("enterprise-nonsense").units, PLANS.starter.units);
 });

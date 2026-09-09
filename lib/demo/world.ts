@@ -1,8 +1,12 @@
 import { limitsOf, monthBounds, nightsUsed, sastToday } from "@/lib/server/visits";
 import { rank } from "@/lib/shared/maintenance";
+import { DEFAULT_THEME } from "@/lib/shared/theme";
+import { currentPeriod, previousPeriod } from "@/lib/shared/money";
+import { encodeEntryCode } from "@/lib/shared/passcode";
 import type {
   LiveContractor,
   LiveInvoice,
+  LiveLedgerEntry,
   LiveMember,
   LiveProperty,
   LiveReport,
@@ -44,6 +48,7 @@ export interface DemoWorld {
   visitors: LiveVisitor[];
   reports: LiveReport[];
   contractors: LiveContractor[];
+  ledger: LiveLedgerEntry[];
   invoices: LiveInvoice[];
   invitations: WorkspaceState["invitations"];
   seq: number;
@@ -102,6 +107,20 @@ const stamp = (offsetDays: number) =>
 const token = (n: number) =>
   (n.toString(16).padStart(4, "0") + "d3m0").repeat(8).slice(0, 64);
 
+// The gate code a guest without a smartphone recites. Deterministic so a
+// prospect who reloads the demo sees the same code they were just reading, and
+// built through the shared encoder so it has exactly the shape the product
+// issues. The engine draws from the same function for a pass booked in the
+// demo, stepping past any code this seed already used.
+export const demoGateCode = (n: number) =>
+  encodeEntryCode([
+    n & 255,
+    (n * 37) & 255,
+    (n * 91) & 255,
+    (n * 13) & 255,
+    (n >> 3) & 255,
+  ]);
+
 function unit(
   id: string,
   propertyId: string,
@@ -109,6 +128,7 @@ function unit(
   rentCents: number,
   residentName: string | null = null,
   rentPaid = 1,
+  archived = false,
 ): LiveUnit {
   return {
     id,
@@ -116,8 +136,15 @@ function unit(
     label,
     rentCents,
     rentPaid,
+    // A paid flag belongs to a month. The sample estate is paid up for the
+    // month a prospect is looking at, so the money screen has something in it.
+    rentPaidPeriod: rentPaid ? currentPeriod() : "",
     frequency: "monthly",
     residentName,
+    // A demo needs one of everything, including a unit taken out of use, so
+    // a prospect can see that archiving keeps history rather than deleting it.
+    archivedAt: archived ? "2026-02-01T08:00:00.000Z" : null,
+    archivedWithProperty: false,
   };
 }
 
@@ -133,6 +160,7 @@ export function seedWorld(): DemoWorld {
       sleepoverNightsPerMonth: 8,
       maxConsecutiveNights: 3,
       maxActiveGuests: 2,
+      archivedAt: null,
     },
     {
       id: CAMPUS,
@@ -144,6 +172,7 @@ export function seedWorld(): DemoWorld {
       sleepoverNightsPerMonth: 4,
       maxConsecutiveNights: 2,
       maxActiveGuests: 1,
+      archivedAt: null,
     },
   ];
 
@@ -155,6 +184,9 @@ export function seedWorld(): DemoWorld {
     unit("demo-unit-s01", CAMPUS, "S-01", 425000, "Lerato Mokoena"),
     unit("demo-unit-s02", CAMPUS, "S-02", 425000, "Yusuf Adams"),
     unit("demo-unit-s03", CAMPUS, "S-03", 425000, null, 0),
+    // Out of use while the roof is replaced: it is not vacancy, it is not
+    // owed, and it does not use up a unit on the plan.
+    unit("demo-unit-b103", COURT, "B-103", 690000, null, 0, true),
   ];
 
   const members: LiveMember[] = [
@@ -227,6 +259,7 @@ export function seedWorld(): DemoWorld {
       idNumber: "•••••••••9087",
       reference: "SP-4K7QP2M9XA",
       token: token(1),
+      entryCode: demoGateCode(1),
       visitType: "daily",
       visitDate: day(0),
       endDate: day(0),
@@ -253,6 +286,7 @@ export function seedWorld(): DemoWorld {
       idNumber: "•••••••••4413",
       reference: "SP-9WD3TB6RLE",
       token: token(2),
+      entryCode: demoGateCode(2),
       visitType: "sleepover",
       visitDate: day(1),
       endDate: day(2),
@@ -279,6 +313,7 @@ export function seedWorld(): DemoWorld {
       idNumber: "••••1120",
       reference: "SP-2CJ8RN5VQK",
       token: token(3),
+      entryCode: demoGateCode(3),
       visitType: "extended_sleepover",
       visitDate: day(3),
       endDate: day(5),
@@ -305,6 +340,7 @@ export function seedWorld(): DemoWorld {
       idNumber: "••••3390",
       reference: "SP-7HM4XZ1PDW",
       token: token(4),
+      entryCode: demoGateCode(4),
       visitType: "daily",
       visitDate: day(-2),
       endDate: day(-2),
@@ -418,6 +454,64 @@ export function seedWorld(): DemoWorld {
     },
   ];
 
+  // Two months of books, so a prospect opening Money sees a working set of
+  // accounts rather than an empty screen, and can page back to a closed month.
+  // Rent receipts are not seeded: they are produced by the rent register, and
+  // viewFor derives them from the units the same way the server does.
+  const costs: [string, LiveLedgerEntry["category"], LiveLedgerEntry["nature"], number, string, string][] = [
+    ["this", "security", "fixed", 650000, "Guarding contract — night shift", COURT],
+    ["this", "staff", "fixed", 520000, "Cleaners and gardener wages", COURT],
+    ["this", "utilities", "variable", 389450, "Municipal water and electricity", COURT],
+    ["this", "maintenance", "variable", 185000, "Geyser replacement, A-204", COURT],
+    ["this", "other", "fixed", 140000, "Building insurance", COURT],
+    ["this", "security", "fixed", 240000, "Campus access control", CAMPUS],
+    ["this", "utilities", "variable", 160000, "Electricity", CAMPUS],
+    ["last", "security", "fixed", 650000, "Guarding contract — night shift", COURT],
+    ["last", "staff", "fixed", 520000, "Cleaners and gardener wages", COURT],
+    ["last", "utilities", "variable", 352800, "Municipal water and electricity", COURT],
+    ["last", "maintenance", "variable", 96000, "Blocked drain, B-101", COURT],
+  ];
+  // Every unit marked paid has a receipt, because that is exactly what
+  // marking it paid does on the server: the register writes into the books.
+  // Without these the money screen would show four units paid and nothing
+  // collected, which is the one thing the screen exists to reconcile.
+  const receipts: LiveLedgerEntry[] = units
+    .filter((u) => u.residentName && u.rentPaid)
+    .map((u, index) => ({
+      id: `demo-rent-${index + 1}`,
+      period: currentPeriod(),
+      kind: "income" as const,
+      category: "rent" as const,
+      nature: "fixed" as const,
+      amountCents: u.rentCents,
+      description: `Rent received — ${u.label}`,
+      propertyId: u.propertyId,
+      propertyName:
+        u.propertyId === COURT ? "Ubuntu Court" : "Jacaranda Campus House",
+      unitId: u.id,
+      unitLabel: u.label,
+      recordedBy: "Nomsa Dlamini",
+      createdAt: stamp(-6),
+    }));
+
+  const ledger: LiveLedgerEntry[] = costs.map<LiveLedgerEntry>(
+    ([when, category, nature, amountCents, description, propertyId], index) => ({
+      id: `demo-ledger-${index + 1}`,
+      period: when === "this" ? currentPeriod() : previousPeriod(currentPeriod()),
+      kind: "expense" as const,
+      category,
+      nature,
+      amountCents,
+      description,
+      propertyId,
+      propertyName: propertyId === COURT ? "Ubuntu Court" : "Ubuntu Campus Residence",
+      unitId: null,
+      unitLabel: null,
+      recordedBy: "Nomsa Dlamini",
+      createdAt: stamp(when === "this" ? -3 : -34),
+    }),
+  ).concat(receipts);
+
   return {
     organisation: {
       id: DEMO_ORG_ID,
@@ -426,6 +520,7 @@ export function seedWorld(): DemoWorld {
       trialUntil: stamp(-30),
       paidUntil: stamp(19),
       active: true,
+      theme: { ...DEFAULT_THEME },
     },
     properties,
     units,
@@ -433,18 +528,19 @@ export function seedWorld(): DemoWorld {
     visitors,
     reports,
     contractors,
+    ledger,
     invoices: [
       {
         id: "demo-invoice-1",
         plan: "growth",
-        amountCents: 129900,
+        amountCents: 149900,
         status: "paid",
         createdAt: stamp(-11),
       },
       {
         id: "demo-invoice-2",
         plan: "growth",
-        amountCents: 129900,
+        amountCents: 149900,
         status: "paid",
         createdAt: stamp(-41),
       },
@@ -557,6 +653,14 @@ export function viewFor(world: DemoWorld, persona: DemoPersona): WorkspaceState 
     ),
     contractors: isManager
       ? [...world.contractors].sort((a, b) => a.name.localeCompare(b.name))
+      : [],
+    // The books never leave the manager, in the demo exactly as on the server.
+    ledger: isManager
+      ? [...world.ledger].sort(
+          (a, b) =>
+            b.period.localeCompare(a.period) ||
+            b.createdAt.localeCompare(a.createdAt),
+        )
       : [],
     invoices: isManager ? world.invoices : [],
     invitations: isManager ? world.invitations : [],

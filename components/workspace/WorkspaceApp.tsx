@@ -1,5 +1,10 @@
 "use client";
-import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -21,11 +26,18 @@ import {
   Check,
   Copy,
   AlertTriangle,
+  Palette,
+  RotateCcw,
+  Wrench,
+  Wallet,
+  Download,
+  Pencil,
 } from "lucide-react";
 import PassScanner from "./PassScanner";
 import Brand from "@/components/ui/Brand";
 import type {
   IdType,
+  LiveUnit,
   LiveVisitor,
   VisitType,
   WorkspaceState,
@@ -38,7 +50,41 @@ import {
   alerting,
   type Urgency,
 } from "@/lib/shared/maintenance";
-import { PLAN_CARDS } from "@/lib/shared/plans";
+import {
+  PLAN_CARDS,
+  UNIVERSAL_RULES,
+  includedSms,
+  plan as planFor,
+} from "@/lib/shared/plans";
+import {
+  AA,
+  AA_LARGE,
+  DEFAULT_THEME,
+  THEME_PRESETS,
+  themeContrast,
+  themeReadable,
+  themeVariables,
+  normaliseHex,
+  resolveTheme,
+  type BrandTheme,
+} from "@/lib/shared/theme";
+import { formatEntryCode, sameEntryCode } from "@/lib/shared/passcode";
+import { smsNotice } from "@/lib/shared/sms";
+import { financeCsv, financeFilename } from "@/lib/server/finance";
+import {
+  CATEGORY_HELP,
+  CATEGORY_LABELS,
+  EXPENSE_CATEGORIES,
+  NATURE_HELP,
+  NATURE_LABELS,
+  currentPeriod,
+  periodLabel,
+  rands,
+  recentPeriods,
+  summarise,
+  type LedgerKind,
+  type LedgerNature,
+} from "@/lib/shared/money";
 import { useDialog } from "@/lib/utils/useDialog";
 import { useMediaQuery } from "@/lib/utils/useMediaQuery";
 
@@ -56,7 +102,15 @@ const day = () =>
     new Date(),
   );
 type View =
-  "overview" | "properties" | "people" | "visitors" | "reports" | "billing";
+  | "overview"
+  | "properties"
+  | "people"
+  | "visitors"
+  | "reports"
+  | "contacts"
+  | "money"
+  | "billing"
+  | "brand";
 function Field({
   name,
   children,
@@ -114,6 +168,219 @@ function Dialog({
     </div>
   );
 }
+/** One colour: a swatch that opens the native picker, plus the hex in text. */
+function ColourField({
+  label: name,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  // The text box keeps whatever is being typed - "#12", "#12ab" - and only
+  // reports upwards once it parses, so a half-typed hex neither repaints the
+  // dashboard nor gets rewritten under the cursor.
+  const [typed, setTyped] = useState<string | null>(null);
+  return (
+    <div className="sp-colour-field">
+      <label>
+        <span>{name}</span>
+        <span className="sp-muted">{hint}</span>
+      </label>
+      <div className="sp-colour-row">
+        <input
+          type="color"
+          aria-label={`${name} colour picker`}
+          value={value}
+          onChange={(e) => {
+            setTyped(null);
+            onChange(e.target.value.toUpperCase());
+          }}
+        />
+        <input
+          type="text"
+          aria-label={`${name} hex code`}
+          spellCheck={false}
+          value={typed ?? value}
+          onChange={(e) => {
+            setTyped(e.target.value);
+            const hex = normaliseHex(e.target.value);
+            if (hex) onChange(hex);
+          }}
+          onBlur={() => setTyped(null)}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Where a manager sets the company's colours.
+ *
+ * Every change repaints the real dashboard behind this panel rather than a
+ * small swatch, so what a manager approves is what they will actually be
+ * looking at all day. Saving is blocked - not merely warned about - while a
+ * pair would leave text unreadable, because the same two colours are about to
+ * land on every tenant and security account in the company.
+ */
+function BrandStudio({
+  saved,
+  draft,
+  busy,
+  onDraft,
+  onSave,
+}: {
+  saved: BrandTheme;
+  draft: BrandTheme;
+  busy: boolean;
+  onDraft: (theme: BrandTheme) => void;
+  onSave: (theme: BrandTheme) => void;
+}) {
+  const readable = themeReadable(draft);
+  const ratios = themeContrast(draft);
+  const changed =
+    draft.primary !== saved.primary || draft.accent !== saved.accent;
+  const failures = [
+    ratios.primary < AA && "text on your primary colour",
+    ratios.accent < AA && "text on your accent colour",
+    ratios.pair < AA_LARGE && "the accent where it sits on the primary",
+  ].filter(Boolean) as string[];
+  return (
+    <>
+      <section className="sp-panel">
+        <div className="sp-section-head">
+          <h2>Your company colours</h2>
+          {changed && (
+            <button
+              className="sp-secondary"
+              disabled={busy}
+              onClick={() => onDraft(saved)}
+            >
+              <RotateCcw size={15} />
+              Discard changes
+            </button>
+          )}
+        </div>
+        <p className="sp-muted sp-brand-intro">
+          Pick the two colours your company already uses. They apply to this
+          whole workspace and to the dashboards of everyone in{" "}
+          <strong>your organisation</strong> — your residents and your security
+          team see the same colours you do, without setting anything themselves.
+          The dashboard behind this panel updates as you choose; nothing is
+          shared until you save.
+        </p>
+        <div className="sp-brand-fields">
+          <ColourField
+            label="Primary"
+            hint="Sidebar, buttons and the welcome panel"
+            value={draft.primary}
+            onChange={(primary) => onDraft({ ...draft, primary })}
+          />
+          <ColourField
+            label="Accent"
+            hint="The selected menu item and highlights"
+            value={draft.accent}
+            onChange={(accent) => onDraft({ ...draft, accent })}
+          />
+        </div>
+        {!readable && (
+          <p className="sp-error" role="alert">
+            <AlertTriangle size={16} />
+            These colours are too close together to read comfortably —{" "}
+            {new Intl.ListFormat("en-ZA", {
+              style: "long",
+              type: "conjunction",
+            }).format(failures)}{" "}
+            {failures.length > 1 ? "fall" : "falls"} below the accessibility
+            minimum. Try a darker primary or a lighter accent.
+          </p>
+        )}
+        <div className="sp-brand-save">
+          <button
+            className="sp-primary"
+            disabled={busy || !changed || !readable}
+            onClick={() => onSave(draft)}
+          >
+            <Check size={16} />
+            Save for everyone
+          </button>
+          <button
+            className="sp-secondary"
+            disabled={busy}
+            onClick={() => onDraft(DEFAULT_THEME)}
+          >
+            Reset to SangoPass colours
+          </button>
+        </div>
+      </section>
+      <section className="sp-panel">
+        <h2>Start from a palette</h2>
+        <p className="sp-muted sp-brand-intro">
+          A starting point you can then adjust to your exact brand.
+        </p>
+        <div className="sp-brand-presets">
+          {THEME_PRESETS.map((preset) => {
+            const current =
+              draft.primary === preset.primary &&
+              draft.accent === preset.accent;
+            return (
+              <button
+                key={preset.id}
+                className="sp-brand-preset"
+                aria-pressed={current}
+                disabled={busy}
+                onClick={() =>
+                  onDraft({ primary: preset.primary, accent: preset.accent })
+                }
+              >
+                <span
+                  className="sp-brand-swatch"
+                  style={{ background: preset.primary }}
+                >
+                  <span style={{ background: preset.accent }} />
+                </span>
+                {preset.name}
+                {current && <Check size={15} />}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+      <section className="sp-panel">
+        <h2>Contrast</h2>
+        <p className="sp-muted sp-brand-intro">
+          Measured against WCAG AA, the accessibility standard for readable
+          text. Higher is easier to read.
+        </p>
+        <ul className="sp-brand-ratios">
+          {[
+            { name: "Text on primary", ratio: ratios.primary, floor: AA },
+            { name: "Text on accent", ratio: ratios.accent, floor: AA },
+            { name: "Accent on primary", ratio: ratios.pair, floor: AA_LARGE },
+          ].map((row) => (
+            <li key={row.name}>
+              <span>{row.name}</span>
+              <strong>{row.ratio.toFixed(1)}:1</strong>
+              <span
+                className={
+                  row.ratio >= row.floor ? "sp-badge" : "sp-badge is-warning"
+                }
+              >
+                {row.ratio >= row.floor
+                  ? "Passes"
+                  : `Below ${row.floor.toFixed(1)}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </>
+  );
+}
+
 /**
  * Lets the demo run this exact component against an in-browser world instead
  * of the API. Everything below is identical in both modes: the demo is the
@@ -153,7 +420,19 @@ export default function WorkspaceApp({
     [inviteRole, setInviteRole] = useState("tenant"),
     [visitType, setVisitType] = useState<VisitType>("daily"),
     [idType, setIdType] = useState<IdType>("sa_id"),
-    [urgency, setUrgency] = useState<Urgency>("normal");
+    [urgency, setUrgency] = useState<Urgency>("normal"),
+    // The month the money screen is showing. Opens on the one in progress.
+    [period, setPeriod] = useState(currentPeriod()),
+    [entryKind, setEntryKind] = useState<LedgerKind>("expense"),
+    [entryNature, setEntryNature] = useState<LedgerNature>("variable"),
+    // Which unit an edit dialog is about, and whether the register shows the
+    // units and properties that have been filed away.
+    [editing, setEditing] = useState(""),
+    [showArchived, setShowArchived] = useState(false),
+    // An unsaved brand colour choice. While it is set the whole dashboard is
+    // painted with it, so a manager judges the colours on the real interface
+    // rather than on a swatch. Leaving the Brand view drops it.
+    [themeDraft, setThemeDraft] = useState<BrandTheme | null>(null);
   const router = useRouter();
   const compact = useMediaQuery("(max-width: 1023px)");
   const navigationOpen = compact && mobile;
@@ -181,8 +460,22 @@ export default function WorkspaceApp({
       title: manager ? "Maintenance" : "Reports",
       icon: ClipboardList,
     },
-    ...(manager ? [{ id: "billing", title: "Billing", icon: CreditCard }] : []),
+    ...(manager
+      ? [
+          { id: "contacts", title: "Maintenance contacts", icon: Wrench },
+          { id: "money", title: "Money", icon: Wallet },
+          { id: "billing", title: "Billing", icon: CreditCard },
+          { id: "brand", title: "Brand", icon: Palette },
+        ]
+      : []),
   ];
+  // What the workspace is painted with right now: the unsaved draft while a
+  // manager is choosing, otherwise the organisation's saved colours - which
+  // the server sends to every role, so a tenant lands here already themed.
+  // Resolved rather than trusted: a demo world restored from a session that
+  // predates the theme field carries none, and this pair paints everything.
+  const savedTheme = resolveTheme(state.organisation.theme);
+  const theme = themeDraft ?? savedTheme;
   async function refresh(orgId = state.membership.orgId) {
     setBusy(true);
     setError("");
@@ -245,21 +538,27 @@ export default function WorkspaceApp({
         setPass(
           data.state.visitors.find((v) => v.id === data.result.id) ?? null,
         );
-      const guestPass = input.action === "visitor";
+      // A guest pass reports the text message first. It is the channel that
+      // reaches the visitor themselves, and the one whose failure changes what
+      // the resident has to do next.
       setNotice(
-        data.result.emailStatus === "sent"
-          ? guestPass
-            ? "Guest pass created and emailed to you, so you can show it at the gate if your guest has no phone."
-            : "Enrolment saved. The welcome email has been sent to the email provider."
-          : data.result.emailStatus === "failed"
-            ? guestPass
-              ? "Guest pass created, but the email could not be sent. Copy the pass link below instead."
-              : "Enrolment saved, but the email could not be sent. Use Resend email in Pending invitations to retry."
-            : data.result.emailStatus === "not_configured"
-              ? guestPass
-                ? "Guest pass created. Email is not connected yet, so copy the pass link below."
-                : "Enrolment saved. Email is not connected yet; the welcome email has not been sent."
-              : "Saved successfully.",
+        input.action === "visitor"
+          ? [
+              "Guest pass created.",
+              smsNotice(String(data.result.smsStatus ?? "not_configured")),
+              data.result.emailStatus === "sent"
+                ? "A copy is on its way to your inbox."
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : data.result.emailStatus === "sent"
+            ? "Enrolment saved. The welcome email has been sent to the email provider."
+            : data.result.emailStatus === "failed"
+              ? "Enrolment saved, but the email could not be sent. Use Resend email in Pending invitations to retry."
+              : data.result.emailStatus === "not_configured"
+                ? "Enrolment saved. Email is not connected yet; the welcome email has not been sent."
+                : "Saved successfully.",
       );
       return true;
     } catch (e) {
@@ -279,11 +578,13 @@ export default function WorkspaceApp({
     });
   }
   function open(action: string, propertyId?: string) {
-    const property = propertyId || state.properties[0]?.id || "";
+    const property = propertyId || openProperties[0]?.id || "";
     setSelectedProperty(property);
     setInviteRole("tenant");
     setVisitType("daily");
     setUrgency("normal");
+    setEntryKind("expense");
+    setEntryNature("variable");
     // A student residence usually identifies guests by student number; an
     // apartment never does.
     setIdType(
@@ -295,6 +596,40 @@ export default function WorkspaceApp({
     setError("");
     setNotice("");
     setModal(action);
+  }
+  /** Edit one unit: the dialog reads it out of state by id. */
+  function openUnit(id: string) {
+    setEditing(id);
+    open("unitUpdate", state.units.find((u) => u.id === id)?.propertyId);
+  }
+  /**
+   * The demo has no session, so the export route would answer 401 and hand a
+   * prospect raw JSON. It builds the file in the browser instead, from the
+   * same function the server renders it with, so what a prospect downloads is
+   * the file the product produces.
+   */
+  function downloadBooks() {
+    const csv = financeCsv(
+      state.organisation.name,
+      period,
+      state.ledger,
+      openUnits.map((u) => ({
+        label: u.label,
+        propertyName:
+          state.properties.find((p) => p.id === u.propertyId)?.name ?? "",
+        rentCents: u.rentCents,
+        occupied: Boolean(u.residentName),
+        paid: paidThisMonth(u),
+      })),
+    );
+    const url = URL.createObjectURL(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = financeFilename(state.organisation.name, period);
+    link.click();
+    URL.revokeObjectURL(url);
   }
   async function copy(value: string) {
     try {
@@ -332,11 +667,69 @@ export default function WorkspaceApp({
       setBusy(false);
     }
   }
-  const visitors = state.visitors.filter((v) =>
-    `${v.visitorName} ${v.reference} ${v.hostName}`
+  // The gate code is searchable too, so a guard who has been read a code down
+  // a radio can type it straight into the box they already use.
+  const visitors = state.visitors.filter(
+    (v) =>
+      `${v.visitorName} ${v.reference} ${v.hostName}`
+        .toLowerCase()
+        .includes(search.toLowerCase()) ||
+      (v.entryCode !== "" && sameEntryCode(v.entryCode, search)),
+  );
+  // A directory is only useful if you can find the plumber in it at 6am, so
+  // the trade and the company are searchable alongside the name.
+  const contacts = state.contractors.filter((c) =>
+    `${c.name} ${c.trade} ${c.company ?? ""} ${c.phone} ${c.email ?? ""}`
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
+  // The books for the month on screen, and the rent the occupied units should
+  // produce. Expected rent comes from the register as it stands today, so it
+  // is only claimed for the month in progress: measuring August against
+  // today's tenants and today's rents would be a number that means nothing.
+  const liveMonth = period === currentPeriod();
+  // Archived properties and units are still sent, so a visitor row or a report
+  // can name the building it happened at. Everywhere a manager chooses or
+  // counts something, only what is in use belongs.
+  const openProperties = state.properties.filter((p) => !p.archivedAt);
+  const openUnits = state.units.filter((u) => !u.archivedAt);
+  const occupied = openUnits.filter((u) => u.residentName);
+  // A vacant unit owes nothing, so it is never in arrears. What it is, is rent
+  // the property is not earning - which is the figure an owner asks about, and
+  // is reported on its own rather than hidden inside the rent lines.
+  const vacant = openUnits.filter((u) => !u.residentName);
+  const paidThisMonth = (unit: LiveUnit) =>
+    Boolean(unit.rentPaid) && unit.rentPaidPeriod === currentPeriod();
+  const rentOf = (rows: LiveUnit[]) =>
+    rows.reduce((total, u) => total + u.rentCents, 0);
+  const expectedRentCents = liveMonth ? rentOf(occupied) : 0;
+  const books = summarise(
+    period,
+    state.ledger,
+    expectedRentCents,
+    liveMonth ? rentOf(vacant) : 0,
+  );
+  const monthEntries = state.ledger
+    .filter((entry) => entry.period === period)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const arrears = occupied.filter((u) => !paidThisMonth(u));
+  // Every month with something in it, plus the last year, so a manager can
+  // reach a month they recorded long ago as well as one they simply missed.
+  const periods = [
+    ...new Set([...recentPeriods(12), ...state.ledger.map((e) => e.period)]),
+  ].sort((a, b) => b.localeCompare(a));
+  // What this organisation is entitled to, and what it is actually using.
+  // Seats and units are counted live so the billing screen agrees with the
+  // limits the server enforces rather than describing them separately.
+  const planNow = planFor(state.organisation.plan);
+  const managerSeats = state.members.filter((m) => m.role === "manager").length;
+  const passesThisMonth = state.visitors.filter(
+    (v) => v.createdAt.slice(0, 7) === currentPeriod(),
+  ).length;
+  const editingProperty = state.properties.find(
+    (p) => p.id === selectedProperty,
+  );
+  const editingUnit = state.units.find((u) => u.id === editing);
   const propertySelect = (
     <label>
       Property
@@ -349,7 +742,7 @@ export default function WorkspaceApp({
         <option value="" disabled>
           Select a property
         </option>
-        {state.properties.map((p) => (
+        {openProperties.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
           </option>
@@ -375,7 +768,7 @@ export default function WorkspaceApp({
     </div>
   );
   return (
-    <div className="sp-shell">
+    <div className="sp-shell" style={themeVariables(theme) as CSSProperties}>
       {demo?.banner}
       <div
         className={`sp-navigation ${navigationOpen ? "is-open" : ""}`}
@@ -435,6 +828,9 @@ export default function WorkspaceApp({
                   setView(item.id as View);
                   setMobile(false);
                   setSearch("");
+                  // Navigating away abandons an unsaved colour choice rather
+                  // than leaving the workspace in colours nobody saved.
+                  if (item.id !== "brand") setThemeDraft(null);
                 }}
               >
                 <item.icon size={19} />
@@ -538,7 +934,10 @@ export default function WorkspaceApp({
                     people: "The people who make your community.",
                     visitors: "A warm welcome. A clear record.",
                     reports: "Keep your community cared for.",
+                    contacts: "Everyone who keeps the place working.",
+                    money: "What came in, what went out.",
                     billing: "Room to grow, at your own pace.",
+                    brand: "Make it look like your company.",
                   }[view]
                 }
               </p>
@@ -555,7 +954,7 @@ export default function WorkspaceApp({
               </button>
             ) : view === "visitors" && tenant ? (
               <button
-                disabled={!state.properties.length}
+                disabled={!openProperties.length}
                 className="sp-primary"
                 onClick={() => open("visitor")}
               >
@@ -564,12 +963,25 @@ export default function WorkspaceApp({
               </button>
             ) : view === "reports" ? (
               <button
-                disabled={!state.properties.length}
+                disabled={!openProperties.length}
                 className="sp-primary"
                 onClick={() => open("report")}
               >
                 <Plus size={17} />
                 {manager ? "Log an issue" : "Report an issue"}
+              </button>
+            ) : view === "contacts" ? (
+              <button className="sp-primary" onClick={() => open("contractor")}>
+                <Plus size={17} />
+                Add a contact
+              </button>
+            ) : view === "money" ? (
+              <button
+                className="sp-primary"
+                onClick={() => open("ledgerEntry")}
+              >
+                <Plus size={17} />
+                Record money
               </button>
             ) : null}
           </div>
@@ -647,7 +1059,7 @@ export default function WorkspaceApp({
                 {[
                   {
                     name: manager ? "Properties" : "Your property",
-                    value: state.properties.length,
+                    value: openProperties.length,
                   },
                   {
                     name: "Visitors today",
@@ -744,8 +1156,12 @@ export default function WorkspaceApp({
                 )
               ) : (
                 <div className="sp-property-grid">
-                  {state.properties.map((p, i) => (
-                    <article className="sp-property-card" key={p.id}>
+                  {(showArchived ? state.properties : openProperties).map(
+                    (p, i) => (
+                    <article
+                      className={`sp-property-card ${p.archivedAt ? "is-archived" : ""}`}
+                      key={p.id}
+                    >
                       <div className="sp-property-image">
                         <Image
                           src={
@@ -782,29 +1198,100 @@ export default function WorkspaceApp({
                           consecutive · {p.maxActiveGuests} active passes
                         </small>
                         <div className="sp-row">
-                          <button
-                            className="sp-secondary"
-                            onClick={() => open("unit", p.id)}
-                          >
-                            <Plus size={15} />
-                            Add unit
-                          </button>
-                          <button
-                            className="sp-secondary"
-                            onClick={() => open("propertyLimits", p.id)}
-                          >
-                            <Ticket size={15} />
-                            Visitor limits
-                          </button>
+                          {p.archivedAt ? (
+                            <>
+                              <span className="sp-badge is-warning">
+                                Archived
+                              </span>
+                              <button
+                                disabled={busy}
+                                className="sp-secondary"
+                                onClick={() =>
+                                  void act({
+                                    action: "propertyArchive",
+                                    id: p.id,
+                                    archived: false,
+                                  })
+                                }
+                              >
+                                <RotateCcw size={15} />
+                                Restore
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                className="sp-secondary"
+                                onClick={() => open("unit", p.id)}
+                              >
+                                <Plus size={15} />
+                                Add unit
+                              </button>
+                              <button
+                                className="sp-secondary"
+                                onClick={() => open("propertyUpdate", p.id)}
+                              >
+                                <Pencil size={15} />
+                                Edit
+                              </button>
+                              <button
+                                className="sp-secondary"
+                                onClick={() => open("propertyLimits", p.id)}
+                              >
+                                <Ticket size={15} />
+                                Visitor limits
+                              </button>
+                              {/* Archiving, never deleting: this building is
+                                  named in last month's books, in the visitor
+                                  register and in the audit trail. */}
+                              <button
+                                disabled={busy}
+                                className="sp-text-button"
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `Archive ${p.name}? It stops appearing when you add units, enrol residents or record money, and its empty units are archived with it. Everything already recorded stays exactly as it is, and you can restore it.`,
+                                    )
+                                  )
+                                    void act({
+                                      action: "propertyArchive",
+                                      id: p.id,
+                                      archived: true,
+                                    });
+                                }}
+                              >
+                                Archive
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </article>
-                  ))}
+                    ),
+                  )}
                 </div>
               )}
               {state.units.length > 0 && (
                 <section className="sp-panel">
-                  <h2>Units & rent register</h2>
+                  <div className="sp-section-head">
+                    <h2>
+                      Units & rent register{" "}
+                      <span className="sp-muted">({openUnits.length})</span>
+                    </h2>
+                    {state.units.length > openUnits.length && (
+                      <label className="sp-row">
+                        <input
+                          type="checkbox"
+                          checked={showArchived}
+                          onChange={(e) => setShowArchived(e.target.checked)}
+                        />
+                        <span>
+                          Show archived (
+                          {state.units.length - openUnits.length})
+                        </span>
+                      </label>
+                    )}
+                  </div>
                   <p className="sp-muted">
                     Manually record this period’s rent. Payment collection is
                     separate.
@@ -826,15 +1313,25 @@ export default function WorkspaceApp({
                             Monthly rent
                           </th>
                           <th role="columnheader" scope="col">
-                            This period
+                            {periodLabel(currentPeriod())}
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Actions
                           </th>
                         </tr>
                       </thead>
                       <tbody role="rowgroup">
-                        {state.units.map((u) => (
+                        {(showArchived ? state.units : openUnits).map((u) => (
                           <tr key={u.id} role="row">
                             <td data-label="Unit" role="cell">
                               <strong>{u.label}</strong>
+                              {u.archivedAt && (
+                                <small className="sp-block">
+                                  <span className="sp-badge is-warning">
+                                    Archived
+                                  </span>
+                                </small>
+                              )}
                             </td>
                             <td data-label="Property" role="cell">
                               {
@@ -849,20 +1346,86 @@ export default function WorkspaceApp({
                             <td data-label="Monthly rent" role="cell">
                               {rand(u.rentCents)}
                             </td>
-                            <td data-label="This period" role="cell">
-                              <button
-                                disabled={busy}
-                                className={`sp-badge ${u.rentPaid ? "success" : ""}`}
-                                onClick={() =>
-                                  void act({
-                                    action: "rent",
-                                    unitId: u.id,
-                                    paid: !u.rentPaid,
-                                  })
-                                }
-                              >
-                                {u.rentPaid ? "Paid · undo" : "Mark paid"}
-                              </button>
+                            <td
+                              data-label={periodLabel(currentPeriod())}
+                              role="cell"
+                            >
+                              {/* Paid means paid for this month. A unit marked
+                                  in September reads as unpaid in October, and
+                                  marking it here writes the receipt into the
+                                  books under Money. */}
+                              {u.archivedAt ? (
+                                <span className="sp-muted">—</span>
+                              ) : (
+                                <button
+                                  disabled={busy}
+                                  className={`sp-badge ${
+                                    paidThisMonth(u) ? "success" : ""
+                                  }`}
+                                  onClick={() =>
+                                    void act({
+                                      action: "rent",
+                                      unitId: u.id,
+                                      paid: !paidThisMonth(u),
+                                    })
+                                  }
+                                >
+                                  {paidThisMonth(u)
+                                    ? "Paid · undo"
+                                    : "Mark paid"}
+                                </button>
+                              )}
+                            </td>
+                            <td data-label="Actions" role="cell">
+                              <div className="sp-row">
+                                {u.archivedAt ? (
+                                  <button
+                                    disabled={busy}
+                                    className="sp-secondary"
+                                    onClick={() =>
+                                      void act({
+                                        action: "unitArchive",
+                                        id: u.id,
+                                        archived: false,
+                                      })
+                                    }
+                                  >
+                                    <RotateCcw size={15} />
+                                    Restore
+                                  </button>
+                                ) : (
+                                  <>
+                                    <button
+                                      className="sp-secondary"
+                                      onClick={() => openUnit(u.id)}
+                                    >
+                                      <Pencil size={15} />
+                                      Edit
+                                    </button>
+                                    {/* Archived, never deleted: this unit is
+                                        named in the books and in the visitor
+                                        register, and both must keep reading. */}
+                                    <button
+                                      disabled={busy}
+                                      className="sp-text-button"
+                                      onClick={() => {
+                                        if (
+                                          window.confirm(
+                                            `Archive ${u.label}? It stops being offered when you enrol a resident and stops counting as vacant income. Everything already recorded stays as it is, and you can restore it.`,
+                                          )
+                                        )
+                                          void act({
+                                            action: "unitArchive",
+                                            id: u.id,
+                                            archived: true,
+                                          });
+                                      }}
+                                    >
+                                      Archive
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1037,6 +1600,22 @@ export default function WorkspaceApp({
                     setSearch(found.reference);
                     setNotice(
                       `Pass verified for ${found.visitorName}. Check the status and arrival window before admitting them.`,
+                    );
+                    return true;
+                  }}
+                  onCode={(code) => {
+                    // Verification, not admission: the guard still reads the
+                    // status and the arrival window, and still checks the
+                    // identity document, exactly as after a scan.
+                    const found = state.visitors.find((v) =>
+                      sameEntryCode(v.entryCode, code),
+                    );
+                    if (!found) return false;
+                    setSearch(found.reference);
+                    setNotice(
+                      `Gate code matches ${found.visitorName}, expected at ${found.propertyName}${
+                        found.unitLabel ? ` for ${found.unitLabel}` : ""
+                      }. Check their identity document, the status and the arrival window before admitting them.`,
                     );
                     return true;
                   }}
@@ -1320,97 +1899,6 @@ export default function WorkspaceApp({
                       </article>
                     ))}
               </section>
-
-              {manager && (
-                <section className="sp-panel">
-                  <div className="sp-section-head">
-                    <h2>Maintenance contacts</h2>
-                    <button
-                      className="sp-secondary"
-                      onClick={() => open("contractor")}
-                    >
-                      <Plus size={15} />
-                      Add a contact
-                    </button>
-                  </div>
-                  <p className="sp-muted">
-                    Your in-house people and outside contractors. A phone list,
-                    nothing more: none of these are accounts and none of them
-                    grant access.
-                  </p>
-                  {!state.contractors.length ? (
-                    empty(
-                      "No contacts yet.",
-                      "Add the plumber, the electrician and whoever holds the gate keys, so they are to hand when something breaks.",
-                    )
-                  ) : (
-                    <div className="sp-table-wrap">
-                      <table className="sp-responsive-table" role="table">
-                        <thead role="rowgroup">
-                          <tr role="row">
-                            <th role="columnheader" scope="col">
-                              Name
-                            </th>
-                            <th role="columnheader" scope="col">
-                              Trade
-                            </th>
-                            <th role="columnheader" scope="col">
-                              Contact
-                            </th>
-                            <th role="columnheader" scope="col">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody role="rowgroup">
-                          {state.contractors.map((c) => (
-                            <tr key={c.id} role="row">
-                              <td data-label="Name" role="cell">
-                                {c.name}
-                                <small className="sp-block">
-                                  {c.kind === "in_house"
-                                    ? "In-house"
-                                    : c.company || "Contractor"}
-                                </small>
-                              </td>
-                              <td data-label="Trade" role="cell">
-                                {c.trade}
-                                {c.notes ? (
-                                  <small className="sp-block">{c.notes}</small>
-                                ) : null}
-                              </td>
-                              <td data-label="Contact" role="cell">
-                                <a href={`tel:${c.phone.replace(/\s/g, "")}`}>
-                                  {c.phone}
-                                </a>
-                                {c.email ? (
-                                  <small className="sp-block">
-                                    <a href={`mailto:${c.email}`}>{c.email}</a>
-                                  </small>
-                                ) : null}
-                              </td>
-                              <td data-label="Actions" role="cell">
-                                <button
-                                  disabled={busy}
-                                  className="sp-text-button"
-                                  onClick={() =>
-                                    void act({
-                                      action: "contractorRemove",
-                                      id: c.id,
-                                    })
-                                  }
-                                >
-                                  Remove
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </section>
-              )}
             </>
           )}
           {view === "billing" && (
@@ -1431,12 +1919,66 @@ export default function WorkspaceApp({
               </section>
               <p className="sp-muted">
                 Monthly access, paid securely through PayFast in South African
-                rand. Each payment covers one month; renew manually.{" "}
+                rand, VAT included. Each payment covers one month; renew
+                manually — nothing recurs on a card without you.{" "}
                 {state.billingMode === "sandbox" &&
                   "Checkout is currently in sandbox mode: test payments only."}{" "}
                 {!state.billingConfigured &&
                   "Payments will become available when the operator connects their PayFast merchant account."}
               </p>
+              {/*
+                Where this organisation actually stands against the plan it is
+                on. A cap is only fair if a manager can see how close they are
+                to it before it stops them.
+              */}
+              <section className="sp-panel">
+                <h2>What you are using</h2>
+                <div className="sp-money-tiles">
+                  {[
+                    {
+                      name: "Units in use",
+                      value: `${openUnits.length} of ${planNow.units}`,
+                      hint: state.units.length > openUnits.length
+                        ? `${state.units.length - openUnits.length} archived, not counted`
+                        : "Archived units do not count",
+                      warn: openUnits.length > planNow.units,
+                    },
+                    {
+                      name: "Manager sign-ins",
+                      value: `${managerSeats} of ${planNow.managers}`,
+                      hint:
+                        planNow.managers === 1
+                          ? "One seat on Starter"
+                          : "Across the organisation",
+                      warn: managerSeats > planNow.managers,
+                    },
+                    {
+                      name: "Gate-code texts",
+                      value: `${passesThisMonth} of ${includedSms(
+                        state.organisation.plan,
+                        openUnits.length,
+                      )}`,
+                      hint: `${periodLabel(currentPeriod())} · R0.60 each beyond`,
+                      warn:
+                        passesThisMonth >
+                        includedSms(state.organisation.plan, openUnits.length),
+                    },
+                  ].map((tile) => (
+                    <article key={tile.name}>
+                      <p>{tile.name}</p>
+                      <strong className={tile.warn ? "sp-money-down" : ""}>
+                        {tile.value}
+                      </strong>
+                      <small>{tile.hint}</small>
+                    </article>
+                  ))}
+                </div>
+                <p className="sp-muted">
+                  Text usage counts guest passes created this month and is a
+                  guide, not an invoice. We would raise anything unusual with
+                  you before it appeared on one.
+                </p>
+              </section>
               <div className="sp-plan-grid">
                 {PLAN_CARDS.filter((p) => p.id !== "portfolio").map((p) => (
                   <article
@@ -1448,13 +1990,16 @@ export default function WorkspaceApp({
                     </span>
                     <h2>{p.name}</h2>
                     <strong className="sp-price">{p.priceLabel}</strong>
-                    <p>
-                      Up to {p.unitCap} units
-                      <br />
-                      {p.seatCap} manager {p.seatCap === 1 ? "seat" : "seats"}
-                      <br />
-                      Visitor passes & reports
-                    </p>
+                    <small className="sp-block sp-muted">VAT included</small>
+                    <p className="sp-plan-audience">{p.audience}</p>
+                    <ul className="sp-plan-rules">
+                      {p.rules.map((rule) => (
+                        <li key={rule}>
+                          <Check size={14} />
+                          {rule}
+                        </li>
+                      ))}
+                    </ul>
                     <button
                       disabled={busy || !state.billingConfigured}
                       onClick={() => void checkout(p.id)}
@@ -1467,6 +2012,17 @@ export default function WorkspaceApp({
                   </article>
                 ))}
               </div>
+              <section className="sp-panel">
+                <h2>How your plan works</h2>
+                <ul className="sp-plan-rules">
+                  {UNIVERSAL_RULES.map((rule) => (
+                    <li key={rule}>
+                      <Check size={14} />
+                      {rule}
+                    </li>
+                  ))}
+                </ul>
+              </section>
               <section className="sp-panel">
                 <h2>Payment history</h2>
                 {!state.invoices.length ? (
@@ -1516,6 +2072,556 @@ export default function WorkspaceApp({
               </section>
             </>
           )}
+          {/*
+            Its own screen rather than a panel under the maintenance queue,
+            where it sat below however many open reports there happened to be.
+            A manager reaches for this list when something has just broken, so
+            it has to be one click from anywhere.
+          */}
+          {view === "contacts" && manager && (
+            <section className="sp-panel">
+              <div className="sp-section-head">
+                <h2>
+                  Your maintenance team{" "}
+                  <span className="sp-muted">({state.contractors.length})</span>
+                </h2>
+                {state.contractors.length > 0 && (
+                  <label className="sp-search">
+                    <Search size={17} />
+                    <input
+                      aria-label="Search contacts by name, trade or company"
+                      placeholder="Name, trade or company"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </label>
+                )}
+              </div>
+              <p className="sp-muted">
+                Your in-house people and outside contractors. A phone list,
+                nothing more: none of these are accounts and none of them grant
+                access.
+              </p>
+              {!state.contractors.length ? (
+                empty(
+                  "No contacts yet.",
+                  "Add the plumber, the electrician and whoever holds the gate keys, so they are to hand when something breaks.",
+                  "contractor",
+                  "Add your first contact",
+                )
+              ) : !contacts.length ? (
+                empty(
+                  "No contact matches that.",
+                  "Try another name, trade or company.",
+                )
+              ) : (
+                <div className="sp-table-wrap">
+                  <table className="sp-responsive-table" role="table">
+                    <thead role="rowgroup">
+                      <tr role="row">
+                        <th role="columnheader" scope="col">
+                          Name
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Trade
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Contact
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody role="rowgroup">
+                      {contacts.map((c) => (
+                        <tr key={c.id} role="row">
+                          <td data-label="Name" role="cell">
+                            <strong>{c.name}</strong>
+                            <small className="sp-block">
+                              {c.kind === "in_house"
+                                ? "In-house"
+                                : c.company || "Contractor"}
+                            </small>
+                          </td>
+                          <td data-label="Trade" role="cell">
+                            {c.trade}
+                            {c.notes ? (
+                              <small className="sp-block">{c.notes}</small>
+                            ) : null}
+                          </td>
+                          <td data-label="Contact" role="cell">
+                            {/* Tappable: this list is read on a phone, and the
+                                next thing a manager does is call. */}
+                            <a href={`tel:${c.phone.replace(/\s/g, "")}`}>
+                              {c.phone}
+                            </a>
+                            {c.email ? (
+                              <small className="sp-block">
+                                <a href={`mailto:${c.email}`}>{c.email}</a>
+                              </small>
+                            ) : null}
+                          </td>
+                          <td data-label="Actions" role="cell">
+                            <button
+                              disabled={busy}
+                              className="sp-text-button"
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Remove ${c.name} from your maintenance contacts?`,
+                                  )
+                                )
+                                  void act({
+                                    action: "contractorRemove",
+                                    id: c.id,
+                                  });
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+          {/*
+            The organisation's own books, kept apart from Billing, which is
+            what they pay SangoPass. Rent receipts arrive here from the rent
+            register rather than being typed twice, so the two can never
+            disagree; costs are entered here directly.
+          */}
+          {view === "money" && manager && (
+            <>
+              <section className="sp-panel">
+                <div className="sp-section-head">
+                  <h2>{periodLabel(period)}</h2>
+                  <div className="sp-row">
+                    <label className="sp-period">
+                      <span className="sr-only">Month</span>
+                      <select
+                        value={period}
+                        onChange={(e) => setPeriod(e.target.value)}
+                      >
+                        {periods.map((option) => (
+                          <option key={option} value={option}>
+                            {periodLabel(option)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {/* A plain link, not fetch-and-blob: the browser handles
+                        the download, and the server decides what this manager
+                        is allowed to export. */}
+                    {demo ? (
+                      <button
+                        className="sp-secondary"
+                        onClick={() => downloadBooks()}
+                      >
+                        <Download size={15} />
+                        Download spreadsheet
+                      </button>
+                    ) : (
+                      <a
+                        className="sp-secondary"
+                        href={`/api/finance/export?org=${encodeURIComponent(
+                          state.membership.orgId,
+                        )}&period=${period}`}
+                      >
+                        <Download size={15} />
+                        Download spreadsheet
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="sp-money-tiles">
+                  {[
+                    ...(liveMonth
+                      ? [
+                          {
+                            name: "Rent expected",
+                            value: books.rentExpectedCents,
+                            hint: `${occupied.length} occupied ${
+                              occupied.length === 1 ? "unit" : "units"
+                            }`,
+                          },
+                          {
+                            name: "Rent collected",
+                            value: books.rentCollectedCents,
+                            hint: `${occupied.length - arrears.length} of ${
+                              occupied.length
+                            } paid`,
+                          },
+                          {
+                            name: "Rent outstanding",
+                            value: books.rentOutstandingCents,
+                            hint: arrears.length
+                              ? `${arrears.length} still to pay`
+                              : "All in",
+                            warn: books.rentOutstandingCents > 0,
+                          },
+                          {
+                            name: "Vacancy",
+                            value: books.vacancyCents,
+                            hint: vacant.length
+                              ? `${vacant.length} of ${openUnits.length} ${
+                                  vacant.length === 1 ? "unit" : "units"
+                                } empty`
+                              : "Every unit is let",
+                            warn: books.vacancyCents > 0,
+                          },
+                        ]
+                      : [
+                          {
+                            name: "Rent collected",
+                            value: books.rentCollectedCents,
+                            hint: "As recorded that month",
+                          },
+                        ]),
+                    {
+                      name: "Total costs",
+                      value: books.expensesCents,
+                      hint: `${rands(books.fixedCents)} fixed · ${rands(
+                        books.variableCents,
+                      )} variable`,
+                    },
+                    {
+                      name: "Net",
+                      value: books.netCents,
+                      hint:
+                        books.netCents >= 0
+                          ? "Income above costs"
+                          : "Costs above income",
+                      warn: books.netCents < 0,
+                    },
+                  ].map((tile) => (
+                    <article key={tile.name}>
+                      <p>{tile.name}</p>
+                      <strong className={tile.warn ? "sp-money-down" : ""}>
+                        {rands(tile.value)}
+                      </strong>
+                      <small>{tile.hint}</small>
+                    </article>
+                  ))}
+                </div>
+                {!liveMonth && (
+                  <p className="sp-muted">
+                    Rent expected and outstanding are tracked for the month in
+                    progress, because the rent register says how things stand
+                    today rather than how they stood in a closed month. This
+                    month shows what was recorded at the time.
+                  </p>
+                )}
+              </section>
+
+              <section className="sp-panel">
+                <h2>Where the money went</h2>
+                <div className="sp-table-wrap">
+                  <table className="sp-responsive-table" role="table">
+                    <thead role="rowgroup">
+                      <tr role="row">
+                        <th role="columnheader" scope="col">
+                          Category
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Fixed
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Variable
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Total
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody role="rowgroup">
+                      {books.expensesByCategory.map((row) => (
+                        <tr key={row.category} role="row">
+                          <td data-label="Category" role="cell">
+                            <strong>{CATEGORY_LABELS[row.category]}</strong>
+                            <small className="sp-block">
+                              {CATEGORY_HELP[row.category]}
+                            </small>
+                          </td>
+                          <td data-label="Fixed" role="cell">
+                            {rands(row.fixedCents)}
+                          </td>
+                          <td data-label="Variable" role="cell">
+                            {rands(row.variableCents)}
+                          </td>
+                          <td data-label="Total" role="cell">
+                            <strong>{rands(row.totalCents)}</strong>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {liveMonth && vacant.length > 0 && (
+                <section className="sp-panel">
+                  <div className="sp-section-head">
+                    <h2>Empty units</h2>
+                    <span className="sp-badge is-warning">
+                      {rands(books.vacancyCents)} a month
+                    </span>
+                  </div>
+                  <p className="sp-muted">
+                    Nobody owes this: it is rent the property is not earning.
+                    Enrol a resident from People to let one of these.
+                  </p>
+                  <div className="sp-table-wrap">
+                    <table className="sp-responsive-table" role="table">
+                      <thead role="rowgroup">
+                        <tr role="row">
+                          <th role="columnheader" scope="col">
+                            Unit
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Property
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Rent not being earned
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody role="rowgroup">
+                        {vacant.map((u) => (
+                          <tr key={u.id} role="row">
+                            <td data-label="Unit" role="cell">
+                              <strong>{u.label}</strong>
+                            </td>
+                            <td data-label="Property" role="cell">
+                              {
+                                state.properties.find(
+                                  (p) => p.id === u.propertyId,
+                                )?.name
+                              }
+                            </td>
+                            <td
+                              data-label="Rent not being earned"
+                              role="cell"
+                            >
+                              {rands(u.rentCents)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+              {liveMonth && arrears.length > 0 && (
+                <section className="sp-panel">
+                  <div className="sp-section-head">
+                    <h2>Rent outstanding</h2>
+                    <span className="sp-badge is-warning">
+                      {rands(books.rentOutstandingCents)}
+                    </span>
+                  </div>
+                  <p className="sp-muted">
+                    Mark a unit paid in Properties and the receipt lands in
+                    these books automatically.
+                  </p>
+                  <div className="sp-table-wrap">
+                    <table className="sp-responsive-table" role="table">
+                      <thead role="rowgroup">
+                        <tr role="row">
+                          <th role="columnheader" scope="col">
+                            Unit
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Resident
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Monthly rent
+                          </th>
+                          <th role="columnheader" scope="col">
+                            {periodLabel(period)}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody role="rowgroup">
+                        {arrears.map((u) => (
+                          <tr key={u.id} role="row">
+                            <td data-label="Unit" role="cell">
+                              <strong>{u.label}</strong>
+                              <small className="sp-block">
+                                {
+                                  state.properties.find(
+                                    (p) => p.id === u.propertyId,
+                                  )?.name
+                                }
+                              </small>
+                            </td>
+                            <td data-label="Resident" role="cell">
+                              {u.residentName}
+                            </td>
+                            <td data-label="Monthly rent" role="cell">
+                              {rands(u.rentCents)}
+                            </td>
+                            <td data-label={periodLabel(period)} role="cell">
+                              <button
+                                disabled={busy}
+                                className="sp-badge"
+                                onClick={() =>
+                                  void act({
+                                    action: "rent",
+                                    unitId: u.id,
+                                    paid: true,
+                                  })
+                                }
+                              >
+                                Mark paid
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              <section className="sp-panel">
+                <div className="sp-section-head">
+                  <h2>
+                    Every entry{" "}
+                    <span className="sp-muted">({monthEntries.length})</span>
+                  </h2>
+                  <button
+                    className="sp-secondary"
+                    onClick={() => open("ledgerEntry")}
+                  >
+                    <Plus size={15} />
+                    Record money
+                  </button>
+                </div>
+                {!monthEntries.length ? (
+                  empty(
+                    "Nothing recorded for this month.",
+                    "Log the security contract, the wages, the water bill and anything else the property costs to run. Rent arrives on its own when you mark a unit paid.",
+                    "ledgerEntry",
+                    "Record the first entry",
+                  )
+                ) : (
+                  <div className="sp-table-wrap">
+                    <table className="sp-responsive-table" role="table">
+                      <thead role="rowgroup">
+                        <tr role="row">
+                          <th role="columnheader" scope="col">
+                            What
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Category
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Recorded
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Amount
+                          </th>
+                          <th role="columnheader" scope="col">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody role="rowgroup">
+                        {monthEntries.map((entry) => (
+                          <tr key={entry.id} role="row">
+                            <td data-label="What" role="cell">
+                              <strong>{entry.description}</strong>
+                              {entry.propertyName ? (
+                                <small className="sp-block">
+                                  {entry.propertyName}
+                                </small>
+                              ) : null}
+                            </td>
+                            <td data-label="Category" role="cell">
+                              <span className="sp-badge">
+                                {CATEGORY_LABELS[entry.category]}
+                              </span>{" "}
+                              <span className="sp-badge">
+                                {NATURE_LABELS[entry.nature]}
+                              </span>
+                            </td>
+                            <td data-label="Recorded" role="cell">
+                              {new Date(entry.createdAt).toLocaleDateString(
+                                "en-ZA",
+                              )}
+                              <small className="sp-block">
+                                {entry.recordedBy}
+                              </small>
+                            </td>
+                            <td data-label="Amount" role="cell">
+                              <strong
+                                className={
+                                  entry.kind === "expense"
+                                    ? "sp-money-down"
+                                    : "sp-money-up"
+                                }
+                              >
+                                {entry.kind === "expense" ? "−" : "+"}
+                                {rands(entry.amountCents)}
+                              </strong>
+                            </td>
+                            <td data-label="Actions" role="cell">
+                              {entry.unitId ? (
+                                <small className="sp-muted">
+                                  From the rent register
+                                </small>
+                              ) : (
+                                <button
+                                  disabled={busy}
+                                  className="sp-text-button"
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        `Remove "${entry.description}" from the books?`,
+                                      )
+                                    )
+                                      void act({
+                                        action: "ledgerRemove",
+                                        id: entry.id,
+                                      });
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+          {view === "brand" && manager && (
+            <BrandStudio
+              saved={savedTheme}
+              draft={theme}
+              busy={busy}
+              onDraft={setThemeDraft}
+              onSave={async (next) => {
+                const saved = await act({
+                  action: "branding",
+                  primary: next.primary,
+                  accent: next.accent,
+                });
+                // The refreshed state carries the new colours, so the draft
+                // has nothing left to say.
+                if (saved) setThemeDraft(null);
+              }}
+            />
+          )}
           <footer className="sp-footer">
             <span>SangoPass. A better way to belong.</span>
             <span>South Africa · All visit times in SAST</span>
@@ -1533,6 +2639,9 @@ export default function WorkspaceApp({
               propertyLimits: "Visitor limits",
               report: "Log an issue",
               contractor: "Add a maintenance contact",
+              ledgerEntry: "Record money",
+              propertyUpdate: "Edit property",
+              unitUpdate: "Edit unit",
             }[modal] || "New record"
           }
           close={() => {
@@ -1589,7 +2698,7 @@ export default function WorkspaceApp({
                     Vacant unit
                     <select name="unitId" required>
                       <option value="">Select a unit</option>
-                      {state.units
+                      {openUnits
                         .filter(
                           (u) =>
                             u.propertyId === selectedProperty &&
@@ -1902,6 +3011,144 @@ export default function WorkspaceApp({
               </>
             )}
 
+            {modal === "ledgerEntry" && (
+              <>
+                <label>
+                  Money in or money out
+                  <select
+                    name="kind"
+                    value={entryKind}
+                    onChange={(e) => setEntryKind(e.target.value as LedgerKind)}
+                  >
+                    <option value="expense">A cost the property paid</option>
+                    <option value="income">Money the property received</option>
+                  </select>
+                </label>
+                <label>
+                  Category
+                  <select name="category" defaultValue="utilities">
+                    {EXPENSE_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {CATEGORY_LABELS[category]}
+                      </option>
+                    ))}
+                  </select>
+                  <small>
+                    {entryKind === "income"
+                      ? "Rent from a unit is recorded by marking it paid in Properties, not here."
+                      : "Pick the one a bookkeeper would expect."}
+                  </small>
+                </label>
+                <label>
+                  Fixed or variable
+                  <select
+                    name="nature"
+                    value={entryNature}
+                    onChange={(e) =>
+                      setEntryNature(e.target.value as LedgerNature)
+                    }
+                  >
+                    <option value="fixed">{NATURE_LABELS.fixed}</option>
+                    <option value="variable">{NATURE_LABELS.variable}</option>
+                  </select>
+                  <small>{NATURE_HELP[entryNature]}</small>
+                </label>
+                <Field name="description">What was it for?</Field>
+                <Field name="amount" type="number">
+                  Amount (ZAR)
+                </Field>
+                <label>
+                  Month
+                  <select name="period" defaultValue={period}>
+                    {periods
+                      .filter((option) => option <= currentPeriod())
+                      .map((option) => (
+                        <option key={option} value={option}>
+                          {periodLabel(option)}
+                        </option>
+                      ))}
+                  </select>
+                  <small>
+                    The month the money moved, which is not always the month you
+                    are recording it in.
+                  </small>
+                </label>
+                <label>
+                  Property <em>(optional)</em>
+                  <select name="propertyId" defaultValue="">
+                    <option value="">Across the organisation</option>
+                    {openProperties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
+            {modal === "propertyUpdate" && (
+              <>
+                <input type="hidden" name="id" value={selectedProperty} />
+                <Field
+                  name="name"
+                  defaultValue={editingProperty?.name}
+                  key={`name-${selectedProperty}`}
+                >
+                  Property name
+                </Field>
+                <Field
+                  name="address"
+                  defaultValue={editingProperty?.address}
+                  key={`address-${selectedProperty}`}
+                >
+                  Street address & city
+                </Field>
+                <label>
+                  Property type
+                  <select
+                    name="type"
+                    key={`type-${selectedProperty}`}
+                    defaultValue={editingProperty?.type}
+                  >
+                    <option value="apartment">
+                      Apartments / residential estate
+                    </option>
+                    <option value="student_accommodation">
+                      Student accommodation
+                    </option>
+                  </select>
+                  <small>
+                    Changing this changes what future residents are enrolled
+                    with and which identity documents their guests may present.
+                    Residents already enrolled keep the usernames they have.
+                  </small>
+                </label>
+              </>
+            )}
+            {modal === "unitUpdate" && (
+              <>
+                <input type="hidden" name="id" value={editing} />
+                <Field
+                  name="label"
+                  defaultValue={editingUnit?.label}
+                  key={`label-${editing}`}
+                >
+                  Unit / room number
+                </Field>
+                <Field
+                  name="rent"
+                  type="number"
+                  defaultValue={(editingUnit?.rentCents ?? 0) / 100}
+                  key={`rent-${editing}`}
+                >
+                  Monthly rent (ZAR)
+                </Field>
+                <small>
+                  The new rent applies from now on. Rent already received keeps
+                  the amount it was received at, so past months do not move.
+                </small>
+              </>
+            )}
             {modal === "contractor" && (
               <>
                 <Field name="name">Name</Field>
@@ -1996,6 +3243,26 @@ export default function WorkspaceApp({
               level="M"
             />
             <strong>{pass.reference}</strong>
+            {pass.entryCode && (
+              <div className="sp-gate-code">
+                <span className="sp-eyebrow">GATE CODE · NO PHONE NEEDED</span>
+                <strong>{formatEntryCode(pass.entryCode)}</strong>
+                <small>
+                  {tenant
+                    ? "Texted to your guest. If it does not arrive, read it to them — with their identity document, it is all they need at the gate."
+                    : "The visitor presents this at the gate when they have no phone to scan."}
+                </small>
+                <div className="sp-gate-code-actions">
+                  <button
+                    className="sp-light"
+                    onClick={() => void copy(formatEntryCode(pass.entryCode))}
+                  >
+                    <Copy size={15} />
+                    Copy code
+                  </button>
+                </div>
+              </div>
+            )}
             <p>
               {pass.nights > 0 ? (
                 <>

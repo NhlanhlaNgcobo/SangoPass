@@ -8,11 +8,14 @@ import { execFileSync } from "node:child_process";
 import { SqliteStore } from "../lib/server/store/sqlite";
 import type {
   MembershipRecord,
+  OrganisationRecord,
   PropertyRecord,
   UnitRecord,
   UserRecord,
   VisitorRecord,
 } from "../lib/server/store";
+import { DEFAULT_THEME } from "../lib/shared/theme";
+import { encodeEntryCode } from "../lib/shared/passcode";
 
 const LEGACY_V1 = `
 CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT UNIQUE,name TEXT,password TEXT,createdAt TEXT);
@@ -174,6 +177,14 @@ test("a v3 database upgrades in place to the current version", async () => {
   raw.exec("ALTER TABLE reports DROP COLUMN unitLabel");
   raw.exec("ALTER TABLE visitors DROP COLUMN visitorEmail");
   raw.exec("DROP TABLE IF EXISTS contractors");
+  // v6 brought the brand colours, v7 the entry code, v8 the books, v9 archiving.
+  raw.exec("ALTER TABLE organisations DROP COLUMN brandPrimary");
+  raw.exec("ALTER TABLE organisations DROP COLUMN brandAccent");
+  raw.exec("ALTER TABLE visitors DROP COLUMN entryCode");
+  raw.exec("ALTER TABLE units DROP COLUMN rentPaidPeriod");
+  raw.exec("ALTER TABLE units DROP COLUMN archivedAt");
+  raw.exec("ALTER TABLE units DROP COLUMN archivedWithProperty");
+  raw.exec("ALTER TABLE properties DROP COLUMN archivedAt");
   raw.exec("PRAGMA user_version=3");
   raw.close();
 
@@ -188,6 +199,14 @@ test("a v3 database upgrades in place to the current version", async () => {
     "property1",
   );
   assert.equal(property!.maxActiveGuests, 2);
+  // v6 gives every existing organisation the SangoPass pair, so an upgraded
+  // database looks exactly as it did before.
+  const organisation = await upgraded.get<OrganisationRecord>(
+    "organisations",
+    "org1",
+  );
+  assert.equal(organisation!.brandPrimary, DEFAULT_THEME.primary);
+  assert.equal(organisation!.brandAccent, DEFAULT_THEME.accent);
   await upgraded.close();
 
   // Reopening an already-migrated database changes nothing.
@@ -227,4 +246,195 @@ PRAGMA user_version=2;
   assert.equal(membership!.usernameKey, "sp-existing-01");
   assert.ok(await store.get("reservations", "username:property1:sp-existing-01"));
   await store.close();
+});
+
+test("a v5 database gains the brand colours without losing anything", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "sangopass-migration-v5-"));
+  const file = join(folder, "v5.sqlite");
+
+  // Build a current database, then rewind it to exactly what a v5 install
+  // looks like: everything but the two colour columns.
+  const seed = new DatabaseSync(file);
+  seed.exec(LEGACY_V1);
+  seed.close();
+  const built = new SqliteStore(file);
+  await built.close();
+  const raw = new DatabaseSync(file);
+  raw.exec("ALTER TABLE organisations DROP COLUMN brandPrimary");
+  raw.exec("ALTER TABLE organisations DROP COLUMN brandAccent");
+  raw.exec("ALTER TABLE visitors DROP COLUMN entryCode");
+  raw.exec("ALTER TABLE units DROP COLUMN rentPaidPeriod");
+  raw.exec("ALTER TABLE units DROP COLUMN archivedAt");
+  raw.exec("ALTER TABLE units DROP COLUMN archivedWithProperty");
+  raw.exec("ALTER TABLE properties DROP COLUMN archivedAt");
+  raw.exec("PRAGMA user_version=5");
+  raw.close();
+
+  const upgraded = new SqliteStore(file);
+  const organisation = await upgraded.get<OrganisationRecord>(
+    "organisations",
+    "org1",
+  );
+  assert.equal(organisation!.name, "Legacy Homes");
+  assert.equal(organisation!.brandPrimary, DEFAULT_THEME.primary);
+  assert.equal(organisation!.brandAccent, DEFAULT_THEME.accent);
+  // The v4 and v5 work is not repeated: its backfills stay as they were.
+  const visit = await upgraded.get<VisitorRecord>("visitors", "visit1");
+  assert.equal(visit!.endDate, "2026-02-01");
+  assert.equal(visit!.unitId, "unit1");
+  await upgraded.close();
+
+  // And a manager's own colours survive the next open.
+  const store = new SqliteStore(file);
+  await store.tx(async (t) => {
+    t.update("organisations", "org1", {
+      brandPrimary: "#3D1F42",
+      brandAccent: "#E7C6F0",
+    });
+  });
+  await store.close();
+  const reopened = new SqliteStore(file);
+  const saved = await reopened.get<OrganisationRecord>("organisations", "org1");
+  assert.equal(saved!.brandPrimary, "#3D1F42");
+  assert.equal(saved!.brandAccent, "#E7C6F0");
+  await reopened.close();
+});
+
+test("a v6 database gains entry codes without inventing one", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "sangopass-migration-v6-"));
+  const file = join(folder, "v6.sqlite");
+
+  const seed = new DatabaseSync(file);
+  seed.exec(LEGACY_V1);
+  seed.close();
+  const built = new SqliteStore(file);
+  await built.close();
+  const raw = new DatabaseSync(file);
+  raw.exec("ALTER TABLE visitors DROP COLUMN entryCode");
+  raw.exec("ALTER TABLE units DROP COLUMN rentPaidPeriod");
+  raw.exec("ALTER TABLE units DROP COLUMN archivedAt");
+  raw.exec("ALTER TABLE units DROP COLUMN archivedWithProperty");
+  raw.exec("ALTER TABLE properties DROP COLUMN archivedAt");
+  raw.exec("PRAGMA user_version=6");
+  raw.close();
+
+  const upgraded = new SqliteStore(file);
+  const visit = await upgraded.get<VisitorRecord>("visitors", "visit1");
+  // No code is invented for a pass whose guest was never sent one: the same
+  // rule v4 followed for identity numbers. Its QR and reference still work.
+  assert.equal(visit!.entryCode, "");
+  assert.equal(visit!.reference, "SP-REF1");
+  await upgraded.close();
+
+  // A pass created after the upgrade gets one, and it survives a reopen.
+  const store = new SqliteStore(file);
+  const code = encodeEntryCode([1, 2, 3, 4, 5]);
+  await store.tx(async (t) => {
+    t.update("visitors", "visit1", { entryCode: code });
+  });
+  await store.close();
+  const reopened = new SqliteStore(file);
+  assert.equal(
+    (await reopened.get<VisitorRecord>("visitors", "visit1"))!.entryCode,
+    code,
+  );
+  await reopened.close();
+});
+
+test("a v7 database gains the books and the rent period", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "sangopass-migration-v7-"));
+  const file = join(folder, "v7.sqlite");
+
+  const seed = new DatabaseSync(file);
+  seed.exec(LEGACY_V1);
+  seed.close();
+  const built = new SqliteStore(file);
+  await built.close();
+  const raw = new DatabaseSync(file);
+  raw.exec("DROP TABLE IF EXISTS ledger");
+  raw.exec("ALTER TABLE units DROP COLUMN rentPaidPeriod");
+  raw.exec("ALTER TABLE units DROP COLUMN archivedAt");
+  raw.exec("ALTER TABLE units DROP COLUMN archivedWithProperty");
+  raw.exec("ALTER TABLE properties DROP COLUMN archivedAt");
+  raw.exec("PRAGMA user_version=7");
+  raw.close();
+
+  const upgraded = new SqliteStore(file);
+  // No month is claimed for a flag that was never period-aware, so a unit
+  // marked paid under the old schema reads as unpaid until it is marked again.
+  const unit = await upgraded.get<UnitRecord>("units", "unit1");
+  assert.equal(unit!.rentPaidPeriod, "");
+  assert.equal(unit!.rentCents, 450000);
+
+  // The books start empty and are writable straight away.
+  assert.equal(await upgraded.count("ledger"), 0);
+  await upgraded.tx(async (t) => {
+    t.create("ledger", "entry1", {
+      orgId: "org1",
+      period: "2026-09",
+      kind: "expense",
+      category: "security",
+      nature: "fixed",
+      amountCents: 185000,
+      description: "Guarding contract",
+      propertyId: "property1",
+      propertyName: "Legacy Court",
+      unitId: null,
+      unitLabel: null,
+      recordedBy: "Legacy Manager",
+      createdAt: "2026-09-01T00:00:00.000Z",
+    });
+  });
+  await upgraded.close();
+
+  const reopened = new SqliteStore(file);
+  const entry = await reopened.get<{ amountCents: number; category: string }>(
+    "ledger",
+    "entry1",
+  );
+  assert.equal(entry!.amountCents, 185000);
+  assert.equal(entry!.category, "security");
+  await reopened.close();
+});
+
+test("a v8 database gains archiving, with everything in use", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "sangopass-migration-v8-"));
+  const file = join(folder, "v8.sqlite");
+
+  const seed = new DatabaseSync(file);
+  seed.exec(LEGACY_V1);
+  seed.close();
+  const built = new SqliteStore(file);
+  await built.close();
+  const raw = new DatabaseSync(file);
+  raw.exec("ALTER TABLE units DROP COLUMN archivedAt");
+  raw.exec("ALTER TABLE units DROP COLUMN archivedWithProperty");
+  raw.exec("ALTER TABLE properties DROP COLUMN archivedAt");
+  raw.exec("PRAGMA user_version=8");
+  raw.close();
+
+  const upgraded = new SqliteStore(file);
+  // Nothing was archived before archiving existed, so everything is in use.
+  const property = await upgraded.get<PropertyRecord>(
+    "properties",
+    "property1",
+  );
+  const unit = await upgraded.get<UnitRecord>("units", "unit1");
+  assert.equal(property!.archivedAt, null);
+  assert.equal(unit!.archivedAt, null);
+  assert.equal(unit!.archivedWithProperty, 0);
+  assert.equal(property!.name, "Legacy Court");
+  assert.equal(unit!.label, "A1");
+
+  // And the column takes a value, which survives a reopen.
+  await upgraded.tx(async (t) => {
+    t.update("units", "unit1", { archivedAt: "2026-09-01T00:00:00.000Z" });
+  });
+  await upgraded.close();
+  const reopened = new SqliteStore(file);
+  assert.equal(
+    (await reopened.get<UnitRecord>("units", "unit1"))!.archivedAt,
+    "2026-09-01T00:00:00.000Z",
+  );
+  await reopened.close();
 });

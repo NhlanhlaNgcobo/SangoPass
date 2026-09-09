@@ -21,7 +21,10 @@ const ICONS = {
   security: Shield,
 } as const;
 
-const STORAGE_KEY = "sangopass_demo_world_v1";
+// Versioned: a stored world is a whole WorkspaceState, so the key moves with
+// its shape rather than letting yesterday's tab restore a world that is
+// missing a field this build now reads. v2 added the organisation's colours.
+const STORAGE_KEY = "sangopass_demo_world_v2";
 
 function restore(): DemoWorld | null {
   try {

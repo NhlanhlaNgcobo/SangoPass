@@ -217,6 +217,12 @@ try {
   // Only the last four characters of the identity document are ever rendered.
   assert.ok(!html.includes("8001015009087"));
   assert.ok(html.includes("9087"));
+  // The gate code, for a guest who arrives without a smartphone. Rendered
+  // grouped for reading, and it is not the pass reference.
+  const code = String(visitor.data.result.entryCode);
+  assert.match(code, /^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{8}$/);
+  assert.ok(html.includes(`${code.slice(0, 4)}-${code.slice(4)}`));
+  assert.notEqual(code, visitor.data.result.reference);
 
   // A manager may not book a guest; only the resident may.
   assert.equal(
@@ -306,6 +312,51 @@ try {
     ).status,
     503,
   );
+  // The money spreadsheet: a real file, from a real session, for a manager.
+  const current = await api(`/api/workspace?org=${orgId}`, null, owner.cookie);
+  const unitId = current.data.units[0].id;
+  await api(
+    "/api/workspace",
+    { orgId, action: "rent", unitId, paid: true },
+    owner.cookie,
+  );
+  await api(
+    "/api/workspace",
+    {
+      orgId,
+      action: "ledgerEntry",
+      kind: "expense",
+      category: "security",
+      nature: "fixed",
+      amount: 1850,
+      description: "Guarding contract",
+      period: new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Africa/Johannesburg",
+      })
+        .format(new Date())
+        .slice(0, 7),
+    },
+    owner.cookie,
+  );
+  const sheet = await fetch(origin + `/api/finance/export?org=${orgId}`, {
+    headers: { Cookie: owner.cookie },
+  });
+  assert.equal(sheet.status, 200);
+  assert.match(sheet.headers.get("content-type") || "", /text\/csv/);
+  assert.match(
+    sheet.headers.get("content-disposition") || "",
+    /attachment; filename=".*-money-\d{4}-\d{2}\.csv"/,
+  );
+  const book = await sheet.text();
+  assert.ok(book.includes("Guarding contract"), "the cost is in the file");
+  assert.ok(book.includes('"-1850.00"'), "costs are negative, so the column sums");
+  assert.ok(book.includes("Rent collected"), "and rent is reported beside them");
+  // A resident may not read the organisation's money.
+  const refused = await fetch(origin + `/api/finance/export?org=${orgId}`, {
+    headers: { Cookie: resident.cookie },
+  });
+  assert.equal(refused.status, 403);
+
   const workspacePage = await fetch(origin + "/workspace", {
     headers: { Cookie: owner.cookie },
   });
@@ -320,7 +371,7 @@ try {
   assert.equal((await api("/api/auth/logout", {}, owner.cookie)).status, 200);
   assert.equal((await api("/api/workspace", null, owner.cookie)).status, 401);
   console.log(
-    "HTTP smoke passed: public pages, authentication, invitation join, resident pass sharing, tenant isolation, CSRF, SSR, database/session persistence across restart, logout, and missing-payment configuration.",
+    "HTTP smoke passed: public pages, authentication, invitation join, resident pass sharing, tenant isolation, CSRF, SSR, the money spreadsheet and its refusal to a resident, database/session persistence across restart, logout, and missing-payment configuration.",
   );
 } catch (error) {
   console.error(error);

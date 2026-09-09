@@ -87,6 +87,28 @@ export function emailConfigured() {
 }
 
 /**
+ * The SMS gateway that texts a visitor their entry code.
+ *
+ * Unlike email, this needs no APP_URL: the message carries a code to recite at
+ * the gate, not a link to open, which is the whole point of it - the guest it
+ * is written for has no smartphone.
+ */
+export function smsConfigured() {
+  return Boolean(sms().tokenId && sms().tokenSecret);
+}
+
+export function sms() {
+  return {
+    tokenId: process.env.BULKSMS_TOKEN_ID || "",
+    tokenSecret: process.env.BULKSMS_TOKEN_SECRET || "",
+    /** Optional registered sender ID; without it the gateway picks a number. */
+    sender: process.env.BULKSMS_SENDER || "",
+    /** Overridable so a different gateway or a test double can stand in. */
+    endpoint: process.env.BULKSMS_ENDPOINT || "https://api.bulksms.com/v1/messages",
+  };
+}
+
+/**
  * Fails fast on configurations that are silently unsafe rather than merely
  * incomplete. Called once from instrumentation at server start.
  */

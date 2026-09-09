@@ -33,6 +33,7 @@ export default async function PassPage({
     propertyName: visit.propertyName,
     reference: visit.reference,
     token: visit.token,
+    entryCode: visit.entryCode || "",
     idType: visit.idType || "sa_id",
     idNumber: visit.idNumber ? maskIdNumber(visit.idNumber) : "",
     visitType: visit.visitType || "daily",

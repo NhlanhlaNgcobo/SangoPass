@@ -6,9 +6,19 @@
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
+/* The organisation's brand colours. These five are the fallback - the
+   SangoPass pair - and WorkspaceApp overrides them with an inline style built
+   from the organisation's saved theme, which is why one manager's choice
+   re-themes their tenants' dashboards too. Everything else in this file that
+   paints a brand surface reads them rather than a literal hex, and the muted
+   sidebar tints are mixed from --sp-on-forest so they follow any brand.
+   See lib/shared/theme.ts. */
 .sp-shell {
   --sp-forest: #143e35;
+  --sp-forest-hover: #245646;
+  --sp-on-forest: #ffffff;
   --sp-lime: #d5ed9f;
+  --sp-on-lime: #143e35;
   --sp-line: #e2e7de;
   --sp-muted: #69796e;
   min-height: 100vh;
@@ -29,38 +39,56 @@
   position: fixed;
   inset: 0 auto 0 0;
   width: 248px;
-  background: #143e35;
-  color: #f5f8ef;
+  background: var(--sp-forest);
+  color: color-mix(in srgb, var(--sp-on-forest) 94%, var(--sp-forest));
   padding: 32px 22px;
   display: flex;
   flex-direction: column;
   z-index: 30;
 }
+/* The mark sits on the organisation's primary, so it follows the brand
+   instead of staying forest and lime on a plum sidebar. The wordmark in
+   particular has to move: globals.css paints it white, which disappears
+   against the light primary a manager is free to choose. Presentation
+   attributes lose to a stylesheet, so the strokes the component inlines are
+   repainted here without the marketing site's copy of the mark changing. */
+.sp-sidebar .brand-light {
+  color: var(--sp-lime, #d5ed9f);
+}
+.sp-sidebar .brand-light > span {
+  color: var(--sp-on-forest, #ffffff);
+}
+.sp-sidebar .brand-light .brand-dot {
+  color: var(--sp-lime, #7e9e54);
+}
+.sp-sidebar .brand-light svg path {
+  stroke: var(--sp-on-lime, #143e35);
+}
 .sp-workspace-label {
   font-size: 10px;
   letter-spacing: 0.16em;
-  color: #aec5b7;
+  color: color-mix(in srgb, var(--sp-on-forest) 66%, var(--sp-forest));
   margin: 42px 10px 12px;
 }
 .sp-org-select {
   padding: 12px;
-  border: 1px solid #426357;
+  border: 1px solid color-mix(in srgb, var(--sp-on-forest) 22%, var(--sp-forest));
   border-radius: 12px;
   display: block;
 }
 .sp-org-select select {
   width: 100%;
   background: transparent;
-  color: #fff;
+  color: var(--sp-on-forest);
   font-weight: 600;
   outline-offset: 4px;
 }
 .sp-org-select option {
-  background: #143e35;
+  background: var(--sp-forest);
 }
 .sp-org-select small {
   display: block;
-  color: #b7c9bf;
+  color: color-mix(in srgb, var(--sp-on-forest) 70%, var(--sp-forest));
   text-transform: capitalize;
   margin-top: 8px;
   font-size: 11px;
@@ -77,12 +105,12 @@
   text-align: left;
   padding: 13px 14px;
   border-radius: 9px;
-  color: #c5d5cb;
+  color: color-mix(in srgb, var(--sp-on-forest) 76%, var(--sp-forest));
 }
 .sp-sidebar nav button[aria-current],
 .sp-sidebar nav button:hover {
-  background: #d5ed9f;
-  color: #143e35;
+  background: var(--sp-lime);
+  color: var(--sp-on-lime);
 }
 .sp-nav-dot {
   width: 6px;
@@ -103,13 +131,13 @@
 }
 .sp-sidebar-bottom small {
   font-size: 10px;
-  color: #b7c9bf;
+  color: color-mix(in srgb, var(--sp-on-forest) 70%, var(--sp-forest));
 }
 .sp-sidebar-bottom button {
   display: flex;
   gap: 10px;
   margin-top: 30px;
-  color: #d2dfd5;
+  color: color-mix(in srgb, var(--sp-on-forest) 82%, var(--sp-forest));
 }
 .sp-main {
   margin-left: 248px;
@@ -195,11 +223,11 @@
   white-space: nowrap;
 }
 .sp-primary {
-  background: #143e35;
-  color: #fff;
+  background: var(--sp-forest);
+  color: var(--sp-on-forest);
 }
 .sp-primary:hover {
-  background: #245646;
+  background: var(--sp-forest-hover);
 }
 .sp-secondary {
   border: 1px solid #dbe2d5;
@@ -208,8 +236,8 @@
   padding: 7px 11px;
 }
 .sp-light {
-  background: #d5ed9f;
-  color: #143e35;
+  background: var(--sp-lime);
+  color: var(--sp-on-lime);
 }
 .sp-welcome {
   display: grid;
@@ -217,15 +245,15 @@
   min-height: 300px;
   border-radius: 18px;
   overflow: hidden;
-  background: #143e35;
-  color: #fff;
+  background: var(--sp-forest);
+  color: var(--sp-on-forest);
   margin-bottom: 24px;
 }
 .sp-welcome > div:first-child {
   padding: 35px;
 }
 .sp-welcome .sp-eyebrow {
-  color: #d5ed9f;
+  color: var(--sp-lime);
 }
 .sp-welcome h2 {
   font-size: 32px;
@@ -235,7 +263,7 @@
   margin: 14px 0;
 }
 .sp-welcome p {
-  color: #c7d7cb;
+  color: color-mix(in srgb, var(--sp-on-forest) 78%, var(--sp-forest));
   max-width: 340px;
   line-height: 1.7;
   margin-bottom: 22px;
@@ -1120,4 +1148,315 @@
 .sp-showcase-note a {
   color: #285e45;
   font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/* Brand colours                                                       */
+/* ------------------------------------------------------------------ */
+
+/* Deliberately styled with fixed neutrals rather than the brand variables:
+   this is the panel where a manager judges those variables, so it has to stay
+   legible even while a half-chosen pair is painting everything around it. */
+.sp-brand-intro {
+  line-height: 1.7;
+  margin-bottom: 20px;
+  max-width: 68ch;
+}
+.sp-brand-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+.sp-colour-field label {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 9px;
+}
+.sp-colour-field label > span:first-child {
+  font-weight: 600;
+  font-size: 13px;
+}
+.sp-colour-field label > span:last-child {
+  font-size: 12px;
+}
+.sp-colour-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sp-colour-row input[type="color"] {
+  /* A large, obvious target: this is the control most managers will reach for
+     first, and a browser's default colour input is easy to miss. */
+  inline-size: 62px;
+  block-size: 46px;
+  padding: 4px;
+  border: 1px solid var(--sp-line);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.sp-colour-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--sp-line);
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  text-transform: uppercase;
+}
+.sp-brand-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+}
+.sp-error svg {
+  flex: none;
+  vertical-align: -3px;
+  margin-right: 8px;
+}
+.sp-brand-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  gap: 12px;
+}
+.sp-brand-preset {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 14px;
+  border: 1px solid var(--sp-line);
+  border-radius: 11px;
+  background: #fff;
+}
+.sp-brand-preset:hover {
+  background: #f4f7ee;
+}
+.sp-brand-preset[aria-pressed="true"] {
+  border-color: #7a9a5c;
+  box-shadow: 0 0 0 1px #7a9a5c;
+}
+.sp-brand-preset svg:last-child {
+  margin-left: auto;
+  color: #4b7a3c;
+}
+/* The pair shown as one mark: the accent inset into the primary, which is how
+   the two actually meet in the sidebar. */
+.sp-brand-swatch {
+  flex: none;
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+.sp-brand-swatch > span {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+}
+.sp-brand-ratios {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.sp-brand-ratios li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--sp-line);
+  font-size: 13px;
+}
+.sp-brand-ratios li:last-child {
+  border-bottom: none;
+}
+.sp-brand-ratios strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.sp-badge.is-warning {
+  background: #fbecea;
+  color: #8a2c1c;
+}
+
+/* ------------------------------------------------------------------ */
+/* Gate code                                                           */
+/* ------------------------------------------------------------------ */
+
+/* Read off a phone screen at a gate, at night, by someone who then says it
+   out loud. So it is large, monospaced, widely tracked, and carries the
+   brand's own contrast pair rather than sitting quietly in body text. */
+.sp-gate-code {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  width: 100%;
+  padding: 18px 16px;
+  border-radius: 14px;
+  background: var(--sp-forest, #143e35);
+  color: var(--sp-on-forest, #ffffff);
+}
+.sp-gate-code .sp-eyebrow {
+  color: var(--sp-lime, #d5ed9f);
+}
+.sp-gate-code strong {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: clamp(28px, 9vw, 38px);
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  /* The hyphen is a reading aid, not part of the code, so it never wraps. */
+  white-space: nowrap;
+}
+.sp-gate-code small {
+  color: color-mix(in srgb, var(--sp-on-forest, #ffffff) 78%, transparent);
+  line-height: 1.6;
+  max-width: 34ch;
+  text-align: center;
+}
+/* Inside the workspace the code sits in a pass dialog beside a copy button. */
+.sp-gate-code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* The guard's manual entry, beside the camera. Wide enough that an eight
+   character code never wraps mid-code on a phone held at a gate. */
+.sp-code-check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+.sp-code-check label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sp-code-check input {
+  width: 190px;
+  max-width: 100%;
+  border: 1px solid var(--sp-line);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.sp-code-check small {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Money                                                               */
+/* ------------------------------------------------------------------ */
+
+/* The month's headline figures. Wider than the overview stat cards because a
+   rand amount with cents is long, and it must never wrap mid-number. */
+.sp-money-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin: 20px 0 4px;
+}
+.sp-money-tiles article {
+  border: 1px solid var(--sp-line);
+  border-radius: 12px;
+  padding: 18px;
+  background: #fbfcf9;
+}
+.sp-money-tiles p {
+  font-size: 12px;
+  color: var(--sp-muted);
+  margin-bottom: 8px;
+}
+.sp-money-tiles strong {
+  display: block;
+  font-size: 24px;
+  font-weight: 550;
+  letter-spacing: -0.6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sp-money-tiles small {
+  display: block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--sp-muted);
+}
+/* Money out and money short. Brick rather than a pure red, and never the only
+   signal: the figure is always labelled in words beside it. */
+.sp-money-down {
+  color: #9a3320;
+}
+.sp-money-up {
+  color: #27633f;
+}
+.sp-period select {
+  border: 1px solid var(--sp-line);
+  border-radius: 9px;
+  padding: 8px 11px;
+  background: #fff;
+  font-weight: 600;
+  font-size: 12px;
+}
+/* Amount columns line up down the table, so totals can be read at a glance. */
+.sp-responsive-table td[data-label="Amount"],
+.sp-responsive-table td[data-label="Fixed"],
+.sp-responsive-table td[data-label="Variable"],
+.sp-responsive-table td[data-label="Total"],
+.sp-responsive-table td[data-label="Monthly rent"] {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* An archived property or unit: present, plainly set aside, not shouting. */
+.sp-property-card.is-archived {
+  opacity: 0.62;
+}
+.sp-property-card.is-archived .sp-property-image {
+  filter: grayscale(1);
+}
+
+/* Plan rules, on the billing screen and beside each tier. Read as a list of
+   promises, so they are set as one: short lines, a tick, no paragraph. */
+.sp-plan-rules {
+  display: grid;
+  gap: 9px;
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 18px;
+}
+.sp-plan-rules li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.sp-plan-rules svg {
+  flex: none;
+  margin-top: 3px;
+  color: #4b7a3c;
+}
+.sp-plan-audience {
+  color: var(--sp-muted);
+  line-height: 1.6;
+  margin-top: 10px;
 }
