@@ -12,12 +12,15 @@ import {
   documentKey,
   documentStorage,
   DOCUMENT_TYPES,
+  LOGO_TYPES,
   MAX_DOCUMENT_BYTES,
+  MAX_LOGO_BYTES,
 } from "./documents";
 import { store } from "./store";
 import type {
   DocumentRecord,
   MembershipRecord,
+  OrganisationRecord,
   PropertyRecord,
   TenancyRecord,
   UnitRecord,
@@ -193,6 +196,103 @@ export async function openDocument(
       410,
     );
   return { record, bytes };
+}
+
+/* ------------------------------------------------------------------ */
+/* The company logo                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Puts a company's own logo on its dashboards.
+ *
+ * Stored under a fresh key each time rather than a fixed "logo" one. A company
+ * that replaces its logo expects to see the new one immediately, and a fixed
+ * key would leave the old image sitting in every member's browser cache with
+ * nothing to tell them apart.
+ */
+export async function setLogo(
+  user: Account,
+  orgId: string,
+  file: { mime: string; data: Uint8Array },
+): Promise<{ updatedAt: string }> {
+  const m = await access(user, orgId);
+  office(m);
+
+  if (!file.data.length) throw new AppError("That file is empty.");
+  if (file.data.length > MAX_LOGO_BYTES)
+    throw new AppError(
+      `A logo must be under ${Math.floor(MAX_LOGO_BYTES / (1024 * 1024))} MB. Export it at a smaller size.`,
+      413,
+    );
+  if (!LOGO_TYPES[file.mime])
+    throw new AppError(
+      "A logo must be a PNG, JPEG or WebP image.",
+      415,
+    );
+
+  const database = store();
+  const organisation = await database.get<OrganisationRecord>(
+    "organisations",
+    m.orgId,
+  );
+  if (!organisation) throw new AppError("Organisation not found.", 404);
+
+  const previous = organisation.logoKey;
+  const storageKey = documentKey(m.orgId, `logo-${randomUUID()}`);
+  await documentStorage().put(storageKey, file.data);
+
+  const updatedAt = now();
+  try {
+    await store().tx(async (t) => {
+      t.update("organisations", m.orgId, {
+        logoKey: storageKey,
+        logoMime: file.mime,
+        logoUpdatedAt: updatedAt,
+      });
+      t.create("audit", randomUUID(), {
+        orgId: m.orgId,
+        userId: user.id,
+        userName: user.name,
+        action: "logo",
+        subject: m.orgId,
+        createdAt: updatedAt,
+      });
+    });
+  } catch (error) {
+    await documentStorage()
+      .remove(storageKey)
+      .catch(() => undefined);
+    throw error;
+  }
+
+  // The record now points at the new file, so the old one belongs to nobody.
+  if (previous)
+    await documentStorage()
+      .remove(previous)
+      .catch(() => undefined);
+  return { updatedAt };
+}
+
+/**
+ * Reads the company logo, for anyone who belongs to the organisation.
+ *
+ * Every role, not just the office: the logo is what a resident and a guard see
+ * at the top of their own dashboard, so keeping it from them would leave the
+ * whole point of it visible only to the people who chose it.
+ */
+export async function openLogo(
+  user: Account,
+  orgId: string,
+): Promise<{ mime: string; bytes: Uint8Array }> {
+  const m = await access(user, orgId);
+  const organisation = await store().get<OrganisationRecord>(
+    "organisations",
+    m.orgId,
+  );
+  if (!organisation?.logoKey) throw new AppError("No logo set.", 404);
+  const bytes = await documentStorage().get(organisation.logoKey);
+  if (!bytes) throw new AppError("No logo set.", 404);
+  return { mime: organisation.logoMime, bytes };
 }
 
 export type { DocumentKind };

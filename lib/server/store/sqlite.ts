@@ -28,6 +28,9 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "paidUntil",
     "brandPrimary",
     "brandAccent",
+    "logoKey",
+    "logoMime",
+    "logoUpdatedAt",
     "createdAt",
   ],
   memberships: [
@@ -229,7 +232,7 @@ export const FIELDS: Record<Collection, readonly string[]> = {
 
 const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL, password TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS organisations(id TEXT PRIMARY KEY, name TEXT NOT NULL, plan TEXT NOT NULL DEFAULT 'starter', trialUntil TEXT NOT NULL, paidUntil TEXT, brandPrimary TEXT NOT NULL DEFAULT '#143E35', brandAccent TEXT NOT NULL DEFAULT '#D5ED9F', createdAt TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS organisations(id TEXT PRIMARY KEY, name TEXT NOT NULL, plan TEXT NOT NULL DEFAULT 'starter', trialUntil TEXT NOT NULL, paidUntil TEXT, brandPrimary TEXT NOT NULL DEFAULT '#143E35', brandAccent TEXT NOT NULL DEFAULT '#D5ED9F', logoKey TEXT NOT NULL DEFAULT '', logoMime TEXT NOT NULL DEFAULT '', logoUpdatedAt TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS memberships(id TEXT PRIMARY KEY, userId TEXT NOT NULL, orgId TEXT NOT NULL, role TEXT NOT NULL, propertyId TEXT, unitId TEXT, username TEXT, usernameKey TEXT, orgName TEXT NOT NULL DEFAULT '', memberName TEXT NOT NULL DEFAULT '', userEmail TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS properties(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, name TEXT NOT NULL, address TEXT NOT NULL, type TEXT NOT NULL, loginCode TEXT NOT NULL DEFAULT '', sleepoverNightsPerMonth INTEGER NOT NULL DEFAULT 8, maxConsecutiveNights INTEGER NOT NULL DEFAULT 3, maxActiveGuests INTEGER NOT NULL DEFAULT 2, archivedAt TEXT)",
   "CREATE TABLE IF NOT EXISTS units(id TEXT PRIMARY KEY, orgId TEXT NOT NULL DEFAULT '', propertyId TEXT NOT NULL, label TEXT NOT NULL, rentCents INTEGER NOT NULL DEFAULT 0, rentPaid INTEGER NOT NULL DEFAULT 0, frequency TEXT NOT NULL DEFAULT 'monthly', residentId TEXT, residentName TEXT, rentPaidPeriod TEXT NOT NULL DEFAULT '', archivedAt TEXT, archivedWithProperty INTEGER NOT NULL DEFAULT 0)",
@@ -312,7 +315,17 @@ const REBUILT = [
 /* Migration                                                           */
 /* ------------------------------------------------------------------ */
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
+
+// v11 lets a company put its own logo on its dashboards. The columns default
+// to empty, which reads as "no logo uploaded" - and that is exactly what every
+// existing organisation has, so nothing is backfilled and every workspace
+// keeps the SangoPass mark until someone chooses otherwise.
+const ALTERS_V11 = [
+  "ALTER TABLE organisations ADD COLUMN logoKey TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE organisations ADD COLUMN logoMime TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE organisations ADD COLUMN logoUpdatedAt TEXT NOT NULL DEFAULT ''",
+];
 
 // v10 adds occupancy history, the tenant document archive and the resident
 // notice queue. All three are new tables, which the schema re-run at the end
@@ -417,6 +430,8 @@ const BACKFILL_V4 = [
 // resident notice queue. Whoever is living in a unit today becomes that unit's
 // current tenancy; nothing is claimed about who lived there before, because
 // nothing ever recorded it.
+// v10 to v11 lets a company upload its own logo. Empty means none, which is
+// what every organisation upgrading has, so their dashboards look unchanged.
 function migrate(database: DatabaseSync) {
   const version = () =>
     (database.prepare("PRAGMA user_version").get() as { user_version: number })
@@ -464,6 +479,7 @@ function migrate(database: DatabaseSync) {
     if (from < 7) steps.push(...ALTERS_V7);
     if (from < 8) steps.push(...ALTERS_V8);
     if (from < 9) steps.push(...ALTERS_V9);
+    if (from < 11) steps.push(...ALTERS_V11);
     database.exec("BEGIN IMMEDIATE");
     try {
       database.exec(

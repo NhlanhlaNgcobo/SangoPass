@@ -38,6 +38,7 @@ import {
 import PassScanner from "./PassScanner";
 import DocumentsPanel from "./DocumentsPanel";
 import RequestsPanel from "./RequestsPanel";
+import CompanyIdentity, { logoUrl } from "./CompanyIdentity";
 import Brand from "@/components/ui/Brand";
 import type {
   IdType,
@@ -823,8 +824,33 @@ export default function WorkspaceApp({
           id="workspace-navigation"
           className={`sp-sidebar ${navigationOpen ? "is-open" : ""}`}
         >
-          <Link href="/" aria-label="SangoPass home">
-            <Brand light />
+          {/*
+            The company's own mark when they have uploaded one, and SangoPass
+            when they have not. The stamp in the URL changes with the upload,
+            so replacing a logo is visible immediately rather than whenever a
+            member's cache happens to expire.
+          */}
+          <Link
+            href="/"
+            aria-label={
+              state.organisation.logoUpdatedAt
+                ? `${state.organisation.name} home`
+                : "SangoPass home"
+            }
+          >
+            {state.organisation.logoUpdatedAt && !demo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                className="sp-org-logo"
+                src={logoUrl(
+                  state.membership.orgId,
+                  state.organisation.logoUpdatedAt,
+                )}
+                alt={state.organisation.name}
+              />
+            ) : (
+              <Brand light />
+            )}
           </Link>
           <button
             className="sp-mobile-close sp-icon"
@@ -2669,6 +2695,21 @@ export default function WorkspaceApp({
                 )}
               </section>
             </>
+          )}
+          {view === "brand" && office && (
+            <CompanyIdentity
+              state={state}
+              busy={busy}
+              demo={Boolean(demo)}
+              onSaveName={(name) => void act({ action: "companyName", name })}
+              onRemoveLogo={() => void act({ action: "logoRemove" })}
+              onUploaded={(next) => {
+                setState(next);
+                setError("");
+                setNotice("Logo saved for everyone in your organisation.");
+              }}
+              onError={setError}
+            />
           )}
           {view === "brand" && office && (
             <BrandStudio

@@ -235,6 +235,14 @@ export interface WorkspaceState {
      * a tenant's dashboard carries the same colours as their manager's.
      */
     theme: BrandTheme;
+    /**
+     * When the company logo was last uploaded, or empty when there is none.
+     *
+     * The bytes are never here: the dashboard asks /api/branding/logo for them
+     * and this stamp goes in the query string, so replacing a logo replaces
+     * the URL too and no member is left looking at the old one from cache.
+     */
+    logoUpdatedAt: string;
   };
   properties: LiveProperty[];
   units: LiveUnit[];

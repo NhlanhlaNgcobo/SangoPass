@@ -454,6 +454,8 @@ export async function workspace(
         primary: organisation.brandPrimary,
         accent: organisation.brandAccent,
       }),
+      // The stamp, never the file. Empty means no logo and the SangoPass mark.
+      logoUpdatedAt: organisation.logoUpdatedAt || "",
     },
     properties: properties.map(
       (p): LiveProperty => ({
@@ -756,6 +758,39 @@ export async function command(
           brandAccent: theme.accent,
         });
         result = { ...theme };
+        subject = orgId;
+        break;
+      }
+
+      case "companyName": {
+        office(m);
+        const name = text(input.name, "company name", 120);
+        // Every membership carries the organisation's name so the account
+        // switcher can list them without a join. Denormalised names have to be
+        // rewritten or the rename is invisible to everyone but the person who
+        // made it - they would still see the old company in their own list.
+        const held = await t.find<MembershipRecord>("memberships", {
+          where: [["orgId", "==", orgId]],
+        });
+        t.update("organisations", orgId, { name });
+        for (const membership of held)
+          t.update("memberships", membership.id, { orgName: name });
+        result = { name };
+        subject = orgId;
+        break;
+      }
+
+      case "logoRemove": {
+        office(m);
+        const org = await t.get<OrganisationRecord>("organisations", orgId);
+        if (!org?.logoKey)
+          throw new AppError("There is no logo to remove.", 404);
+        t.update("organisations", orgId, {
+          logoKey: "",
+          logoMime: "",
+          logoUpdatedAt: "",
+        });
+        discard = org.logoKey;
         subject = orgId;
         break;
       }

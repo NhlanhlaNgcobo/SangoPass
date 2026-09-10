@@ -43,6 +43,23 @@ export const DOCUMENT_TYPES: Record<string, string> = {
 export const MAX_DOCUMENT_BYTES = 15 * 1024 * 1024;
 
 /**
+ * A company logo, which is a small image and nothing else.
+ *
+ * PDF is missing on purpose: this one gets rendered into an <img> on every
+ * dashboard, so it has to be something a browser will actually draw. SVG stays
+ * out for the same reason it does above - it would run as script in the origin
+ * serving it.
+ */
+export const LOGO_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+};
+
+/** Generous for a logo, and far too small to be anything else. */
+export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+
+/**
  * Keys are built from ids this application generated, never from anything a
  * person typed. Checked anyway: a storage key becomes a filesystem path, and
  * the one thing that must never reach it is a caller's idea of "..".

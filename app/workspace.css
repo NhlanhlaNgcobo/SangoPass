@@ -1617,3 +1617,64 @@
     flex-basis: 100%;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* The company's own name and logo                                     */
+/* ------------------------------------------------------------------ */
+
+/*
+  A company logo is any shape at all, so it is bounded rather than sized:
+  height caps it against the sidebar, width stops a very wide mark pushing
+  the navigation sideways, and contain keeps it undistorted either way.
+*/
+.sp-org-logo {
+  display: block;
+  max-height: 40px;
+  max-width: 100%;
+  width: auto;
+  object-fit: contain;
+}
+
+.sp-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  align-items: flex-start;
+}
+.sp-identity-preview {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+}
+/* Shown on the primary colour, because that is where it will actually sit. */
+.sp-identity-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 210px;
+  min-height: 78px;
+  padding: 14px 18px;
+  border-radius: 12px;
+}
+.sp-identity-chip img {
+  max-height: 46px;
+  max-width: 170px;
+  width: auto;
+  object-fit: contain;
+}
+.sp-identity-actions {
+  display: grid;
+  gap: 16px;
+  flex: 1 1 300px;
+  min-width: 260px;
+}
+.sp-identity-actions > label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sp-identity-actions small {
+  font-weight: 400;
+  line-height: 1.55;
+}

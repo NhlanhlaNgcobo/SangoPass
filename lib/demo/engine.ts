@@ -827,6 +827,24 @@ export function apply(
       break;
     }
 
+    case "companyName": {
+      requireOffice(persona);
+      const name = text(input.name, "company name", 120);
+      draft.organisation = { ...draft.organisation, name };
+      result = { name };
+      break;
+    }
+
+    case "logoRemove": {
+      requireOffice(persona);
+      // The demo never had one to remove: nothing is stored, so nothing was
+      // uploaded. Said plainly rather than pretending it worked.
+      throw new AppError(
+        "The demo keeps nothing, so there is no logo to remove. Uploading one works on a real account.",
+        409,
+      );
+    }
+
     case "documentRemove": {
       requireOffice(persona);
       const id = text(input.id, "document");

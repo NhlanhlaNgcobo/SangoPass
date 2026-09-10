@@ -26,6 +26,21 @@ const csp = [
   ...(development ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
 
+/**
+ * The policy for bytes somebody uploaded.
+ *
+ * A lease or a company logo is content this application did not write, served
+ * from its own origin, and a PDF opened inline is its own document with its
+ * own script context. The app-wide policy above is written for the app's own
+ * pages and is far too permissive for these: it allows 'unsafe-inline'
+ * scripts, which is exactly what an uploaded file must never get.
+ *
+ * A route handler cannot do this on its own - headers() here is applied after
+ * the handler and wins on a duplicate key - so the narrower rule has to live
+ * beside the broad one.
+ */
+const uploadCsp = "default-src 'none'; sandbox; frame-ancestors 'none'";
+
 const nextConfig: NextConfig = {
   // Standalone output bundles a self-contained server for the Docker and
   // single-VM deployments. Vercel builds its own serverless output and traces
@@ -56,6 +71,15 @@ const nextConfig: NextConfig = {
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         ],
       },
+      // Listed after the catch-all so it wins for the two routes that hand
+      // back a file somebody uploaded. See uploadCsp above.
+      ...["/api/documents/:path*", "/api/branding/logo"].map((source) => ({
+        source,
+        headers: [
+          { key: "Content-Security-Policy", value: uploadCsp },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+        ],
+      })),
     ];
   },
 };

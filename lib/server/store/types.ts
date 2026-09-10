@@ -113,6 +113,18 @@ export interface OrganisationRecord {
    */
   brandPrimary: string;
   brandAccent: string;
+  /**
+   * The company's own logo, shown in place of the SangoPass mark on every
+   * dashboard in the organisation.
+   *
+   * Only where to find the file is kept here - the bytes live in the storage
+   * port, the same one the tenant documents use. Empty when the organisation
+   * has not uploaded one, which is when the SangoPass mark is shown instead.
+   */
+  logoKey: string;
+  logoMime: string;
+  /** Changes on every upload, so a replaced logo is never served from cache. */
+  logoUpdatedAt: string;
   createdAt: string;
 }
 

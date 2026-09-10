@@ -12,10 +12,14 @@ export const dynamic = "force-dynamic";
  * only door, and openDocument() checks the membership behind it.
  *
  * The response headers matter as much as the check. An uploaded file is
- * content this application did not write, served from its own origin, so:
- * nosniff stops the browser second-guessing a declared type, the sandbox CSP
- * neutralises anything active that made it through the upload whitelist, and
- * no-store keeps a lease out of a shared machine's disk cache.
+ * content this application did not write, served from its own origin, so
+ * nosniff stops the browser second-guessing a declared type and no-store keeps
+ * a lease out of a shared machine's disk cache.
+ *
+ * The Content-Security-Policy that neutralises anything active in an uploaded
+ * file is set in next.config.ts, not here: headers() there is applied after
+ * this handler and wins on a duplicate key, so a policy set here would be
+ * silently replaced by the app-wide one - which allows inline script.
  */
 export async function GET(
   request: Request,
@@ -35,7 +39,6 @@ export async function GET(
         "Content-Disposition": `inline; filename="${record.filename.replace(/[^\w. -]/g, "_")}"`,
         "Cache-Control": "no-store, private",
         "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "default-src 'none'; sandbox",
         "Referrer-Policy": "no-referrer",
       },
     });
