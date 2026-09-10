@@ -10,6 +10,7 @@ import { AppError, choice, colour, money, text } from "@/lib/server/validation";
 import { themeReadable } from "@/lib/shared/theme";
 import { currentPeriod } from "@/lib/shared/money";
 import { parseLedgerEntry } from "@/lib/server/finance";
+import { parseAnnouncement } from "@/lib/server/announcements";
 import {
   DEFAULT_LIMITS,
   endsAt,
@@ -17,6 +18,7 @@ import {
   monthBounds,
   nightsUsed,
   parseLimits,
+  sastToday,
   startsAt,
   visitWindow,
   visitorIdentity,
@@ -126,6 +128,7 @@ export function apply(
     tenancies: [...world.tenancies],
     documents: [...world.documents],
     requests: [...world.requests],
+    announcements: [...world.announcements],
     invoices: [...world.invoices],
     invitations: [...world.invitations],
   };
@@ -856,6 +859,96 @@ export function apply(
         "The demo keeps nothing, so there is no logo to remove. Uploading one works on a real account.",
         409,
       );
+    }
+
+    case "announce": {
+      requireOffice(persona);
+      // The same rule the server applies: reception announces to the building
+      // it sits in, and the whole organisation is a manager's to address.
+      const wide = !input.propertyId || input.propertyId === "all";
+      if (wide && persona.role !== "manager")
+        throw new AppError(
+          "Reception announces to its own property. Ask a manager to send one to the whole organisation.",
+          403,
+        );
+      const property = wide
+        ? null
+        : requireProperty(world, persona, input.propertyId);
+      const announcement = parseAnnouncement(input, sastToday());
+      const id = next(draft, "announcement");
+      draft.announcements = [
+        {
+          id,
+          propertyId: property?.id ?? null,
+          propertyName: property?.name ?? "",
+          title: announcement.title,
+          body: announcement.body,
+          level: announcement.level,
+          audience: announcement.audience,
+          showUntil: announcement.showUntil,
+          publishedAt: new Date().toISOString(),
+          editedAt: null,
+          authorName: persona.name,
+          archivedAt: null,
+        },
+        ...draft.announcements,
+      ];
+      result = { id };
+      break;
+    }
+
+    case "announcementUpdate": {
+      requireOffice(persona);
+      const id = text(input.id, "announcement");
+      const existing = draft.announcements.find((a) => a.id === id);
+      if (
+        !existing ||
+        (persona.role !== "manager" &&
+          existing.propertyId !== persona.propertyId)
+      )
+        throw new AppError("Announcement not found.", 404);
+      if (existing.archivedAt)
+        throw new AppError(
+          "This announcement has been taken down. Publish a new one instead.",
+          409,
+        );
+      // Audience and building are fixed once published, exactly as on the
+      // server: they are what decided whose dashboard it landed on.
+      const edit = parseAnnouncement(
+        { ...input, audience: existing.audience },
+        sastToday(),
+      );
+      draft.announcements = draft.announcements.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              title: edit.title,
+              body: edit.body,
+              level: edit.level,
+              showUntil: edit.showUntil,
+              editedAt: new Date().toISOString(),
+            }
+          : a,
+      );
+      break;
+    }
+
+    case "announcementTakeDown": {
+      requireOffice(persona);
+      const id = text(input.id, "announcement");
+      const existing = draft.announcements.find((a) => a.id === id);
+      if (
+        !existing ||
+        (persona.role !== "manager" &&
+          existing.propertyId !== persona.propertyId)
+      )
+        throw new AppError("Announcement not found.", 404);
+      draft.announcements = draft.announcements.map((a) =>
+        a.id === id
+          ? { ...a, archivedAt: a.archivedAt || new Date().toISOString() }
+          : a,
+      );
+      break;
     }
 
     case "documentRemove": {

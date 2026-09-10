@@ -1051,6 +1051,48 @@
 }
 
 /* ---------------------------------------------------------------- */
+/* Announcements: the office's board                                  */
+/* ---------------------------------------------------------------- */
+
+/* The same stripe language as the maintenance queue, so a reader who has
+   learned one has learned both. Louder announcements carry a heavier one. */
+.sp-announcement {
+  border-left: 3px solid transparent;
+  padding: 4px 0 18px 14px;
+  border-bottom: 1px solid var(--sp-line);
+}
+.sp-announcement:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.sp-announcement h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.sp-announcement-body {
+  margin: 6px 0 8px;
+  line-height: 1.7;
+  /* Announcements are typed into a textarea, and a manager's line breaks are
+     part of what they wrote: a list of three affected blocks is not a
+     paragraph. */
+  white-space: pre-wrap;
+}
+.sp-level-urgent {
+  border-left-color: #b8452f;
+}
+.sp-level-important {
+  border-left-color: #d99a2b;
+}
+.sp-level-routine {
+  border-left-color: #cdd7c6;
+}
+/* Expired or taken down: still on the office's own board, visibly done with. */
+.sp-announcement.is-past {
+  opacity: 0.62;
+}
+
+/* ---------------------------------------------------------------- */
 /* Demo bar                                                           */
 /* ---------------------------------------------------------------- */
 

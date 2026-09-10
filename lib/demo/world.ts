@@ -5,10 +5,12 @@ import {
   sastToday,
 } from "@/lib/server/visits";
 import { rank } from "@/lib/shared/maintenance";
+import { addresses, levelRank, showing } from "@/lib/shared/announcements";
 import { DEFAULT_THEME } from "@/lib/shared/theme";
 import { currentPeriod, previousPeriod } from "@/lib/shared/money";
 import { encodeEntryCode } from "@/lib/shared/passcode";
 import type {
+  LiveAnnouncement,
   LiveContractor,
   LiveDocument,
   LiveInvoice,
@@ -59,6 +61,7 @@ export interface DemoWorld {
   tenancies: LiveTenancy[];
   documents: LiveDocument[];
   requests: LiveRequest[];
+  announcements: LiveAnnouncement[];
   ledger: LiveLedgerEntry[];
   invoices: LiveInvoice[];
   invitations: WorkspaceState["invitations"];
@@ -772,6 +775,70 @@ export function seedWorld(): DemoWorld {
     },
   ];
 
+  // The board: what the office has told the buildings. One of each kind, so a
+  // prospect switching roles sees the audience rule work rather than reading
+  // about it - the guard sees the boom notice the residents do not, the
+  // residents see the water and the AGM, and the manager sees all of it plus
+  // the one that has already expired.
+  const announcements: LiveAnnouncement[] = [
+    {
+      id: "demo-announcement-1",
+      propertyId: COURT,
+      propertyName: nameOf(COURT),
+      title: "Water off Tuesday, 09:00 to 15:00",
+      body: "The municipality is replacing the main on Ubuntu Street. Please store drinking water on Monday night. The pressure will be low for an hour or so after it comes back.",
+      level: "important",
+      audience: "everyone",
+      showUntil: day(3),
+      publishedAt: stamp(-1),
+      editedAt: null,
+      authorName: "Fatima Jacobs",
+      archivedAt: null,
+    },
+    {
+      id: "demo-announcement-2",
+      propertyId: COURT,
+      propertyName: nameOf(COURT),
+      title: "Vehicle boom out of order — use the side gate",
+      body: "The boom motor has failed and the part arrives Thursday. Open the side gate by hand for residents and check every visitor pass on the tablet before letting a car through.",
+      level: "urgent",
+      audience: "security",
+      showUntil: day(4),
+      publishedAt: stamp(-0.2),
+      editedAt: null,
+      authorName: "Nomsa Dlamini",
+      archivedAt: null,
+    },
+    {
+      id: "demo-announcement-3",
+      propertyId: null,
+      propertyName: "",
+      title: "Annual general meeting — 12 November, 18:00",
+      body: "Both buildings, in the Ubuntu Court courtyard. The levy proposal for next year will be tabled and voted on. Proxy forms are with reception.",
+      level: "routine",
+      audience: "residents",
+      showUntil: day(45),
+      publishedAt: stamp(-9),
+      editedAt: stamp(-7),
+      authorName: "Nomsa Dlamini",
+      archivedAt: null,
+    },
+    {
+      id: "demo-announcement-4",
+      propertyId: CAMPUS,
+      propertyName: nameOf(CAMPUS),
+      title: "Fibre installation finished",
+      body: "All rooms are connected. Collect your router and network key from the house parent.",
+      level: "routine",
+      audience: "residents",
+      showUntil: day(-4),
+      publishedAt: stamp(-20),
+      editedAt: null,
+      authorName: "Nomsa Dlamini",
+      archivedAt: null,
+    },
+  ];
+
   // Two months of books, so a prospect opening Money sees a working set of
   // accounts rather than an empty screen, and can page back to a closed month.
   // Rent receipts are not seeded: they are produced by the rent register, and
@@ -901,6 +968,7 @@ export function seedWorld(): DemoWorld {
     tenancies,
     documents,
     requests,
+    announcements,
     ledger,
     invoices: [
       {
@@ -994,6 +1062,24 @@ export function viewFor(
       ? []
       : world.requests.filter((r) => r.residentId === persona.id);
 
+  // The board reaches everybody, including the gate. An announcement with no
+  // property is the whole organisation's, so it survives the narrowing to a
+  // building; the office reads its own board whole, expired entries included,
+  // and everyone else gets only what is up and addressed to them. The same two
+  // shared functions the server filters with, so the demo cannot show a
+  // prospect a rule the product does not have.
+  const today = sastToday();
+  const board = isManager
+    ? world.announcements
+    : world.announcements.filter(
+        (a) => a.propertyId === null || a.propertyId === persona.propertyId,
+      );
+  const announcements = isOffice
+    ? board
+    : board.filter(
+        (a) => showing(a, today) && addresses(a.audience, persona.role),
+      );
+
   let allowance: WorkspaceState["allowance"] = null;
   if (persona.role === "tenant" && persona.unitId && persona.propertyId) {
     const limits = limitsOf(
@@ -1063,6 +1149,11 @@ export function viewFor(
     ),
     requests: [...requests].sort((a, b) =>
       b.createdAt.localeCompare(a.createdAt),
+    ),
+    announcements: [...announcements].sort(
+      (a, b) =>
+        levelRank(a.level) - levelRank(b.level) ||
+        b.publishedAt.localeCompare(a.publishedAt),
     ),
     // The books never leave the manager, in the demo exactly as on the server.
     ledger: isManager

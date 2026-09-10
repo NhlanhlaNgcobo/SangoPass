@@ -28,6 +28,7 @@ export const COLLECTIONS = [
   "tenancies",
   "documents",
   "requests",
+  "announcements",
   "invoices",
   "audit",
   "contractors",
@@ -372,6 +373,58 @@ export interface RequestRecord {
   decidedBy: string | null;
   decidedByName: string;
   decisionNote: string;
+}
+
+/**
+ * The office telling the building something: a scheduled water outage, the
+ * AGM date, a gate that has failed.
+ *
+ * The opposite direction to a RequestRecord above, and kept apart from it for
+ * that reason. A notice is raised by one resident and ends in a decision about
+ * them; an announcement is raised by the office, addressed to everybody, and
+ * nobody answers it.
+ *
+ * Whether it is still on anyone's dashboard is worked out from showUntil and
+ * archivedAt rather than stored, because a stored flag would be correct on the
+ * day it was written and wrong the morning after. See lib/shared/announcements.
+ */
+export interface AnnouncementRecord {
+  id: string;
+  orgId: string;
+  /**
+   * The building it is about, or null for the whole organisation.
+   *
+   * Reception can only ever write its own building's id here: the front desk
+   * of one block does not get to address an estate it does not sit in.
+   */
+  propertyId: string | null;
+  /** Denormalised, and empty on an organisation-wide announcement. */
+  propertyName: string;
+  title: string;
+  body: string;
+  /** routine | important | urgent. See lib/shared/announcements.ts. */
+  level: string;
+  /** Sort key: 0 is loudest, so one ORDER BY works on both backends. */
+  levelRank: number;
+  /** everyone | residents | security. */
+  audience: string;
+  /**
+   * The last SAST date it shows on a dashboard, or empty for no end date.
+   * An outage notice is stale the day after the outage, and a manager should
+   * not have to remember to come back and clear it.
+   */
+  showUntil: string;
+  publishedAt: string;
+  /**
+   * When it was last corrected, or null. Recorded rather than hidden: people
+   * act on these, and someone who read "Tuesday" yesterday is owed the fact
+   * that it does not say Tuesday any more.
+   */
+  editedAt: string | null;
+  authorId: string;
+  authorName: string;
+  /** When the office took it down early, or null. Never deleted: it was said. */
+  archivedAt: string | null;
 }
 
 /** A maintenance contact: a directory entry, never an account. */

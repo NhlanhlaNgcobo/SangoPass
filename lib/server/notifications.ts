@@ -3,8 +3,11 @@ import { emailConfigured } from "./config";
 import { guestPassSms, sendSms } from "./sms";
 import { formatEntryCode } from "@/lib/shared/passcode";
 import { store } from "./store";
+import { addresses, levelAlerting } from "@/lib/shared/announcements";
 import type {
+  AnnouncementRecord,
   InvitationRecord,
+  MembershipRecord,
   OrganisationRecord,
   PropertyRecord,
   UnitRecord,
@@ -149,6 +152,75 @@ export function visitorPassEmail(
 }
 
 /**
+ * An announcement, as it reaches an inbox.
+ *
+ * Plainer than the guest pass on purpose: there is nothing to click. The whole
+ * message is the message, so somebody reading it on a feature phone with
+ * images off has been told the same thing as somebody on a laptop.
+ */
+export function announcementEmail(
+  announcement: {
+    title: string;
+    body: string;
+    level: string;
+    propertyName: string;
+    authorName: string;
+    showUntil: string;
+  },
+  orgName: string,
+  origin: string,
+) {
+  const workspaceUrl = new URL("/workspace", origin).href;
+  const where = announcement.propertyName || orgName;
+  const flag = levelAlerting(announcement.level) ? "URGENT — " : "";
+  const subject = `${flag}${announcement.title} — ${where}`;
+  const signature = `${announcement.authorName}, ${orgName}`;
+  const text = `${announcement.title}\n\n${announcement.body}\n\n${signature}\n\nThis is an announcement from the office at ${where}. There is nothing to reply to here — speak to the office directly, or raise a report in your SangoPass workspace:\n${workspaceUrl}\n\nSangoPass. A better way to belong.`;
+  const banner = flag
+    ? `<div style="background:#8c2f21;color:white;padding:14px 28px;font-size:12px;letter-spacing:2px">URGENT ANNOUNCEMENT</div>`
+    : "";
+  const html = `<!doctype html><html><body style="margin:0;background:#f6f7f3;font-family:Arial,sans-serif;color:#203b33"><main style="max-width:540px;margin:32px auto;background:white;border:1px solid #e2e7de;border-radius:16px;overflow:hidden"><div style="background:#143e35;color:#d5ed9f;padding:28px;font-size:26px;font-weight:bold">SangoPass.</div>${banner}<div style="padding:28px"><p style="font-size:11px;letter-spacing:2px;color:#69796e">${escape(where.toUpperCase())}</p><h1 style="font-size:26px;font-weight:500">${escape(announcement.title)}</h1><div style="line-height:1.8">${escape(announcement.body).replaceAll("\n", "<br>")}</div><p style="margin-top:28px;line-height:1.7">${escape(signature)}</p><p style="font-size:12px;color:#69796e;line-height:1.7">There is nothing to reply to here. Speak to the office directly, or raise a report from your <a href="${escape(workspaceUrl)}" style="color:#285e45">SangoPass workspace</a>.</p></div></main></body></html>`;
+  return { subject, text, html };
+}
+
+/**
+ * Everyone in the organisation an announcement is addressed to, narrowed to
+ * the building when it names one.
+ *
+ * Read from the memberships rather than the tenancies: an announcement is for
+ * the people living and working here now, and somebody whose stay closed last
+ * month has no interest in Tuesday's water.
+ */
+async function announcementRecipients(
+  announcement: AnnouncementRecord,
+): Promise<string[]> {
+  const members = await store().find<MembershipRecord>("memberships", {
+    where: [["orgId", "==", announcement.orgId]],
+  });
+  const addressed = members.filter(
+    (member) =>
+      addresses(announcement.audience, member.role) &&
+      member.userEmail &&
+      (!announcement.propertyId ||
+        member.propertyId === announcement.propertyId),
+  );
+  // One person can hold two memberships in the same organisation; they should
+  // not receive the announcement twice.
+  return [...new Set(addressed.map((member) => member.userEmail))];
+}
+
+/**
+ * How many addresses go into one send.
+ *
+ * They go in BCC, so the message carries no copy of the building's mailing
+ * list to every door in it. Resend caps a recipient field at 50, so a large
+ * estate is sent in a handful of messages rather than one call per resident,
+ * which on a 300-unit customer would be 300 HTTP requests inside a single
+ * click.
+ */
+const BCC_LIMIT = 50;
+
+/**
  * Runs a workspace command, then sends whatever outbound email it produced:
  * the welcome email for an enrolment, or the guest pass for a visit request.
  * Delivery never fails the command - the record is saved either way, and the
@@ -161,6 +233,72 @@ export async function commandAndNotify(
   send: typeof fetch = fetch,
 ) {
   const result = await command(user, orgId, input);
+
+  // An announcement is emailed only when the office asks for it. Most of them
+  // belong on the dashboard and nowhere else, and a manager who has learned
+  // that this product mails the whole building every time they correct a date
+  // is a manager who stops writing announcements.
+  if (input.action === "announce" && input.email) {
+    const announcement = await store().get<AnnouncementRecord>(
+      "announcements",
+      String(result.id),
+    );
+    if (!announcement) return result;
+    if (!emailConfigured())
+      return { ...result, emailStatus: "not_configured", emailed: 0 };
+
+    const organisation = await store().get<OrganisationRecord>(
+      "organisations",
+      orgId,
+    );
+    const recipients = await announcementRecipients(announcement);
+    if (!recipients.length)
+      return { ...result, emailStatus: "no_recipients", emailed: 0 };
+
+    const message = announcementEmail(
+      announcement,
+      organisation?.name || "SangoPass",
+      process.env.APP_URL!,
+    );
+    let sent = 0;
+    for (let start = 0; start < recipients.length; start += BCC_LIMIT) {
+      const batch = recipients.slice(start, start + BCC_LIMIT);
+      try {
+        const response = await send("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+            "Idempotency-Key": `announcement-${announcement.id}-${start}`,
+          },
+          body: JSON.stringify({
+            from: process.env.EMAIL_FROM,
+            // The author is the visible recipient and everyone else is blind
+            // copied, so no resident's address reaches another resident and
+            // the person who wrote it gets their own copy to check.
+            to: [user.email],
+            bcc: batch,
+            ...message,
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (response.ok) sent += batch.length;
+      } catch {
+        // Delivery never fails the command: the announcement is on the board
+        // either way, and the interface reports what reached an inbox.
+      }
+    }
+    return {
+      ...result,
+      emailStatus: sent
+        ? sent === recipients.length
+          ? "sent"
+          : "partial"
+        : "failed",
+      emailed: sent,
+      recipients: recipients.length,
+    };
+  }
 
   if (input.action === "visitor") {
     const visit = await store().get<VisitorRecord>(

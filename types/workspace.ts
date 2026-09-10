@@ -208,6 +208,33 @@ export interface LiveRequest {
   decisionNote: string;
 }
 
+export type AnnouncementLevel = "routine" | "important" | "urgent";
+export type Audience = "everyone" | "residents" | "security";
+
+/**
+ * The office telling the building something. The opposite direction to a
+ * LiveRequest above: nobody answers an announcement.
+ */
+export interface LiveAnnouncement {
+  id: string;
+  /** Null when it is addressed to the whole organisation. */
+  propertyId: string | null;
+  /** Empty on an organisation-wide announcement. */
+  propertyName: string;
+  title: string;
+  body: string;
+  level: AnnouncementLevel;
+  audience: Audience;
+  /** Last SAST date it shows, or empty for no end date. */
+  showUntil: string;
+  publishedAt: string;
+  /** Set once it has been corrected, so a reader is told it changed. */
+  editedAt: string | null;
+  authorName: string;
+  /** Set when the office took it down early. */
+  archivedAt: string | null;
+}
+
 export interface WorkspaceState {
   asOf: string;
   user: Account;
@@ -247,6 +274,13 @@ export interface WorkspaceState {
   documents: LiveDocument[];
   /** Resident notices: moving out, changing unit, changing property. */
   requests: LiveRequest[];
+  /**
+   * What the office has told this reader's building. A resident and a guard
+   * receive only the ones still showing and addressed to them; the office
+   * receives its own, expired and taken-down ones included, because that list
+   * is the record of what it has said.
+   */
+  announcements: LiveAnnouncement[];
   /** The organisation's own money. Empty for every role but manager. */
   ledger: LiveLedgerEntry[];
   invoices: LiveInvoice[];

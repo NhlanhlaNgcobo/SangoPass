@@ -34,10 +34,12 @@ import {
   Pencil,
   FolderOpen,
   Inbox,
+  Megaphone,
 } from "lucide-react";
 import PassScanner from "./PassScanner";
 import DocumentsPanel from "./DocumentsPanel";
 import RequestsPanel from "./RequestsPanel";
+import AnnouncementsPanel from "./AnnouncementsPanel";
 import CompanyIdentity, { logoUrl } from "./CompanyIdentity";
 import Brand from "@/components/ui/Brand";
 import type {
@@ -47,6 +49,7 @@ import type {
   VisitType,
   WorkspaceState,
 } from "@/types/workspace";
+import { levelAlerting, showing } from "@/lib/shared/announcements";
 import {
   ALERTING,
   TRADES,
@@ -123,6 +126,7 @@ type View =
   | "reports"
   | "documents"
   | "requests"
+  | "announcements"
   | "contacts"
   | "money"
   | "billing"
@@ -480,6 +484,14 @@ export default function WorkspaceApp({
       title: office ? "Maintenance" : "Reports",
       icon: ClipboardList,
     },
+    // Everyone gets the board, under the name that describes their side of it:
+    // the office writes announcements, everybody else is told them. Security
+    // included - a guard is exactly who "the boom is out" is written for.
+    {
+      id: "announcements",
+      title: office ? "Announcements" : "Notice board",
+      icon: Megaphone,
+    },
     ...(office
       ? [
           { id: "documents", title: "Documents", icon: FolderOpen },
@@ -583,13 +595,33 @@ export default function WorkspaceApp({
             ]
               .filter(Boolean)
               .join(" ")
-          : data.result.emailStatus === "sent"
-            ? "Enrolment saved. The welcome email has been sent to the email provider."
-            : data.result.emailStatus === "failed"
-              ? "Enrolment saved, but the email could not be sent. Use Resend email in Pending invitations to retry."
-              : data.result.emailStatus === "not_configured"
-                ? "Enrolment saved. Email is not connected yet; the welcome email has not been sent."
-                : "Saved successfully.",
+          : input.action === "announce"
+            ? // What reached an inbox is reported separately from what went on
+              // the board, because the board always worked and the email is
+              // the half the office may need to chase.
+              [
+                "Announced. It is on the board now.",
+                !input.email
+                  ? ""
+                  : data.result.emailStatus === "sent"
+                    ? `Emailed to ${data.result.emailed} ${data.result.emailed === 1 ? "person" : "people"}.`
+                    : data.result.emailStatus === "partial"
+                      ? `Emailed to ${data.result.emailed} of ${data.result.recipients}; the rest did not send. Tell the others another way.`
+                      : data.result.emailStatus === "no_recipients"
+                        ? "Nobody is enrolled to receive it by email yet."
+                        : data.result.emailStatus === "not_configured"
+                          ? "Email is not connected, so it went to dashboards only."
+                          : "The email could not be sent, so it went to dashboards only.",
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : data.result.emailStatus === "sent"
+              ? "Enrolment saved. The welcome email has been sent to the email provider."
+              : data.result.emailStatus === "failed"
+                ? "Enrolment saved, but the email could not be sent. Use Resend email in Pending invitations to retry."
+                : data.result.emailStatus === "not_configured"
+                  ? "Enrolment saved. Email is not connected yet; the welcome email has not been sent."
+                  : "Saved successfully.",
       );
       return true;
     } catch (e) {
@@ -997,6 +1029,9 @@ export default function WorkspaceApp({
                     people: "The people who make your community.",
                     visitors: "A warm welcome. A clear record.",
                     reports: "Keep your community cared for.",
+                    announcements: office
+                      ? "Say it once, and everybody has it."
+                      : "What the office wants you to know.",
                     documents: "Every stay, and the papers that go with it.",
                     requests: tenant
                       ? "Tell the office what is changing."
@@ -1071,6 +1106,44 @@ export default function WorkspaceApp({
           )}
           {view === "overview" && (
             <>
+              {/*
+                An urgent announcement is the one thing on this screen that
+                cannot wait for somebody to go looking for it. A resident opens
+                the workspace to book a guest, not to read a board, so the
+                board comes to them - and the office sees the same banner, so
+                what it has raised is visible from where it works.
+              */}
+              {(() => {
+                const raised = state.announcements.filter(
+                  (a) => levelAlerting(a.level) && showing(a, day()),
+                );
+                if (!raised.length) return null;
+                return (
+                  <section role="alert" className="sp-alert sp-alert-critical">
+                    <Megaphone size={20} aria-hidden />
+                    <div>
+                      <strong>
+                        {raised.length === 1
+                          ? raised[0].title
+                          : `${raised.length} urgent announcements`}
+                      </strong>
+                      <p>
+                        {raised.length === 1
+                          ? `${raised[0].propertyName || state.organisation.name} · ${raised[0].authorName || "The office"}.`
+                          : `From ${state.organisation.name}.`}{" "}
+                        <button
+                          className="sp-text-button"
+                          onClick={() => setView("announcements")}
+                        >
+                          {raised.length === 1
+                            ? "Read it on the board"
+                            : "Read them on the board"}
+                        </button>
+                      </p>
+                    </div>
+                  </section>
+                );
+              })()}
               <section className="sp-welcome">
                 <div>
                   <span className="sp-eyebrow">
@@ -2154,6 +2227,16 @@ export default function WorkspaceApp({
                 setNotice("Document filed.");
               }}
               onError={setError}
+            />
+          )}
+          {view === "announcements" && (
+            <AnnouncementsPanel
+              state={state}
+              today={day()}
+              office={office}
+              manager={manager}
+              busy={busy}
+              onAct={(input) => void act(input)}
             />
           )}
           {view === "requests" && (office || tenant) && (

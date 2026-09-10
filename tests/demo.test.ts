@@ -513,3 +513,91 @@ test("the demo books reconcile: what is marked paid is what was collected", () =
   for (const unit of archived)
     assert.ok(!open.includes(unit), "archived units are out of the month");
 });
+
+test("the demo board tells each role what it is addressed", async (t) => {
+  const world = seedWorld();
+  const desk = PERSONAS.find((p) => p.role === "reception")!;
+
+  await t.test("residents get theirs and not the gate's", () => {
+    const titles = viewFor(world, resident).announcements.map((a) => a.title);
+    assert.ok(
+      titles.some((t) => /water off/i.test(t)),
+      "the outage is for everybody",
+    );
+    assert.ok(
+      titles.some((t) => /annual general meeting/i.test(t)),
+      "the company-wide one reaches a single building",
+    );
+    assert.ok(
+      !titles.some((t) => /boom/i.test(t)),
+      "an instruction to the gate is not a resident's",
+    );
+  });
+
+  await t.test("the gate gets its own, and not the AGM", () => {
+    const titles = viewFor(world, guard).announcements.map((a) => a.title);
+    assert.ok(titles.some((t) => /boom/i.test(t)));
+    assert.ok(titles.some((t) => /water off/i.test(t)));
+    assert.ok(!titles.some((t) => /annual general meeting/i.test(t)));
+  });
+
+  await t.test("an expired one is off the dashboards and on the board", () => {
+    const seen = viewFor(world, resident).announcements;
+    assert.ok(
+      !seen.some((a) => /fibre/i.test(a.title)),
+      "last month's fibre notice has come down on its own",
+    );
+    assert.ok(
+      viewFor(world, manager).announcements.some((a) => /fibre/i.test(a.title)),
+      "and the manager can still see that it went up",
+    );
+  });
+
+  await t.test("the loudest is first", () => {
+    const board = viewFor(world, guard).announcements;
+    assert.equal(board[0].level, "urgent");
+  });
+
+  await t.test("the desk announces to its building and no further", () => {
+    const published = apply(world, desk, {
+      action: "announce",
+      audience: "residents",
+      level: "routine",
+      title: "Parcels are in at the desk",
+      body: "Collect before six.",
+      propertyId: desk.propertyId,
+    });
+    assert.ok(
+      viewFor(published.world, resident).announcements.some(
+        (a) => a.title === "Parcels are in at the desk",
+      ),
+    );
+    assert.throws(
+      () =>
+        apply(world, desk, {
+          action: "announce",
+          audience: "residents",
+          level: "routine",
+          title: "Speaking for everybody",
+          body: "Both buildings, from one desk.",
+          propertyId: "all",
+        }),
+      /own property/i,
+    );
+  });
+
+  await t.test("a resident cannot announce", () => {
+    assert.throws(
+      () =>
+        apply(world, resident, {
+          action: "announce",
+          audience: "everyone",
+          level: "urgent",
+          title: "Party at mine",
+          body: "Everyone welcome.",
+          propertyId: resident.propertyId,
+        }),
+      /manager or reception/i,
+    );
+  });
+});

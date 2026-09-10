@@ -15,12 +15,12 @@ Open http://localhost:3000 and choose **Start your free trial**. Create your org
 
 - /register creates a real account and organisation with a 14-day Starter trial.
 - /login signs in to the live /workspace using a server session.
-- Managers manage properties, units, invitations, visitor movements, rent status, maintenance, maintenance contacts, tenant **Documents**, resident **Requests**, the property's own books under **Money**, brand colours and billing.
-- **Reception** is the front desk of one property: every manager screen for that building — properties, people, visitor passes, maintenance, contacts, documents, requests and brand — and never **Money** or **Billing**. It cannot create or remove manager and reception accounts either, because a role that can mint managers is a manager. A reception account uses one of the plan's sign-ins, for the same reason: it does nearly everything a manager does, so a free one would make the seat limit a formality.
+- Managers manage properties, units, invitations, visitor movements, rent status, maintenance, maintenance contacts, tenant **Documents**, resident **Requests**, **Announcements** to their buildings, the property's own books under **Money**, brand colours and billing.
+- **Reception** is the front desk of one property: every manager screen for that building — properties, people, visitor passes, maintenance, contacts, documents, requests, announcements and brand — and never **Money** or **Billing**. It cannot create or remove manager and reception accounts either, because a role that can mint managers is a manager. A reception account uses one of the plan's sign-ins, for the same reason: it does nearly everything a manager does, so a free one would make the seat limit a formality.
 - Managers enrol residents by email and vacant unit. Apartment residents receive a generated unit-linked username; student accommodation requires their student number, preserved exactly (including leading zeroes).
 - The welcome email provides the username, property/unit and a one-use password-setup link. Tenant sign-in is at /tenant/login. The emailed login link pre-fills the property code so matching student numbers at different properties remain separate.
-- Residents activate their account by setting their own password, then request and cancel guest visits, submit reports, and give notice that they are moving out or want a different unit or property. Existing account holders confirm their existing password instead of having it overwritten.
-- Security joins with an assigned property, scans QR passes, checks visitors in/out and submits reports.
+- Residents activate their account by setting their own password, then request and cancel guest visits, submit reports, and give notice that they are moving out or want a different unit or property. Their **Notice board** carries whatever the office has announced to them. Existing account holders confirm their existing password instead of having it overwritten.
+- Security joins with an assigned property, scans QR passes, checks visitors in/out, submits reports, and reads the announcements written for the gate.
 - /pass/[token] is a private guest pass with a printable QR code and a gate code for a guest with no smartphone, emailed to the resident and to the visitor when an address is given, and texted to the visitor when SMS is configured. Its purpose is to let the invited visitor confirm they are on the system before they travel. It omits the visitor phone number, all host account details, and all but the last four characters of the identity document.
 - /demo is a full interactive demonstration: the real workspace running against a sample estate held in the visitor's browser. Pick a role, switch between them, and the data follows. Nothing is stored, nothing is sent, and no account is created. /dashboard now redirects there.
 
@@ -121,21 +121,44 @@ Deliberately not a maintenance report. A report says something is broken and som
 
 Only the resident whose life is changing may raise one — "your tenant gave notice" is exactly the claim a register should not let anyone make on someone's behalf — and only they may withdraw it, while it is still unanswered. Once the office has answered, it stays answered: the record should say whether a resident withdrew or an office declined, because those are not the same thing.
 
+## Announcements
+
+**The office tells the building something, and everyone has it.** A water outage, the AGM date, a gate that has failed. It is written once in **Announcements** and lands on the dashboards of everyone it is addressed to, under **Notice board** on their side.
+
+The opposite direction to a resident notice, and its own screen for that reason. A notice is one resident's business, addressed to the office, and it ends in a decision about them. An announcement is the office's business, addressed to everybody, and nobody answers it — the water is off on Tuesday whether or not you reply. In one queue, the decision somebody is waiting on would sit under a fortnight of reminders about the AGM.
+
+**Three things are chosen when it is written**, and the first two decide who ever sees it:
+
+- **Which building**, or the whole organisation. Reception announces to the block it sits in and nowhere else — an estate it does not work at is not its to address, and the whole company is a manager's to speak for.
+- **Who it is for**: residents, security, or everyone. "The gate motor is being replaced on Thursday, admit the contractor" is an instruction to a guard and noise to everybody else; "the water is off on Tuesday" is for the whole building. Without being able to say which, a manager writes only the ones that are safe to send to everybody.
+- **How loudly**: routine, important or urgent. Three rather than ten, so that a manager choosing among them chooses consistently and "urgent" keeps meaning urgent. An urgent announcement still showing raises a banner on every dashboard it reaches, including the office's own — a resident opens the workspace to book a guest, not to read a board, so the board comes to them.
+
+**It comes down on its own.** An optional end date is the last day it shows; after that it drops off every dashboard and stays on the office's board marked _Expired_. Whether it is still up is worked out from that date every time it is read, never stored as a flag — a stored flag is right on the day it is written and wrong the morning after, with nothing there to correct it, which is exactly the quiet wrongness that made a rent flag without its month useless. An end date already in the past is refused rather than published into silence.
+
+**Nothing is deleted.** The office takes an announcement down and it stops showing, while staying on the board so the record still says it went up. What it _says_ can be corrected — a date that moved, a level that was wrong — and the correction is stamped and shown, because someone who read "Tuesday" yesterday is owed the fact that it no longer says Tuesday. What it says can change; **who it went to cannot**. Audience and building are what put it on particular dashboards, and redirecting it quietly would leave the people who read it holding an announcement that no longer exists for them, and the people it moved to having missed it entirely.
+
+**Emailing is per announcement, and optional.** Ticking _Email it as well_ sends it to everyone it is addressed to, with the author as the visible recipient and everybody else blind copied, so no resident's address reaches another resident and the author gets a copy to check. Addresses go out in batches of fifty, so a 300-unit estate is a handful of messages rather than three hundred HTTP requests inside one click. Delivery never fails the announcement: it is on the board either way, and the screen reports separately how many inboxes it reached, because that is the half a manager may have to chase. Most announcements belong on the dashboard and nowhere else — a product that mails the whole building every time a date is corrected is one whose managers stop writing announcements.
+
+**Not gated on billing**, for the same reason the books are not. The trial gate stops an unpaid organisation growing; withholding "the water is off from noon" would not prompt a payment, it would leave a building that does not know.
+
 ## The demo
 
 `/demo` runs the **real workspace component** against an in-browser sample
 organisation - two properties, six residents, a week of arrivals, a maintenance
-queue and a contacts directory. It is not a mock-up: `lib/demo/engine.ts`
-imports the same validation, visitor limits, visit-window and urgency rules the
-server runs, so the demo cannot promise behaviour the product does not have.
-What is simulated is persistence and identity, nothing else.
+queue, a contacts directory and a notice board. It is not a mock-up:
+`lib/demo/engine.ts` imports the same validation, visitor limits, visit-window,
+urgency and announcement rules the server runs, so the demo cannot promise
+behaviour the product does not have. What is simulated is persistence and
+identity, nothing else.
 
 A prospect can follow one guest end to end: sign in as the resident, request a
 visit (confirming with the sample password `sangopass`), switch to Security and
 check the guest in at the gate, then switch to the manager and watch the
 maintenance queue and visitor limits. Role scoping is derived by the same rules
-as the server, so switching roles demonstrates real isolation. **Reset data**
-puts the world back.
+as the server, so switching roles demonstrates real isolation - the notice
+board makes it visible in one click, since the guard's board carries the broken
+boom the residents never see and not the AGM they do. **Reset data** puts the
+world back.
 
 Set `SANGOPASS_DEMO=true` for a showcase deployment: the boot guard then allows
 ephemeral hosting (there is nothing to store), `APP_URL` becomes optional, and

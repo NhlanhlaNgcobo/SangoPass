@@ -462,3 +462,59 @@ test("a v8 database gains archiving, with everything in use", async () => {
   );
   await reopened.close();
 });
+
+test("a v11 database gains the announcements board, empty", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "sangopass-migration-v11-"));
+  const file = join(folder, "v11.sqlite");
+
+  const seed = new DatabaseSync(file);
+  seed.exec(LEGACY_V1);
+  seed.close();
+  const built = new SqliteStore(file);
+  await built.close();
+  const raw = new DatabaseSync(file);
+  // Wind the database back to v11: the board did not exist, so neither did
+  // the table. Everything else about a v11 database stays as it was.
+  raw.exec("DROP TABLE announcements");
+  raw.exec("PRAGMA user_version=11");
+  raw.close();
+
+  const upgraded = new SqliteStore(file);
+  // Nothing is invented. An organisation that upgrades has announced nothing,
+  // because before this there was nowhere to announce it.
+  assert.deepEqual(await upgraded.find("announcements"), []);
+  assert.equal(
+    (await upgraded.get<PropertyRecord>("properties", "property1"))!.name,
+    "Legacy Court",
+    "and the rest of the database is untouched",
+  );
+
+  // The new table takes a row, and it survives a reopen.
+  await upgraded.tx(async (t) => {
+    t.create("announcements", "ann1", {
+      orgId: "org1",
+      propertyId: "property1",
+      propertyName: "Legacy Court",
+      title: "Water off Tuesday",
+      body: "09:00 to 15:00.",
+      level: "important",
+      levelRank: 1,
+      audience: "everyone",
+      showUntil: "2026-12-31",
+      publishedAt: "2026-09-10T08:00:00.000Z",
+      editedAt: null,
+      authorId: "user2",
+      authorName: "Legacy Manager",
+      archivedAt: null,
+    });
+  });
+  await upgraded.close();
+  const reopened = new SqliteStore(file);
+  const posted = await reopened.get<{ title: string; levelRank: number }>(
+    "announcements",
+    "ann1",
+  );
+  assert.equal(posted!.title, "Water off Tuesday");
+  assert.equal(posted!.levelRank, 1);
+  await reopened.close();
+});

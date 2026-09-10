@@ -17,6 +17,7 @@ import { plan as planFor } from "./plans";
 import { bucket, throttle } from "./ratelimit";
 import { store } from "./store";
 import type {
+  AnnouncementRecord,
   ContractorRecord,
   DocumentRecord,
   InvitationRecord,
@@ -41,6 +42,7 @@ import {
   stillOpen,
 } from "@/lib/shared/notices";
 import { parseContractor, parseUrgency, rank } from "./maintenance";
+import { addresses, parseAnnouncement, showing } from "./announcements";
 import {
   DEFAULT_LIMITS,
   endsAt,
@@ -69,6 +71,7 @@ import { currentPeriod } from "@/lib/shared/money";
 import { LEDGER_LIMIT, parseLedgerEntry } from "./finance";
 import type {
   Account,
+  LiveAnnouncement,
   LiveDocument,
   LiveInvoice,
   LiveLedgerEntry,
@@ -200,6 +203,59 @@ function entitled(org: OrganisationRecord) {
 /* Read model                                                          */
 /* ------------------------------------------------------------------ */
 
+/** Loudest first, newest within a level. One ORDER BY on both backends. */
+const ANNOUNCEMENT_ORDER = [
+  { field: "levelRank" },
+  { field: "publishedAt", direction: "desc" as const },
+];
+
+/**
+ * Every announcement that could reach this reader, before the audience and the
+ * calendar have had their say.
+ *
+ * Two reads rather than one for anybody below a manager, because "addressed to
+ * my building, or to the whole company" is an OR and the store contract has
+ * none - every where clause is an AND, which is all Firestore will index. So
+ * the two legs are fetched separately and merged here. That costs one extra
+ * query and keeps both backends answering the identical question, which is
+ * worth more than the query: the alternative is writing a copy of every
+ * organisation-wide announcement into each property, and then having to find
+ * all of them again to take one down.
+ *
+ * A manager needs no second leg: the whole organisation already includes it.
+ */
+async function announcementsFor(
+  reader: Reader,
+  orgId: string,
+  propertyId: string | null,
+  wholeOrganisation: boolean,
+): Promise<AnnouncementRecord[]> {
+  if (wholeOrganisation)
+    return reader.find<AnnouncementRecord>("announcements", {
+      where: [["orgId", "==", orgId]],
+      orderBy: ANNOUNCEMENT_ORDER,
+      limit: LIST_LIMIT,
+    });
+  const leg = (property: string | null) =>
+    reader.find<AnnouncementRecord>("announcements", {
+      where: [
+        ["orgId", "==", orgId],
+        ["propertyId", "==", property],
+      ],
+      orderBy: ANNOUNCEMENT_ORDER,
+      limit: LIST_LIMIT,
+    });
+  const [building, organisation] = await Promise.all([
+    propertyId ? leg(propertyId) : Promise.resolve([]),
+    leg(null),
+  ]);
+  // Each leg arrives sorted; concatenating two sorted lists does not.
+  return [...building, ...organisation].sort(
+    (a, b) =>
+      a.levelRank - b.levelRank || b.publishedAt.localeCompare(a.publishedAt),
+  );
+}
+
 export async function workspace(
   user: Account,
   orgId?: string,
@@ -271,6 +327,7 @@ export async function workspace(
     tenancies,
     documents,
     requests,
+    announced,
   ] = await Promise.all([
     isManager || m.propertyId
       ? database.find<PropertyRecord>("properties", {
@@ -406,7 +463,21 @@ export async function workspace(
           orderBy: [{ field: "createdAt", direction: "desc" }],
           limit: LIST_LIMIT,
         }),
+    // Everyone gets these, including security: a guard on the gate is
+    // exactly who a "the boom is out, admit on the side entrance" notice is
+    // for. Which of them this reader actually sees is settled below.
+    announcementsFor(database, m.orgId, m.propertyId, isManager),
   ]);
+
+  // The office sees its whole board, expired and taken-down announcements
+  // included, because that list is the record of what it has said. Everyone
+  // else sees only what is still up and addressed to them.
+  const today = sastToday();
+  const announcements = isOffice
+    ? announced
+    : announced.filter(
+        (a) => showing(a, today) && addresses(a.audience, m.role),
+      );
 
   // What this resident has left this month, so the form can say so before they
   // fill it in rather than rejecting them after.
@@ -613,6 +684,22 @@ export async function workspace(
       decidedAt: r.decidedAt,
       decidedByName: r.decidedByName,
       decisionNote: r.decisionNote,
+    })),
+    announcements: announcements.map((a): LiveAnnouncement => ({
+      id: a.id,
+      propertyId: a.propertyId ?? null,
+      propertyName: a.propertyName || "",
+      title: a.title,
+      body: a.body,
+      level: a.level as LiveAnnouncement["level"],
+      audience: a.audience as LiveAnnouncement["audience"],
+      showUntil: a.showUntil || "",
+      publishedAt: a.publishedAt,
+      editedAt: a.editedAt ?? null,
+      authorName: a.authorName || "",
+      archivedAt: a.archivedAt ?? null,
+      // authorId is deliberately absent: who wrote it is a name on the
+      // board, and nothing a resident's browser needs an account id for.
     })),
     invoices: invoices.map((i): LiveInvoice => ({
       id: i.id,
@@ -1733,6 +1820,94 @@ export async function command(
               : notice.decisionNote,
         });
         subject = notice.id;
+        break;
+      }
+
+      /* --- Announcements: the office telling the building something --- */
+
+      case "announce": {
+        office(m);
+        // A manager may address the whole company or pick one building. The
+        // front desk of one block may do neither: its announcements go to the
+        // block it sits in, because an estate it does not work at is not its
+        // to address. Sent as "" or omitted, that is what it gets.
+        const wide = !input.propertyId || input.propertyId === "all";
+        if (wide && m.role !== "manager")
+          throw new AppError(
+            "Reception announces to its own property. Ask a manager to send one to the whole organisation.",
+            403,
+          );
+        const property = wide
+          ? null
+          : await requireOpenProperty(t, m, input.propertyId);
+        const announcement = parseAnnouncement(input, sastToday());
+        const id = randomUUID();
+        t.create("announcements", id, {
+          orgId,
+          propertyId: property?.id ?? null,
+          propertyName: property?.name ?? "",
+          ...announcement,
+          publishedAt: now(),
+          editedAt: null,
+          authorId: user.id,
+          authorName: user.name,
+          archivedAt: null,
+        });
+        result = { id };
+        subject = id;
+        break;
+      }
+
+      case "announcementUpdate": {
+        office(m);
+        const announcement = await t.get<AnnouncementRecord>(
+          "announcements",
+          text(input.id, "announcement"),
+        );
+        if (!announcement || announcement.orgId !== orgId)
+          throw new AppError("Announcement not found.", 404);
+        // Reception may correct its own building's board, and never one
+        // addressed to the whole organisation - a manager wrote that.
+        if (m.role !== "manager" && announcement.propertyId !== m.propertyId)
+          throw new AppError("Announcement not found.", 404);
+        if (announcement.archivedAt)
+          throw new AppError(
+            "This announcement has been taken down. Publish a new one instead.",
+            409,
+          );
+        // What it says can be corrected; who it is addressed to and which
+        // building it is about cannot. Those are what decided whose dashboard
+        // it landed on, and quietly redirecting it would leave the people who
+        // read it holding an announcement that no longer exists for them and
+        // the people it moved to having missed it entirely.
+        t.update("announcements", announcement.id, {
+          ...parseAnnouncement(
+            { ...input, audience: announcement.audience },
+            sastToday(),
+          ),
+          editedAt: now(),
+        });
+        subject = announcement.id;
+        break;
+      }
+
+      case "announcementTakeDown": {
+        office(m);
+        const announcement = await t.get<AnnouncementRecord>(
+          "announcements",
+          text(input.id, "announcement"),
+        );
+        if (!announcement || announcement.orgId !== orgId)
+          throw new AppError("Announcement not found.", 404);
+        if (m.role !== "manager" && announcement.propertyId !== m.propertyId)
+          throw new AppError("Announcement not found.", 404);
+        // Taken down, never deleted. It was said, people acted on it, and the
+        // office's own board should still show that it went up - the same
+        // reason a property is archived rather than removed.
+        t.update("announcements", announcement.id, {
+          archivedAt: announcement.archivedAt || now(),
+        });
+        subject = announcement.id;
         break;
       }
 

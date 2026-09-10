@@ -186,6 +186,23 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "decidedByName",
     "decisionNote",
   ],
+  announcements: [
+    "id",
+    "orgId",
+    "propertyId",
+    "propertyName",
+    "title",
+    "body",
+    "level",
+    "levelRank",
+    "audience",
+    "showUntil",
+    "publishedAt",
+    "editedAt",
+    "authorId",
+    "authorName",
+    "archivedAt",
+  ],
   contractors: [
     "id",
     "orgId",
@@ -250,6 +267,7 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS tenancies(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, propertyName TEXT NOT NULL DEFAULT '', unitId TEXT NOT NULL, unitLabel TEXT NOT NULL DEFAULT '', residentId TEXT NOT NULL, residentName TEXT NOT NULL DEFAULT '', residentEmail TEXT NOT NULL DEFAULT '', username TEXT, startedAt TEXT NOT NULL, endedAt TEXT, endedReason TEXT NOT NULL DEFAULT '', current INTEGER NOT NULL DEFAULT 1)",
   "CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, propertyName TEXT NOT NULL DEFAULT '', unitId TEXT, unitLabel TEXT, tenancyId TEXT, residentId TEXT, residentName TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'other', filename TEXT NOT NULL, mime TEXT NOT NULL DEFAULT 'application/octet-stream', bytes INTEGER NOT NULL DEFAULT 0, storageKey TEXT NOT NULL, uploadedAt TEXT NOT NULL, uploadedBy TEXT NOT NULL DEFAULT '', uploadedByName TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, propertyName TEXT NOT NULL DEFAULT '', unitId TEXT, unitLabel TEXT, residentId TEXT NOT NULL, residentName TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, effectiveDate TEXT NOT NULL DEFAULT '', details TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open', open INTEGER NOT NULL DEFAULT 1, createdAt TEXT NOT NULL, decidedAt TEXT, decidedBy TEXT, decidedByName TEXT NOT NULL DEFAULT '', decisionNote TEXT NOT NULL DEFAULT '')",
+  "CREATE TABLE IF NOT EXISTS announcements(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT, propertyName TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', level TEXT NOT NULL DEFAULT 'routine', levelRank INTEGER NOT NULL DEFAULT 2, audience TEXT NOT NULL DEFAULT 'everyone', showUntil TEXT NOT NULL DEFAULT '', publishedAt TEXT NOT NULL, editedAt TEXT, authorId TEXT NOT NULL DEFAULT '', authorName TEXT NOT NULL DEFAULT '', archivedAt TEXT)",
   "CREATE TABLE IF NOT EXISTS contractors(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, name TEXT NOT NULL, trade TEXT NOT NULL, company TEXT, phone TEXT NOT NULL, email TEXT, kind TEXT NOT NULL DEFAULT 'contractor', notes TEXT, createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS ledger(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, period TEXT NOT NULL, kind TEXT NOT NULL, category TEXT NOT NULL, nature TEXT NOT NULL DEFAULT 'variable', amountCents INTEGER NOT NULL DEFAULT 0, description TEXT NOT NULL DEFAULT '', propertyId TEXT, propertyName TEXT NOT NULL DEFAULT '', unitId TEXT, unitLabel TEXT, recordedBy TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS invoices(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, plan TEXT NOT NULL, amountCents INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', paymentId TEXT, createdAt TEXT NOT NULL)",
@@ -291,6 +309,8 @@ const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS request_property ON requests(orgId, propertyId, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS request_resident ON requests(orgId, residentId, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS request_open ON requests(orgId, open, createdAt DESC)",
+  "CREATE INDEX IF NOT EXISTS announcement_org ON announcements(orgId, levelRank, publishedAt DESC)",
+  "CREATE INDEX IF NOT EXISTS announcement_property ON announcements(orgId, propertyId, levelRank, publishedAt DESC)",
   "CREATE INDEX IF NOT EXISTS contractor_org ON contractors(orgId, name)",
   "CREATE INDEX IF NOT EXISTS ledger_org ON ledger(orgId, period DESC, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS ledger_unit ON ledger(unitId, period)",
@@ -323,7 +343,12 @@ const REBUILT = [
 /* Migration                                                           */
 /* ------------------------------------------------------------------ */
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
+
+// v12 adds announcements: the office telling the building something. One new
+// table, which the schema re-run at the end of a migration creates, so there
+// is nothing to alter and nothing to backfill. An upgraded database has no
+// announcements because none was ever made, and none is invented.
 
 // v11 lets a company put its own logo on its dashboards. The columns default
 // to empty, which reads as "no logo uploaded" - and that is exactly what every
@@ -440,6 +465,8 @@ const BACKFILL_V4 = [
 // nothing ever recorded it.
 // v10 to v11 lets a company upload its own logo. Empty means none, which is
 // what every organisation upgrading has, so their dashboards look unchanged.
+// v11 to v12 adds the announcements the office makes to its buildings. A new
+// table and nothing else: an upgraded database has made none.
 function migrate(database: DatabaseSync) {
   const version = () =>
     (database.prepare("PRAGMA user_version").get() as { user_version: number })
