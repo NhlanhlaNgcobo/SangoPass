@@ -1721,3 +1721,51 @@
   font-weight: 400;
   line-height: 1.55;
 }
+
+/* ---------------------------------------------------------------- */
+/* Bulk import: the lines that need fixing                            */
+/* ---------------------------------------------------------------- */
+
+/* Not styled as an error, because nothing went wrong: the file was read and
+   understood, and this is the list of corrections to make before sending it
+   again. Amber rather than brick, for the same reason. */
+.sp-import-problems {
+  margin-top: 20px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: #fdf4e3;
+  border: 1px solid #e8c98a;
+  color: #7a5312;
+}
+.sp-import-problems strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+.sp-import-problems p {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.sp-import-problems ul {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.sp-import-problems li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  list-style: none;
+}
+/* Fixed width so the line numbers form a column the eye can run down. */
+.sp-import-line {
+  flex: none;
+  min-width: 66px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}

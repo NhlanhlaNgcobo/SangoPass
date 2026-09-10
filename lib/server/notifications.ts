@@ -221,6 +221,102 @@ async function announcementRecipients(
 const BCC_LIMIT = 50;
 
 /**
+ * Sends one welcome email and records what happened to it on the invitation.
+ *
+ * Its own function because two callers need it: enrolling one resident, and
+ * importing a hundred. Delivery never fails the enrolment - the invitation is
+ * written either way, and the interface offers "Resend email" for the ones
+ * that did not land.
+ */
+export async function deliverWelcome(
+  id: string,
+  token: string,
+  send: typeof fetch = fetch,
+): Promise<string> {
+  const hash = hashToken(token);
+  const details = await invitationDetails(token);
+  if (!details) return "not_sent";
+
+  let emailStatus = "not_configured";
+  if (emailConfigured()) {
+    try {
+      const message = welcomeEmail(details, token, process.env.APP_URL!);
+      const response = await send("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": `enrolment-${id}-${hash}`,
+        },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM,
+          to: [details.email],
+          ...message,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      emailStatus = response.ok ? "sent" : "failed";
+    } catch {
+      emailStatus = "failed";
+    }
+  }
+
+  await store().tx(async (t) => {
+    const live = await t.get<InvitationRecord>("invitations", id);
+    if (!live || live.hash !== hash || live.acceptedAt) return;
+    t.update("invitations", id, {
+      emailStatus,
+      emailSentAt: emailStatus === "sent" ? now() : null,
+    });
+  });
+  return emailStatus;
+}
+
+/**
+ * How many welcome emails an import has in flight at once.
+ *
+ * Sequential would make a hundred-resident import a hundred round trips end
+ * to end, which is long enough for a manager to conclude it has hung and
+ * press the button again. All at once would be a hundred simultaneous
+ * requests at the mail provider from one click, which is how a sender earns a
+ * rate limit. Five is neither.
+ */
+const WELCOME_CONCURRENCY = 5;
+
+/**
+ * Sends the welcome email for every invitation an import created.
+ *
+ * The invitations already exist by the time this runs, so a failure here
+ * costs a message rather than an enrolment: the resident is enrolled, their
+ * invitation is on the Pending list, and the office can resend from there.
+ */
+export async function deliverImport(
+  invitations: { id: string; token: string; email: string }[],
+  send: typeof fetch = fetch,
+): Promise<{ sent: number; failed: number; configured: boolean }> {
+  if (!emailConfigured()) return { sent: 0, failed: 0, configured: false };
+  let sent = 0;
+  let failed = 0;
+  const queue = [...invitations];
+  const worker = async () => {
+    for (;;) {
+      const next = queue.shift();
+      if (!next) return;
+      const status = await deliverWelcome(next.id, next.token, send);
+      if (status === "sent") sent += 1;
+      else failed += 1;
+    }
+  };
+  await Promise.all(
+    Array.from(
+      { length: Math.min(WELCOME_CONCURRENCY, invitations.length) },
+      worker,
+    ),
+  );
+  return { sent, failed, configured: true };
+}
+
+/**
  * Runs a workspace command, then sends whatever outbound email it produced:
  * the welcome email for an enrolment, or the guest pass for a visit request.
  * Delivery never fails the command - the record is saved either way, and the
@@ -369,43 +465,12 @@ export async function commandAndNotify(
   if (input.action !== "invite" && input.action !== "resendInvitation")
     return result;
 
-  const token = String(result.token);
-  const id = String(result.invitationId);
-  const hash = hashToken(token);
-  const details = await invitationDetails(token);
-  if (!details) return { ...result, emailStatus: "not_sent" };
-
-  let emailStatus = "not_configured";
-  if (emailConfigured()) {
-    try {
-      const message = welcomeEmail(details, token, process.env.APP_URL!);
-      const response = await send("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-          "Idempotency-Key": `enrolment-${id}-${hash}`,
-        },
-        body: JSON.stringify({
-          from: process.env.EMAIL_FROM,
-          to: [details.email],
-          ...message,
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
-      emailStatus = response.ok ? "sent" : "failed";
-    } catch {
-      emailStatus = "failed";
-    }
-  }
-
-  await store().tx(async (t) => {
-    const live = await t.get<InvitationRecord>("invitations", id);
-    if (!live || live.hash !== hash || live.acceptedAt) return;
-    t.update("invitations", id, {
-      emailStatus,
-      emailSentAt: emailStatus === "sent" ? now() : null,
-    });
-  });
-  return { ...result, emailStatus };
+  return {
+    ...result,
+    emailStatus: await deliverWelcome(
+      String(result.invitationId),
+      String(result.token),
+      send,
+    ),
+  };
 }

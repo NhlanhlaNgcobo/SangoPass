@@ -15,7 +15,7 @@ Open http://localhost:3000 and choose **Start your free trial**. Create your org
 
 - /register creates a real account and organisation with a 14-day Starter trial.
 - /login signs in to the live /workspace using a server session.
-- Managers manage properties, units, invitations, visitor movements, rent status, maintenance, maintenance contacts, tenant **Documents**, resident **Requests**, **Announcements** to their buildings, the property's own books under **Money**, brand colours and billing.
+- Managers manage properties, units, invitations, visitor movements, rent status, maintenance, maintenance contacts, tenant **Documents**, resident **Requests**, bulk resident **import**, **Announcements** to their buildings, the property's own books under **Money**, brand colours and billing.
 - **Reception** is the front desk of one property: every manager screen for that building — properties, people, visitor passes, maintenance, contacts, documents, requests, announcements and brand — and never **Money** or **Billing**. It cannot create or remove manager and reception accounts either, because a role that can mint managers is a manager. A reception account uses one of the plan's sign-ins, for the same reason: it does nearly everything a manager does, so a free one would make the seat limit a formality.
 - Managers enrol residents by email and vacant unit. Apartment residents receive a generated unit-linked username; student accommodation requires their student number, preserved exactly (including leading zeroes).
 - The welcome email provides the username, property/unit and a one-use password-setup link. Tenant sign-in is at /tenant/login. The emailed login link pre-fills the property code so matching student numbers at different properties remain separate.
@@ -120,6 +120,20 @@ The bucket and the disk are both closed to the outside world. `storage.rules` is
 Deliberately not a maintenance report. A report says something is broken and someone should come and fix it; a notice says nothing is broken and a decision is needed. Filed in one queue, the notice that needs a month's warning would sit under the taps that need a plumber.
 
 Only the resident whose life is changing may raise one — "your tenant gave notice" is exactly the claim a register should not let anyone make on someone's behalf — and only they may withdraw it, while it is still unanswered. Once the office has answered, it stays answered: the record should say whether a resident withdrew or an office declined, because those are not the same thing.
+
+## Enrolling a building at once
+
+**Upload the roll the office already keeps.** People → _Enrol a whole building_ takes a CSV of up to 100 residents, each with an email address and the unit they are moving into, and sends every welcome email in one pass. Enrolling a 150-unit Growth customer was 150 separate dialogs before this, which is the point at which a manager stops setting the product up.
+
+**Only Email and Unit are required**, matched case-insensitively and in any order. A student residence also needs _Student number_. The columns an office keeps for itself — names, phone numbers, lease dates — are ignored rather than refused, because making a manager strip their own spreadsheet before they can use it is a reason not to use it. A misspelt heading is still caught, since the columns that are required have to be found.
+
+**Download a blank roll** and it arrives with that property's vacant units already listed, so the labels match what the register calls them. Values beginning `=`, `+`, `-` or `@` are prefixed on the way out, the same rule the money spreadsheet applies, so a unit label cannot execute as a formula when the file is opened.
+
+**The whole file is checked before any of it is written**, and refused as a whole if any line fails — with every problem named by its line number as the spreadsheet shows it, not just the first. That is the only shape that makes the obvious second attempt safe: a manager who does not know which forty of their hundred rows landed has to reconcile by hand, and re-uploading the corrected file would double-enrol everyone who worked the first time. Checked per row: the address is real, not repeated in the file, and not already in the organisation; the unit exists at that property, is not archived, is not lived in, has no pending invitation, and is not claimed twice in the same file; and at a student residence the number is valid, unique in the file, and not already enrolled — leading zeroes preserved exactly.
+
+The three lists every row is checked against are read **once**, not per row, so a hundred residents costs three queries rather than three hundred. Welcome emails go out five at a time after the invitations are committed: sequentially, a hundred round trips is long enough for a manager to conclude it has hung and press the button again; all at once is how a sender earns a rate limit. Delivery never fails the enrolment, and the count that reached an inbox is reported separately from the count enrolled, because the ones that did not land are retried from **Pending invitations**.
+
+Importing is enrolment, so it waits for renewal exactly as adding one resident by hand does. A file is not a way around the trial gate.
 
 ## Announcements
 

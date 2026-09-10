@@ -42,6 +42,7 @@ import {
   stillOpen,
 } from "@/lib/shared/notices";
 import { parseContractor, parseUrgency, rank } from "./maintenance";
+import { createInvitation, tenantUsername } from "./enrolment";
 import { addresses, parseAnnouncement, showing } from "./announcements";
 import {
   DEFAULT_LIMITS,
@@ -195,7 +196,7 @@ async function requireOpenProperty(
   return property;
 }
 
-function entitled(org: OrganisationRecord) {
+export function entitled(org: OrganisationRecord) {
   return (org.paidUntil || "") > now() || org.trialUntil > now();
 }
 
@@ -1285,18 +1286,9 @@ export async function command(
               409,
             );
           unitId = unit.id;
-          username =
-            property!.type === "student_accommodation"
-              ? text(input.studentNumber, "student number", 80)
-              : "SP-" +
-                (unit.label.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16) ||
-                  "UNIT") +
-                "-" +
-                newToken().slice(0, 8).toUpperCase();
-          if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{1,79}$/.test(username))
-            throw new AppError(
-              "Student numbers must be 2-80 letters, digits, dots, hyphens or underscores. Leading zeroes are preserved.",
-            );
+          // One definition of the credential format, shared with the bulk
+          // import: two copies is how the two quietly drift apart.
+          username = tenantUsername(property!, unit, input.studentNumber);
           const key = username.toLowerCase();
           const taken = await t.first<MembershipRecord>("memberships", {
             where: [
@@ -1331,21 +1323,13 @@ export async function command(
             409,
           );
 
-        const token = newToken();
-        const id = randomUUID();
-        t.create("invitations", id, {
+        const { id, token } = createInvitation(t, {
           orgId,
           email: invitee,
           role,
           propertyId,
           unitId,
-          hash: hashToken(token),
-          expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
-          acceptedAt: null,
           username,
-          usernameKey: username ? username.toLowerCase() : null,
-          emailStatus: "not_sent",
-          emailSentAt: null,
         });
         result = { token, invitationId: id, username };
         subject = id;

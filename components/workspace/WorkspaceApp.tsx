@@ -40,6 +40,7 @@ import PassScanner from "./PassScanner";
 import DocumentsPanel from "./DocumentsPanel";
 import RequestsPanel from "./RequestsPanel";
 import AnnouncementsPanel from "./AnnouncementsPanel";
+import ImportPanel from "./ImportPanel";
 import CompanyIdentity, { logoUrl } from "./CompanyIdentity";
 import Brand from "@/components/ui/Brand";
 import type {
@@ -1578,6 +1579,22 @@ export default function WorkspaceApp({
           )}
           {view === "people" && (
             <>
+              {/*
+                Above the register rather than below it: a manager opens People
+                on the day they are setting the estate up, and enrolling a
+                hundred residents one dialog at a time is the moment they give
+                up on the product.
+              */}
+              <ImportPanel
+                state={state}
+                orgId={state.membership.orgId}
+                demo={Boolean(demo)}
+                onImported={(next, message) => {
+                  setState(next);
+                  setError("");
+                  setNotice(message);
+                }}
+              />
               <section className="sp-panel">
                 <h2>
                   Community members{" "}
