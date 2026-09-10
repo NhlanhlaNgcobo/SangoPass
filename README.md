@@ -6,10 +6,10 @@ A South African residential and student-accommodation SaaS for properties, peopl
 
 Use Node.js 24. On Windows PowerShell use npm.cmd if npm.ps1 is blocked.
 
-~~~sh
+```sh
 npm ci
 npm run dev
-~~~
+```
 
 Open http://localhost:3000 and choose **Start your free trial**. Create your organisation, add a property and units, then invite residents or security. No cloud project is needed: records are saved to data/sangopass.sqlite (ignored by Git). Never commit customer databases or credentials.
 
@@ -41,11 +41,11 @@ The number is normalised (spaces and hyphens removed, upper-cased) and stored wh
 
 The resident chooses one of three visit types:
 
-| Type | Window | Counts against |
-| --- | --- | --- |
-| Day visit | Arrival and departure on one date | active guest passes |
-| Sleepover | One night; departure falls on the next date | active passes and the monthly night budget |
-| Extended sleepover | Two or more consecutive nights | active passes and the monthly night budget |
+| Type               | Window                                      | Counts against                             |
+| ------------------ | ------------------------------------------- | ------------------------------------------ |
+| Day visit          | Arrival and departure on one date           | active guest passes                        |
+| Sleepover          | One night; departure falls on the next date | active passes and the monthly night budget |
+| Extended sleepover | Two or more consecutive nights              | active passes and the monthly night budget |
 
 A sleepover's check-in window runs from the arrival time on the first date to the departure time on the last, so a guest can be admitted on any night of the stay.
 
@@ -148,12 +148,12 @@ demo with no configuration. Delete it before deploying for real customers;
 
 Storage and credentials sit behind one interface, selected by `SANGOPASS_BACKEND`.
 
-| | `sqlite` (default) | `firebase` |
-| --- | --- | --- |
-| Data | Node 24 built-in SQLite, one file | Cloud Firestore |
-| Credentials | salted scrypt on the user record | Firebase Authentication |
-| Deployment | one server with a persistent disk | any host, including serverless |
-| Horizontal scaling | no | yes |
+|                    | `sqlite` (default)                | `firebase`                     |
+| ------------------ | --------------------------------- | ------------------------------ |
+| Data               | Node 24 built-in SQLite, one file | Cloud Firestore                |
+| Credentials        | salted scrypt on the user record  | Firebase Authentication        |
+| Deployment         | one server with a persistent disk | any host, including serverless |
+| Horizontal scaling | no                                | yes                            |
 
 Nothing above `lib/server/store/` and `lib/server/identity/` knows which is
 active, and the application, API and UI are identical on both. With no setting,
@@ -202,12 +202,12 @@ Not gated on billing. The trial gate exists to stop an unpaid organisation growi
 
 **Every published price includes 15% VAT.** Registration is compulsory above R1m of turnover in twelve months, which this business reaches at roughly seventy paying organisations, so the VAT inside the price was never the seller's to keep. What a customer sees is what they pay.
 
-| Tier | Price | Units | Managers | Gate-code texts | For |
-| --- | --- | --- | --- | --- | --- |
-| Starter | R699/mo | 25 | 1 | 75/mo | One block, one person running it |
-| Growth | R1,499/mo | 150 | 5 | 450/mo | An agent with several buildings, or an estate with a team |
-| Premium | R2,899/mo | 300 | 10 | 900/mo | A larger estate or a full agency |
-| Portfolio | Quoted | Custom | Custom | Custom | Above 300 units, or needing its own terms and an SLA |
+| Tier      | Price     | Units  | Managers | Gate-code texts | For                                                       |
+| --------- | --------- | ------ | -------- | --------------- | --------------------------------------------------------- |
+| Starter   | R699/mo   | 25     | 1        | 75/mo           | One block, one person running it                          |
+| Growth    | R1,499/mo | 150    | 5        | 450/mo          | An agent with several buildings, or an estate with a team |
+| Premium   | R2,899/mo | 300    | 10       | 900/mo          | A larger estate or a full agency                          |
+| Portfolio | Quoted    | Custom | Custom   | Custom          | Above 300 units, or needing its own terms and an SLA      |
 
 The rules that hold on every tier:
 
@@ -237,7 +237,7 @@ The operator console is a CLI. It runs against whichever backend the
 environment selects, so with Firebase credentials it works from an operator
 workstation rather than on the application host.
 
-~~~sh
+```sh
 npm run admin -- tenants                       # every organisation and its state
 npm run admin -- export <orgId> dump.json      # full tenant export
 npm run admin -- extend <orgId> 30             # move the trial or paid horizon
@@ -245,15 +245,15 @@ npm run admin -- suspend <orgId> --confirm     # end access and all sessions
 npm run admin -- delete <orgId> --confirm      # erase a tenant (export first)
 npm run admin -- invoices <orgId>
 npm run admin -- invoice-paid <id> <ref> --confirm
-~~~
+```
 
 Managers can export their own organisation at `GET /api/tenancy/export?org=<id>`. Deletion erases every record scoped to the organisation, releases its uniqueness keys, and removes any account that belonged to no other organisation, including its credential in the identity backend.
 
 Schedule maintenance daily. It sweeps elapsed sessions, reset tokens and rate-limit windows, prunes the audit trail, and sends renewal reminders:
 
-~~~sh
+```sh
 npm run maintenance
-~~~
+```
 
 ## Deployment
 
@@ -261,9 +261,9 @@ npm run maintenance
 
 Run this before every deploy. It reads the environment the way the server will, prints no secrets, and exits non-zero if anything is unsafe or missing:
 
-~~~sh
+```sh
 npm run preflight
-~~~
+```
 
 `GET /api/health` is a readiness probe: it confirms the storage backend answers and reveals nothing else.
 
@@ -271,16 +271,16 @@ The server refuses to start on a configuration that is silently unsafe: a produc
 
 On the SQLite backend, run **one Node.js application instance with a persistent disk**. Do not put the database on ephemeral storage or run independent replicas with separate files.
 
-~~~sh
+```sh
 npm run build
 npm start
-~~~
+```
 
 For Docker, copy .env.example to .env, set APP_URL to your public HTTPS origin, then run:
 
-~~~sh
+```sh
 docker compose up --build -d
-~~~
+```
 
 The provided image runs as the node user. Compose binds port 3000 on loopback and persists the database in the sangopass-data volume. Put an HTTPS reverse proxy in front of it, preserve the public Host header and `X-Forwarded-Proto`, and proxy to port 3000. APP_URL is used for origin checks and absolute payment/recovery links. Docker must have network access at build time to obtain the bundled Google fonts.
 
@@ -290,13 +290,13 @@ Back up SQLite with `npm run backup` on a host installation. This uses SQLite's 
 
 ## Verification
 
-~~~sh
+```sh
 npm run lint
 npm run typecheck
 npm test
 npm run build
 npm run test:http
-~~~
+```
 
 The automated suite covers real tenant isolation on the live backend, role denial, invitation replay prevention, SAST visit windows, password reset/session revocation, signed and idempotent payment callbacks with mocked PayFast confirmation, audit-trail scoping, tenant export and erasure, per-tenant rate-limit scoping, the store contract shared by both backends (uniqueness reservations, read-before-write transactions, rollback, query translation), refusal to boot on unsafe deployments, every schema migration from v1 through v4, and the guest-visit rules: SA ID checksum validation, passport and student-number acceptance per property type, identity masking, residents-only booking, day/sleepover/extended windows, each of the three manager-set limits including the release of nights and slots on cancellation, the pass reaching both the resident and the visitor, the gate code (its alphabet, the mistyped O and I a guard actually produces, uniqueness, and that it is never the pass reference), South African phone numbers normalised to E.164, the SMS gateway being called correctly and every unsent outcome reported rather than thrown, check-in being refused to a resident and accepted from reception, password re-authentication on every guest request, report urgency ordering and manager re-triage, and the contacts directory including its organisation scoping, and the books: the totals in cents, rent receipts written and withdrawn by the register, manager-only access, one organisation never seeing another, refusal of a future month or a cost filed as rent, vacancy reported apart from arrears and a vacated unit not carrying its rent flag to the next tenant, editing and archiving (a repriced unit leaving past receipts alone, a rename reaching an unused pass, name reservations released and re-held, an occupied unit or a tenanted property refused, archived units freeing a plan slot and leaving vacancy, and restoration bringing a building and its units back), and a spreadsheet that cannot execute a formula while its negative amounts still sum. Plus the original demo's QR encode/decode and workflows. The HTTP smoke test starts an isolated production server, exercises account creation, invitations, a resident-only guest request with identity capture, the visitor-facing pass page and its masking, a resident signing their own guest in and out, the health probe, cross-tenant/CSRF denial and SSR, then restarts the server to verify database and session persistence. It uses generated test accounts and a temporary database, never the application database.
 

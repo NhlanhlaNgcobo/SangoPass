@@ -175,11 +175,7 @@ export async function commandAndNotify(
     // It is attempted whether or not email is configured, and its outcome is
     // reported separately, because the resident's next action differs: an
     // unsent code is one they have to read out themselves.
-    const smsStatus = await sendSms(
-      visit.phone,
-      guestPassSms(visit),
-      send,
-    );
+    const smsStatus = await sendSms(visit.phone, guestPassSms(visit), send);
 
     if (!emailConfigured())
       return {

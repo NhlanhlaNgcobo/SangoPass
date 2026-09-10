@@ -116,7 +116,10 @@ export async function membershipFor(
   orgId: string,
 ) {
   if (!orgId) return undefined;
-  return reader.get<MembershipRecord>("memberships", membershipId(userId, orgId));
+  return reader.get<MembershipRecord>(
+    "memberships",
+    membershipId(userId, orgId),
+  );
 }
 
 export async function access(
@@ -269,141 +272,141 @@ export async function workspace(
     documents,
     requests,
   ] = await Promise.all([
-      isManager || m.propertyId
-        ? database.find<PropertyRecord>("properties", {
-            ...scopedProperties,
-            orderBy: [{ field: "name" }],
-          })
-        : Promise.resolve([]),
-      m.role === "security"
-        ? Promise.resolve([])
-        : m.role === "tenant"
-          ? m.unitId
-            ? database.find<UnitRecord>("units", {
-                where: [["id", "==", m.unitId]],
-              })
-            : Promise.resolve([])
-          : isManager
-            ? database.find<UnitRecord>("units", {
-                where: [["orgId", "==", m.orgId]],
-                orderBy: [{ field: "label" }],
-              })
-            : database.find<UnitRecord>("units", {
-                where: [["propertyId", "==", m.propertyId]],
-                orderBy: [{ field: "label" }],
-              }),
-      isManager
+    isManager || m.propertyId
+      ? database.find<PropertyRecord>("properties", {
+          ...scopedProperties,
+          orderBy: [{ field: "name" }],
+        })
+      : Promise.resolve([]),
+    m.role === "security"
+      ? Promise.resolve([])
+      : m.role === "tenant"
+        ? m.unitId
+          ? database.find<UnitRecord>("units", {
+              where: [["id", "==", m.unitId]],
+            })
+          : Promise.resolve([])
+        : isManager
+          ? database.find<UnitRecord>("units", {
+              where: [["orgId", "==", m.orgId]],
+              orderBy: [{ field: "label" }],
+            })
+          : database.find<UnitRecord>("units", {
+              where: [["propertyId", "==", m.propertyId]],
+              orderBy: [{ field: "label" }],
+            }),
+    isManager
+      ? database.find<MembershipRecord>("memberships", {
+          where: [["orgId", "==", m.orgId]],
+        })
+      : m.role === "reception"
         ? database.find<MembershipRecord>("memberships", {
-            where: [["orgId", "==", m.orgId]],
-          })
-        : m.role === "reception"
-          ? database.find<MembershipRecord>("memberships", {
-              where: [
-                ["orgId", "==", m.orgId],
-                ["propertyId", "==", m.propertyId],
-              ],
-            })
-          : Promise.resolve([]),
-      database.find<VisitorRecord>("visitors", {
-        where: visitorScope as never,
-        orderBy: [
-          { field: "visitDate", direction: "desc" },
-          { field: "arrival", direction: "desc" },
-        ],
-        limit: LIST_LIMIT,
-      }),
-      // Worked in urgency order, newest first within a level. urgencyRank is
-      // stored so one ORDER BY does this on both backends.
-      database.find<ReportRecord>("reports", {
-        where: reportScope as never,
-        orderBy: [
-          { field: "urgencyRank" },
-          { field: "createdAt", direction: "desc" },
-        ],
-        limit: LIST_LIMIT,
-      }),
-      // What the organisation pays SangoPass. The subscription is the account
-      // holder's business, so reception never sees it.
-      isManager
-        ? database.find<InvoiceRecord>("invoices", {
-            where: [["orgId", "==", m.orgId]],
-            orderBy: [{ field: "createdAt", direction: "desc" }],
-            limit: 100,
-          })
-        : Promise.resolve([]),
-      isOffice
-        ? database.find<InvitationRecord>("invitations", {
             where: [
-              ...officeScope,
-              ["acceptedAt", "==", null],
-              ["expiresAt", ">", now()],
-            ] as never,
-          })
-        : Promise.resolve([]),
-      // The trades directory is one list for the whole organisation: the
-      // plumber does not belong to a building.
-      isOffice
-        ? database.find<ContractorRecord>("contractors", {
-            where: [["orgId", "==", m.orgId]],
-            orderBy: [{ field: "name" }],
-          })
-        : Promise.resolve([]),
-      // The organisation's own money. Managers only: a resident has no
-      // business seeing what the building costs to run, and neither has a
-      // guard. Newest month first, so the screen opens on the current one.
-      isManager
-        ? database.find<LedgerRecord>("ledger", {
-            where: [["orgId", "==", m.orgId]],
-            orderBy: [
-              { field: "period", direction: "desc" },
-              { field: "createdAt", direction: "desc" },
+              ["orgId", "==", m.orgId],
+              ["propertyId", "==", m.propertyId],
             ],
-            limit: LEDGER_LIMIT,
           })
         : Promise.resolve([]),
-      // Occupancy history, newest stay first. The office needs the whole
-      // register to answer "who was in A1 last year"; a resident needs only
-      // their own stays, which is what the filing cabinet holds about them.
-      isOffice
+    database.find<VisitorRecord>("visitors", {
+      where: visitorScope as never,
+      orderBy: [
+        { field: "visitDate", direction: "desc" },
+        { field: "arrival", direction: "desc" },
+      ],
+      limit: LIST_LIMIT,
+    }),
+    // Worked in urgency order, newest first within a level. urgencyRank is
+    // stored so one ORDER BY does this on both backends.
+    database.find<ReportRecord>("reports", {
+      where: reportScope as never,
+      orderBy: [
+        { field: "urgencyRank" },
+        { field: "createdAt", direction: "desc" },
+      ],
+      limit: LIST_LIMIT,
+    }),
+    // What the organisation pays SangoPass. The subscription is the account
+    // holder's business, so reception never sees it.
+    isManager
+      ? database.find<InvoiceRecord>("invoices", {
+          where: [["orgId", "==", m.orgId]],
+          orderBy: [{ field: "createdAt", direction: "desc" }],
+          limit: 100,
+        })
+      : Promise.resolve([]),
+    isOffice
+      ? database.find<InvitationRecord>("invitations", {
+          where: [
+            ...officeScope,
+            ["acceptedAt", "==", null],
+            ["expiresAt", ">", now()],
+          ] as never,
+        })
+      : Promise.resolve([]),
+    // The trades directory is one list for the whole organisation: the
+    // plumber does not belong to a building.
+    isOffice
+      ? database.find<ContractorRecord>("contractors", {
+          where: [["orgId", "==", m.orgId]],
+          orderBy: [{ field: "name" }],
+        })
+      : Promise.resolve([]),
+    // The organisation's own money. Managers only: a resident has no
+    // business seeing what the building costs to run, and neither has a
+    // guard. Newest month first, so the screen opens on the current one.
+    isManager
+      ? database.find<LedgerRecord>("ledger", {
+          where: [["orgId", "==", m.orgId]],
+          orderBy: [
+            { field: "period", direction: "desc" },
+            { field: "createdAt", direction: "desc" },
+          ],
+          limit: LEDGER_LIMIT,
+        })
+      : Promise.resolve([]),
+    // Occupancy history, newest stay first. The office needs the whole
+    // register to answer "who was in A1 last year"; a resident needs only
+    // their own stays, which is what the filing cabinet holds about them.
+    isOffice
+      ? database.find<TenancyRecord>("tenancies", {
+          where: officeScope as never,
+          orderBy: [{ field: "startedAt", direction: "desc" }],
+          limit: LIST_LIMIT,
+        })
+      : m.role === "tenant"
         ? database.find<TenancyRecord>("tenancies", {
-            where: officeScope as never,
+            where: [
+              ["orgId", "==", m.orgId],
+              ["residentId", "==", user.id],
+            ],
             orderBy: [{ field: "startedAt", direction: "desc" }],
-            limit: LIST_LIMIT,
           })
-        : m.role === "tenant"
-          ? database.find<TenancyRecord>("tenancies", {
-              where: [
-                ["orgId", "==", m.orgId],
-                ["residentId", "==", user.id],
-              ],
-              orderBy: [{ field: "startedAt", direction: "desc" }],
-            })
-          : Promise.resolve([]),
-      // The filing cabinet. A resident sees their own papers; security sees
-      // none, because nothing at the gate is answered by a lease.
-      isOffice
+        : Promise.resolve([]),
+    // The filing cabinet. A resident sees their own papers; security sees
+    // none, because nothing at the gate is answered by a lease.
+    isOffice
+      ? database.find<DocumentRecord>("documents", {
+          where: officeScope as never,
+          orderBy: [{ field: "uploadedAt", direction: "desc" }],
+          limit: LIST_LIMIT,
+        })
+      : m.role === "tenant"
         ? database.find<DocumentRecord>("documents", {
-            where: officeScope as never,
+            where: [
+              ["orgId", "==", m.orgId],
+              ["residentId", "==", user.id],
+            ],
             orderBy: [{ field: "uploadedAt", direction: "desc" }],
-            limit: LIST_LIMIT,
           })
-        : m.role === "tenant"
-          ? database.find<DocumentRecord>("documents", {
-              where: [
-                ["orgId", "==", m.orgId],
-                ["residentId", "==", user.id],
-              ],
-              orderBy: [{ field: "uploadedAt", direction: "desc" }],
-            })
-          : Promise.resolve([]),
-      m.role === "security"
-        ? Promise.resolve([])
-        : database.find<RequestRecord>("requests", {
-            where: requestScope as never,
-            orderBy: [{ field: "createdAt", direction: "desc" }],
-            limit: LIST_LIMIT,
-          }),
-    ]);
+        : Promise.resolve([]),
+    m.role === "security"
+      ? Promise.resolve([])
+      : database.find<RequestRecord>("requests", {
+          where: requestScope as never,
+          orderBy: [{ field: "createdAt", direction: "desc" }],
+          limit: LIST_LIMIT,
+        }),
+  ]);
 
   // What this resident has left this month, so the form can say so before they
   // fill it in rather than rejecting them after.
@@ -457,111 +460,99 @@ export async function workspace(
       // The stamp, never the file. Empty means no logo and the SangoPass mark.
       logoUpdatedAt: organisation.logoUpdatedAt || "",
     },
-    properties: properties.map(
-      (p): LiveProperty => ({
-        id: p.id,
-        orgId: p.orgId,
-        name: p.name,
-        address: p.address,
-        type: p.type,
-        loginCode: p.loginCode,
-        archivedAt: p.archivedAt ?? null,
-        ...limitsOf(p),
-      }),
-    ),
+    properties: properties.map((p): LiveProperty => ({
+      id: p.id,
+      orgId: p.orgId,
+      name: p.name,
+      address: p.address,
+      type: p.type,
+      loginCode: p.loginCode,
+      archivedAt: p.archivedAt ?? null,
+      ...limitsOf(p),
+    })),
     units: units
       .slice()
       .sort((a, b) => a.label.localeCompare(b.label))
-      .map(
-        (u): LiveUnit => ({
-          id: u.id,
-          propertyId: u.propertyId,
-          label: u.label,
-          rentCents: u.rentCents,
-          rentPaid: u.rentPaid,
-          rentPaidPeriod: u.rentPaidPeriod || "",
-          archivedAt: u.archivedAt ?? null,
-          archivedWithProperty: Boolean(u.archivedWithProperty),
-          frequency: u.frequency,
-          residentName: u.residentName,
-        }),
-      ),
+      .map((u): LiveUnit => ({
+        id: u.id,
+        propertyId: u.propertyId,
+        label: u.label,
+        rentCents: u.rentCents,
+        rentPaid: u.rentPaid,
+        rentPaidPeriod: u.rentPaidPeriod || "",
+        archivedAt: u.archivedAt ?? null,
+        archivedWithProperty: Boolean(u.archivedWithProperty),
+        frequency: u.frequency,
+        residentName: u.residentName,
+      })),
     members: members
       .slice()
       .sort((a, b) => a.memberName.localeCompare(b.memberName))
-      .map(
-        (member): LiveMember => ({
-          id: member.userId,
-          name: member.memberName,
-          email: member.userEmail,
-          role: member.role,
-          propertyId: member.propertyId,
-          unitId: member.unitId,
-          username: member.username,
-        }),
-      ),
-    visitors: visitors.map(
-      (v): LiveVisitor => ({
-        id: v.id,
-        propertyId: v.propertyId,
-        unitId: v.unitId ?? null,
-        hostId: v.hostId,
-        visitorName: v.visitorName,
-        phone: v.phone,
-        visitorEmail: v.visitorEmail ?? null,
-        idType: v.idType,
-        // Never leave a full identity number sitting in a client payload.
-        idNumber: v.idNumber ? maskIdNumber(v.idNumber) : "",
-        reference: v.reference,
-        token: v.token,
-        entryCode: v.entryCode || "",
-        visitType: v.visitType || "daily",
-        visitDate: v.visitDate,
-        endDate: v.endDate || v.visitDate,
-        arrival: v.arrival,
-        departure: v.departure,
-        nights: v.nights || 0,
-        status: v.status,
-        createdAt: v.createdAt,
-        checkedInAt: v.checkedInAt,
-        checkedOutAt: v.checkedOutAt,
-        propertyName: v.propertyName,
-        hostName: v.hostName,
-        unitLabel: v.unitLabel,
-      }),
-    ),
+      .map((member): LiveMember => ({
+        id: member.userId,
+        name: member.memberName,
+        email: member.userEmail,
+        role: member.role,
+        propertyId: member.propertyId,
+        unitId: member.unitId,
+        username: member.username,
+      })),
+    visitors: visitors.map((v): LiveVisitor => ({
+      id: v.id,
+      propertyId: v.propertyId,
+      unitId: v.unitId ?? null,
+      hostId: v.hostId,
+      visitorName: v.visitorName,
+      phone: v.phone,
+      visitorEmail: v.visitorEmail ?? null,
+      idType: v.idType,
+      // Never leave a full identity number sitting in a client payload.
+      idNumber: v.idNumber ? maskIdNumber(v.idNumber) : "",
+      reference: v.reference,
+      token: v.token,
+      entryCode: v.entryCode || "",
+      visitType: v.visitType || "daily",
+      visitDate: v.visitDate,
+      endDate: v.endDate || v.visitDate,
+      arrival: v.arrival,
+      departure: v.departure,
+      nights: v.nights || 0,
+      status: v.status,
+      createdAt: v.createdAt,
+      checkedInAt: v.checkedInAt,
+      checkedOutAt: v.checkedOutAt,
+      propertyName: v.propertyName,
+      hostName: v.hostName,
+      unitLabel: v.unitLabel,
+    })),
     allowance,
-    reports: reports.map(
-      (r): LiveReport => ({
-        id: r.id,
-        propertyId: r.propertyId,
-        authorId: r.authorId,
-        authorName: r.authorName,
-        category: r.category,
-        description: r.description,
-        urgency: (r.urgency || "normal") as LiveReport["urgency"],
-        status: r.status,
-        createdAt: r.createdAt,
-        unitLabel: r.unitLabel ?? null,
-      }),
-    ),
-    ledger: ledger.map(
-      (entry): LiveLedgerEntry => ({
-        id: entry.id,
-        period: entry.period,
-        kind: entry.kind,
-        category: entry.category as LiveLedgerEntry["category"],
-        nature: entry.nature,
-        amountCents: entry.amountCents,
-        description: entry.description,
-        propertyId: entry.propertyId ?? null,
-        propertyName: entry.propertyName || "",
-        unitId: entry.unitId ?? null,
-        unitLabel: entry.unitLabel ?? null,
-        recordedBy: entry.recordedBy || "",
-        createdAt: entry.createdAt,
-      }),
-    ),
+    reports: reports.map((r): LiveReport => ({
+      id: r.id,
+      propertyId: r.propertyId,
+      authorId: r.authorId,
+      authorName: r.authorName,
+      category: r.category,
+      description: r.description,
+      urgency: (r.urgency || "normal") as LiveReport["urgency"],
+      status: r.status,
+      createdAt: r.createdAt,
+      unitLabel: r.unitLabel ?? null,
+    })),
+    ledger: ledger.map((entry): LiveLedgerEntry => ({
+      id: entry.id,
+      period: entry.period,
+      kind: entry.kind,
+      category: entry.category as LiveLedgerEntry["category"],
+      nature: entry.nature,
+      amountCents: entry.amountCents,
+      description: entry.description,
+      propertyId: entry.propertyId ?? null,
+      propertyName: entry.propertyName || "",
+      unitId: entry.unitId ?? null,
+      unitLabel: entry.unitLabel ?? null,
+      recordedBy: entry.recordedBy || "",
+      createdAt: entry.createdAt,
+    })),
     contractors: contractors.map((c) => ({
       id: c.id,
       name: c.name,
@@ -572,72 +563,64 @@ export async function workspace(
       kind: c.kind,
       notes: c.notes,
     })),
-    tenancies: tenancies.map(
-      (s): LiveTenancy => ({
-        id: s.id,
-        propertyId: s.propertyId,
-        propertyName: s.propertyName,
-        unitId: s.unitId,
-        unitLabel: s.unitLabel,
-        residentId: s.residentId,
-        residentName: s.residentName,
-        residentEmail: s.residentEmail,
-        username: s.username,
-        startedAt: s.startedAt,
-        endedAt: s.endedAt,
-        endedReason: s.endedReason,
-        current: s.current === 1,
-      }),
-    ),
-    documents: documents.map(
-      (d): LiveDocument => ({
-        id: d.id,
-        propertyId: d.propertyId,
-        propertyName: d.propertyName,
-        unitId: d.unitId,
-        unitLabel: d.unitLabel,
-        tenancyId: d.tenancyId,
-        residentId: d.residentId,
-        residentName: d.residentName,
-        title: d.title,
-        kind: d.kind as LiveDocument["kind"],
-        filename: d.filename,
-        mime: d.mime,
-        bytes: d.bytes,
-        uploadedAt: d.uploadedAt,
-        uploadedByName: d.uploadedByName,
-        // storageKey is deliberately absent: where the file sits on disk is
-        // the server's business, and the id is all a download needs.
-      }),
-    ),
-    requests: requests.map(
-      (r): LiveRequest => ({
-        id: r.id,
-        propertyId: r.propertyId,
-        propertyName: r.propertyName,
-        unitId: r.unitId,
-        unitLabel: r.unitLabel,
-        residentId: r.residentId,
-        residentName: r.residentName,
-        kind: r.kind as LiveRequest["kind"],
-        effectiveDate: r.effectiveDate,
-        details: r.details,
-        status: r.status as LiveRequest["status"],
-        createdAt: r.createdAt,
-        decidedAt: r.decidedAt,
-        decidedByName: r.decidedByName,
-        decisionNote: r.decisionNote,
-      }),
-    ),
-    invoices: invoices.map(
-      (i): LiveInvoice => ({
-        id: i.id,
-        plan: i.plan,
-        amountCents: i.amountCents,
-        status: i.status,
-        createdAt: i.createdAt,
-      }),
-    ),
+    tenancies: tenancies.map((s): LiveTenancy => ({
+      id: s.id,
+      propertyId: s.propertyId,
+      propertyName: s.propertyName,
+      unitId: s.unitId,
+      unitLabel: s.unitLabel,
+      residentId: s.residentId,
+      residentName: s.residentName,
+      residentEmail: s.residentEmail,
+      username: s.username,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt,
+      endedReason: s.endedReason,
+      current: s.current === 1,
+    })),
+    documents: documents.map((d): LiveDocument => ({
+      id: d.id,
+      propertyId: d.propertyId,
+      propertyName: d.propertyName,
+      unitId: d.unitId,
+      unitLabel: d.unitLabel,
+      tenancyId: d.tenancyId,
+      residentId: d.residentId,
+      residentName: d.residentName,
+      title: d.title,
+      kind: d.kind as LiveDocument["kind"],
+      filename: d.filename,
+      mime: d.mime,
+      bytes: d.bytes,
+      uploadedAt: d.uploadedAt,
+      uploadedByName: d.uploadedByName,
+      // storageKey is deliberately absent: where the file sits on disk is
+      // the server's business, and the id is all a download needs.
+    })),
+    requests: requests.map((r): LiveRequest => ({
+      id: r.id,
+      propertyId: r.propertyId,
+      propertyName: r.propertyName,
+      unitId: r.unitId,
+      unitLabel: r.unitLabel,
+      residentId: r.residentId,
+      residentName: r.residentName,
+      kind: r.kind as LiveRequest["kind"],
+      effectiveDate: r.effectiveDate,
+      details: r.details,
+      status: r.status as LiveRequest["status"],
+      createdAt: r.createdAt,
+      decidedAt: r.decidedAt,
+      decidedByName: r.decidedByName,
+      decisionNote: r.decisionNote,
+    })),
+    invoices: invoices.map((i): LiveInvoice => ({
+      id: i.id,
+      plan: i.plan,
+      amountCents: i.amountCents,
+      status: i.status,
+      createdAt: i.createdAt,
+    })),
     invitations: invitations.map((i) => ({
       id: i.id,
       email: i.email,
@@ -829,7 +812,8 @@ export async function command(
           t.release(`unit:${unit.propertyId}:${unit.label.toLowerCase()}`);
         }
         t.update("units", unit.id, { label, rentCents });
-        for (const visit of live) t.update("visitors", visit.id, { unitLabel: label });
+        for (const visit of live)
+          t.update("visitors", visit.id, { unitLabel: label });
         result = { id: unit.id, label, rentCents };
         subject = unit.id;
         break;
@@ -1033,7 +1017,10 @@ export async function command(
        */
       case "rent": {
         manager(m);
-        const unit = await t.get<UnitRecord>("units", text(input.unitId, "unit"));
+        const unit = await t.get<UnitRecord>(
+          "units",
+          text(input.unitId, "unit"),
+        );
         if (!unit || unit.orgId !== orgId)
           throw new AppError("Unit not found.", 404);
         const property = await requireProperty(t, m, unit.propertyId);
@@ -1315,7 +1302,11 @@ export async function command(
           "invitations",
           text(input.id, "invitation"),
         );
-        if (invitation && invitation.orgId === orgId && !invitation.acceptedAt) {
+        if (
+          invitation &&
+          invitation.orgId === orgId &&
+          !invitation.acceptedAt
+        ) {
           t.remove("invitations", invitation.id);
           subject = invitation.id;
         }
@@ -1527,7 +1518,8 @@ export async function command(
         if (
           status === "checked_in" &&
           (Date.now() < startsAt(visit) ||
-            Date.now() >= endsAt({ ...visit, endDate: visit.endDate || visit.visitDate }))
+            Date.now() >=
+              endsAt({ ...visit, endDate: visit.endDate || visit.visitDate }))
         )
           throw new AppError("This pass is outside its arrival window.", 409);
         const stamp = now();
@@ -1847,7 +1839,8 @@ export async function join(
     "organisations",
     invitation.orgId,
   );
-  if (!organisation) throw new AppError("Invitation is no longer available.", 409);
+  if (!organisation)
+    throw new AppError("Invitation is no longer available.", 409);
 
   try {
     await store().tx(async (t) => {
@@ -1882,8 +1875,13 @@ export async function join(
           createdAt: now(),
         });
       }
-      if (invitation.unitId) t.reserve(`unitResident:${invitation.unitId}`, userId);
-      if (invitation.role === "tenant" && invitation.propertyId && invitation.usernameKey)
+      if (invitation.unitId)
+        t.reserve(`unitResident:${invitation.unitId}`, userId);
+      if (
+        invitation.role === "tenant" &&
+        invitation.propertyId &&
+        invitation.usernameKey
+      )
         t.reserve(
           `username:${invitation.propertyId}:${invitation.usernameKey}`,
           userId,

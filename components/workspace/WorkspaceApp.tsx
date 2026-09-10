@@ -1225,115 +1225,115 @@ export default function WorkspaceApp({
                 <div className="sp-property-grid">
                   {(showArchived ? state.properties : openProperties).map(
                     (p, i) => (
-                    <article
-                      className={`sp-property-card ${p.archivedAt ? "is-archived" : ""}`}
-                      key={p.id}
-                    >
-                      <div className="sp-property-image">
-                        <Image
-                          src={
-                            p.type === "student_accommodation"
-                              ? "/brand/residence.webp"
-                              : "/brand/courtyard.webp"
-                          }
-                          alt="Illustrative South African residential architecture"
-                          fill
-                          sizes="(max-width: 700px) 100vw, 40vw"
-                        />
-                        <span>PROPERTY {String(i + 1).padStart(2, "0")}</span>
-                      </div>
-                      <div>
-                        <span className="sp-eyebrow">{label(p.type)}</span>
-                        <h2>{p.name}</h2>
-                        <p>{p.address}</p>
-                        <small className="sp-block">
-                          {
-                            state.units.filter((u) => u.propertyId === p.id)
-                              .length
-                          }{" "}
-                          units ·{" "}
-                          {
-                            state.units.filter(
-                              (u) => u.propertyId === p.id && u.residentName,
-                            ).length
-                          }{" "}
-                          occupied
-                        </small>
-                        <small className="sp-block">
-                          Guests: {p.sleepoverNightsPerMonth} sleepover nights
-                          per unit each month · up to {p.maxConsecutiveNights}{" "}
-                          consecutive · {p.maxActiveGuests} active passes
-                        </small>
-                        <div className="sp-row">
-                          {p.archivedAt ? (
-                            <>
-                              <span className="sp-badge is-warning">
-                                Archived
-                              </span>
-                              <button
-                                disabled={busy}
-                                className="sp-secondary"
-                                onClick={() =>
-                                  void act({
-                                    action: "propertyArchive",
-                                    id: p.id,
-                                    archived: false,
-                                  })
-                                }
-                              >
-                                <RotateCcw size={15} />
-                                Restore
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                className="sp-secondary"
-                                onClick={() => open("unit", p.id)}
-                              >
-                                <Plus size={15} />
-                                Add unit
-                              </button>
-                              <button
-                                className="sp-secondary"
-                                onClick={() => open("propertyUpdate", p.id)}
-                              >
-                                <Pencil size={15} />
-                                Edit
-                              </button>
-                              <button
-                                className="sp-secondary"
-                                onClick={() => open("propertyLimits", p.id)}
-                              >
-                                <Ticket size={15} />
-                                Visitor limits
-                              </button>
-                              {/* Archiving, never deleting: this building is
-                                  named in last month's books, in the visitor
-                                  register and in the audit trail. */}
-                              <button
-                                disabled={busy}
-                                className="sp-text-button"
-                                onClick={() => {
-                                  if (
-                                    window.confirm(
-                                      `Archive ${p.name}? It stops appearing when you add units, enrol residents or record money, and its empty units are archived with it. Everything already recorded stays exactly as it is, and you can restore it.`,
-                                    )
-                                  )
+                      <article
+                        className={`sp-property-card ${p.archivedAt ? "is-archived" : ""}`}
+                        key={p.id}
+                      >
+                        <div className="sp-property-image">
+                          <Image
+                            src={
+                              p.type === "student_accommodation"
+                                ? "/brand/residence.webp"
+                                : "/brand/courtyard.webp"
+                            }
+                            alt="Illustrative South African residential architecture"
+                            fill
+                            sizes="(max-width: 700px) 100vw, 40vw"
+                          />
+                          <span>PROPERTY {String(i + 1).padStart(2, "0")}</span>
+                        </div>
+                        <div>
+                          <span className="sp-eyebrow">{label(p.type)}</span>
+                          <h2>{p.name}</h2>
+                          <p>{p.address}</p>
+                          <small className="sp-block">
+                            {
+                              state.units.filter((u) => u.propertyId === p.id)
+                                .length
+                            }{" "}
+                            units ·{" "}
+                            {
+                              state.units.filter(
+                                (u) => u.propertyId === p.id && u.residentName,
+                              ).length
+                            }{" "}
+                            occupied
+                          </small>
+                          <small className="sp-block">
+                            Guests: {p.sleepoverNightsPerMonth} sleepover nights
+                            per unit each month · up to {p.maxConsecutiveNights}{" "}
+                            consecutive · {p.maxActiveGuests} active passes
+                          </small>
+                          <div className="sp-row">
+                            {p.archivedAt ? (
+                              <>
+                                <span className="sp-badge is-warning">
+                                  Archived
+                                </span>
+                                <button
+                                  disabled={busy}
+                                  className="sp-secondary"
+                                  onClick={() =>
                                     void act({
                                       action: "propertyArchive",
                                       id: p.id,
-                                      archived: true,
-                                    });
-                                }}
-                              >
-                                Archive
-                              </button>
-                            </>
-                          )}
+                                      archived: false,
+                                    })
+                                  }
+                                >
+                                  <RotateCcw size={15} />
+                                  Restore
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  className="sp-secondary"
+                                  onClick={() => open("unit", p.id)}
+                                >
+                                  <Plus size={15} />
+                                  Add unit
+                                </button>
+                                <button
+                                  className="sp-secondary"
+                                  onClick={() => open("propertyUpdate", p.id)}
+                                >
+                                  <Pencil size={15} />
+                                  Edit
+                                </button>
+                                <button
+                                  className="sp-secondary"
+                                  onClick={() => open("propertyLimits", p.id)}
+                                >
+                                  <Ticket size={15} />
+                                  Visitor limits
+                                </button>
+                                {/* Archiving, never deleting: this building is
+                                  named in last month's books, in the visitor
+                                  register and in the audit trail. */}
+                                <button
+                                  disabled={busy}
+                                  className="sp-text-button"
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        `Archive ${p.name}? It stops appearing when you add units, enrol residents or record money, and its empty units are archived with it. Everything already recorded stays exactly as it is, and you can restore it.`,
+                                      )
+                                    )
+                                      void act({
+                                        action: "propertyArchive",
+                                        id: p.id,
+                                        archived: true,
+                                      });
+                                  }}
+                                >
+                                  Archive
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </article>
+                      </article>
                     ),
                   )}
                 </div>
@@ -1353,8 +1353,8 @@ export default function WorkspaceApp({
                           onChange={(e) => setShowArchived(e.target.checked)}
                         />
                         <span>
-                          Show archived (
-                          {state.units.length - openUnits.length})
+                          Show archived ({state.units.length - openUnits.length}
+                          )
                         </span>
                       </label>
                     )}
@@ -2005,9 +2005,10 @@ export default function WorkspaceApp({
                     {
                       name: "Units in use",
                       value: `${openUnits.length} of ${planNow.units}`,
-                      hint: state.units.length > openUnits.length
-                        ? `${state.units.length - openUnits.length} archived, not counted`
-                        : "Archived units do not count",
+                      hint:
+                        state.units.length > openUnits.length
+                          ? `${state.units.length - openUnits.length} archived, not counted`
+                          : "Archived units do not count",
                       warn: openUnits.length > planNow.units,
                     },
                     {
@@ -2495,10 +2496,7 @@ export default function WorkspaceApp({
                                 )?.name
                               }
                             </td>
-                            <td
-                              data-label="Rent not being earned"
-                              role="cell"
-                            >
+                            <td data-label="Rent not being earned" role="cell">
                               {rands(u.rentCents)}
                             </td>
                           </tr>
@@ -2913,9 +2911,7 @@ export default function WorkspaceApp({
                         {student && (
                           <option value="student_number">Student number</option>
                         )}
-                        <option value="sa_id">
-                          South African ID number
-                        </option>
+                        <option value="sa_id">South African ID number</option>
                         <option value="passport">Passport number</option>
                       </select>
                     </label>
@@ -2991,7 +2987,9 @@ export default function WorkspaceApp({
                         type="time"
                         defaultValue={sleepover ? "09:00" : "18:00"}
                       >
-                        {sleepover ? "Departure, final day" : "Departure (SAST)"}
+                        {sleepover
+                          ? "Departure, final day"
+                          : "Departure (SAST)"}
                       </Field>
                     </div>
 

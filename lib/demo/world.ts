@@ -1,4 +1,9 @@
-import { limitsOf, monthBounds, nightsUsed, sastToday } from "@/lib/server/visits";
+import {
+  limitsOf,
+  monthBounds,
+  nightsUsed,
+  sastToday,
+} from "@/lib/server/visits";
 import { rank } from "@/lib/shared/maintenance";
 import { DEFAULT_THEME } from "@/lib/shared/theme";
 import { currentPeriod, previousPeriod } from "@/lib/shared/money";
@@ -70,8 +75,7 @@ export const PERSONAS: DemoPersona[] = [
     email: "nomsa@ubuntuliving.demo",
     role: "manager",
     title: "Property manager",
-    blurb:
-      "Two properties, the maintenance queue, visitor limits and billing.",
+    blurb: "Two properties, the maintenance queue, visitor limits and billing.",
     propertyId: null,
     unitId: null,
     username: null,
@@ -430,7 +434,8 @@ export function seedWorld(): DemoWorld {
       authorId: "demo-resident",
       authorName: "Aisha Petersen",
       category: "Maintenance",
-      description: "Passage light outside A-204 has been flickering for a week.",
+      description:
+        "Passage light outside A-204 has been flickering for a week.",
       urgency: "low",
       status: "resolved",
       createdAt: stamp(-9),
@@ -515,15 +520,89 @@ export function seedWorld(): DemoWorld {
   });
 
   const tenancies: LiveTenancy[] = [
-    stay("demo-stay-a204", "demo-unit-a204", "A-204", COURT, "demo-resident", "Aisha Petersen", "aisha@ubuntuliving.demo", "SP-A204-7F2C91B4", "2025-02-01T08:00:00.000Z"),
-    stay("demo-stay-a101", "demo-unit-a101", "A-101", COURT, "demo-thabo", "Thabo Molefe", "thabo@ubuntuliving.demo", "SP-A101-3B7E20DD", "2024-11-01T08:00:00.000Z"),
-    stay("demo-stay-s01", "demo-unit-s01", "S-01", CAMPUS, "demo-lerato", "Lerato Mokoena", "lerato@ubuntuliving.demo", "20241187", "2025-01-15T08:00:00.000Z"),
-    stay("demo-stay-s02", "demo-unit-s02", "S-02", CAMPUS, "demo-yusuf", "Yusuf Adams", "yusuf@ubuntuliving.demo", "20239954", "2025-01-15T08:00:00.000Z"),
-    stay("demo-stay-b102", "demo-unit-b102", "B-102", COURT, "demo-riaan", "Riaan van Wyk", "riaan@ubuntuliving.demo", "SP-B102-9C4A11FE", "2024-06-01T08:00:00.000Z"),
+    stay(
+      "demo-stay-a204",
+      "demo-unit-a204",
+      "A-204",
+      COURT,
+      "demo-resident",
+      "Aisha Petersen",
+      "aisha@ubuntuliving.demo",
+      "SP-A204-7F2C91B4",
+      "2025-02-01T08:00:00.000Z",
+    ),
+    stay(
+      "demo-stay-a101",
+      "demo-unit-a101",
+      "A-101",
+      COURT,
+      "demo-thabo",
+      "Thabo Molefe",
+      "thabo@ubuntuliving.demo",
+      "SP-A101-3B7E20DD",
+      "2024-11-01T08:00:00.000Z",
+    ),
+    stay(
+      "demo-stay-s01",
+      "demo-unit-s01",
+      "S-01",
+      CAMPUS,
+      "demo-lerato",
+      "Lerato Mokoena",
+      "lerato@ubuntuliving.demo",
+      "20241187",
+      "2025-01-15T08:00:00.000Z",
+    ),
+    stay(
+      "demo-stay-s02",
+      "demo-unit-s02",
+      "S-02",
+      CAMPUS,
+      "demo-yusuf",
+      "Yusuf Adams",
+      "yusuf@ubuntuliving.demo",
+      "20239954",
+      "2025-01-15T08:00:00.000Z",
+    ),
+    stay(
+      "demo-stay-b102",
+      "demo-unit-b102",
+      "B-102",
+      COURT,
+      "demo-riaan",
+      "Riaan van Wyk",
+      "riaan@ubuntuliving.demo",
+      "SP-B102-9C4A11FE",
+      "2024-06-01T08:00:00.000Z",
+    ),
     // The ones that ended. This is the "previous occupants" the register would
     // otherwise have forgotten the day their account was deleted.
-    stay("demo-stay-a101-old", "demo-unit-a101", "A-101", COURT, "demo-past-naledi", "Naledi Khoza", "naledi@ubuntuliving.demo", "SP-A101-1A55C7B0", "2023-03-01T08:00:00.000Z", "2024-10-25T08:00:00.000Z", "moved_out"),
-    stay("demo-stay-a204-old", "demo-unit-a204", "A-204", COURT, "demo-past-daniel", "Daniel Sithole", "daniel@ubuntuliving.demo", "SP-A204-44E1B209", "2023-08-01T08:00:00.000Z", "2025-01-20T08:00:00.000Z", "moved_out"),
+    stay(
+      "demo-stay-a101-old",
+      "demo-unit-a101",
+      "A-101",
+      COURT,
+      "demo-past-naledi",
+      "Naledi Khoza",
+      "naledi@ubuntuliving.demo",
+      "SP-A101-1A55C7B0",
+      "2023-03-01T08:00:00.000Z",
+      "2024-10-25T08:00:00.000Z",
+      "moved_out",
+    ),
+    stay(
+      "demo-stay-a204-old",
+      "demo-unit-a204",
+      "A-204",
+      COURT,
+      "demo-past-daniel",
+      "Daniel Sithole",
+      "daniel@ubuntuliving.demo",
+      "SP-A204-44E1B209",
+      "2023-08-01T08:00:00.000Z",
+      "2025-01-20T08:00:00.000Z",
+      "moved_out",
+    ),
   ];
 
   // The filing cabinet. No bytes here - the demo runs entirely in the
@@ -559,14 +638,78 @@ export function seedWorld(): DemoWorld {
   };
 
   const documents: LiveDocument[] = [
-    paper("demo-doc-1", "demo-stay-a204", "Lease agreement — A-204", "lease", "lease-a204-petersen.pdf", 842_119, "2025-02-01T09:12:00.000Z"),
-    paper("demo-doc-2", "demo-stay-a204", "Entry inspection", "inspection", "inspection-a204-in.pdf", 431_880, "2025-02-01T10:04:00.000Z"),
-    paper("demo-doc-3", "demo-stay-a101", "Lease agreement — A-101", "lease", "lease-a101-molefe.pdf", 795_540, "2024-11-01T08:41:00.000Z"),
-    paper("demo-doc-4", "demo-stay-s01", "Lease agreement — S-01", "lease", "lease-s01-mokoena.pdf", 612_300, "2025-01-15T11:20:00.000Z"),
-    paper("demo-doc-5", "demo-stay-a101-old", "Lease agreement — A-101 (2023)", "lease", "lease-a101-khoza.pdf", 733_002, "2023-03-01T09:00:00.000Z"),
-    paper("demo-doc-6", "demo-stay-a101-old", "Exit inspection and deposit", "inspection", "exit-a101-khoza.pdf", 388_412, "2024-10-25T15:30:00.000Z"),
-    paper("demo-doc-7", "demo-stay-a204-old", "Notice to vacate", "notice", "notice-a204-sithole.pdf", 96_770, "2024-12-18T13:02:00.000Z"),
-    paper("demo-doc-8", "demo-stay-b102", "Lease agreement — B-102", "lease", "lease-b102-vanwyk.pdf", 701_244, "2024-06-01T08:15:00.000Z"),
+    paper(
+      "demo-doc-1",
+      "demo-stay-a204",
+      "Lease agreement — A-204",
+      "lease",
+      "lease-a204-petersen.pdf",
+      842_119,
+      "2025-02-01T09:12:00.000Z",
+    ),
+    paper(
+      "demo-doc-2",
+      "demo-stay-a204",
+      "Entry inspection",
+      "inspection",
+      "inspection-a204-in.pdf",
+      431_880,
+      "2025-02-01T10:04:00.000Z",
+    ),
+    paper(
+      "demo-doc-3",
+      "demo-stay-a101",
+      "Lease agreement — A-101",
+      "lease",
+      "lease-a101-molefe.pdf",
+      795_540,
+      "2024-11-01T08:41:00.000Z",
+    ),
+    paper(
+      "demo-doc-4",
+      "demo-stay-s01",
+      "Lease agreement — S-01",
+      "lease",
+      "lease-s01-mokoena.pdf",
+      612_300,
+      "2025-01-15T11:20:00.000Z",
+    ),
+    paper(
+      "demo-doc-5",
+      "demo-stay-a101-old",
+      "Lease agreement — A-101 (2023)",
+      "lease",
+      "lease-a101-khoza.pdf",
+      733_002,
+      "2023-03-01T09:00:00.000Z",
+    ),
+    paper(
+      "demo-doc-6",
+      "demo-stay-a101-old",
+      "Exit inspection and deposit",
+      "inspection",
+      "exit-a101-khoza.pdf",
+      388_412,
+      "2024-10-25T15:30:00.000Z",
+    ),
+    paper(
+      "demo-doc-7",
+      "demo-stay-a204-old",
+      "Notice to vacate",
+      "notice",
+      "notice-a204-sithole.pdf",
+      96_770,
+      "2024-12-18T13:02:00.000Z",
+    ),
+    paper(
+      "demo-doc-8",
+      "demo-stay-b102",
+      "Lease agreement — B-102",
+      "lease",
+      "lease-b102-vanwyk.pdf",
+      701_244,
+      "2024-06-01T08:15:00.000Z",
+    ),
   ];
 
   // Notices waiting on the office, and one already answered.
@@ -605,7 +748,8 @@ export function seedWorld(): DemoWorld {
       createdAt: stamp(-6),
       decidedAt: stamp(-4),
       decidedByName: "Fatima Jacobs",
-      decisionNote: "Holding A-205 until the end of the month while she decides.",
+      decisionNote:
+        "Holding A-205 until the end of the month while she decides.",
     },
     {
       id: "demo-request-3",
@@ -632,17 +776,59 @@ export function seedWorld(): DemoWorld {
   // accounts rather than an empty screen, and can page back to a closed month.
   // Rent receipts are not seeded: they are produced by the rent register, and
   // viewFor derives them from the units the same way the server does.
-  const costs: [string, LiveLedgerEntry["category"], LiveLedgerEntry["nature"], number, string, string][] = [
-    ["this", "security", "fixed", 650000, "Guarding contract — night shift", COURT],
+  const costs: [
+    string,
+    LiveLedgerEntry["category"],
+    LiveLedgerEntry["nature"],
+    number,
+    string,
+    string,
+  ][] = [
+    [
+      "this",
+      "security",
+      "fixed",
+      650000,
+      "Guarding contract — night shift",
+      COURT,
+    ],
     ["this", "staff", "fixed", 520000, "Cleaners and gardener wages", COURT],
-    ["this", "utilities", "variable", 389450, "Municipal water and electricity", COURT],
-    ["this", "maintenance", "variable", 185000, "Geyser replacement, A-204", COURT],
+    [
+      "this",
+      "utilities",
+      "variable",
+      389450,
+      "Municipal water and electricity",
+      COURT,
+    ],
+    [
+      "this",
+      "maintenance",
+      "variable",
+      185000,
+      "Geyser replacement, A-204",
+      COURT,
+    ],
     ["this", "other", "fixed", 140000, "Building insurance", COURT],
     ["this", "security", "fixed", 240000, "Campus access control", CAMPUS],
     ["this", "utilities", "variable", 160000, "Electricity", CAMPUS],
-    ["last", "security", "fixed", 650000, "Guarding contract — night shift", COURT],
+    [
+      "last",
+      "security",
+      "fixed",
+      650000,
+      "Guarding contract — night shift",
+      COURT,
+    ],
     ["last", "staff", "fixed", 520000, "Cleaners and gardener wages", COURT],
-    ["last", "utilities", "variable", 352800, "Municipal water and electricity", COURT],
+    [
+      "last",
+      "utilities",
+      "variable",
+      352800,
+      "Municipal water and electricity",
+      COURT,
+    ],
     ["last", "maintenance", "variable", 96000, "Blocked drain, B-101", COURT],
   ];
   // Every unit marked paid has a receipt, because that is exactly what
@@ -668,23 +854,30 @@ export function seedWorld(): DemoWorld {
       createdAt: stamp(-6),
     }));
 
-  const ledger: LiveLedgerEntry[] = costs.map<LiveLedgerEntry>(
-    ([when, category, nature, amountCents, description, propertyId], index) => ({
-      id: `demo-ledger-${index + 1}`,
-      period: when === "this" ? currentPeriod() : previousPeriod(currentPeriod()),
-      kind: "expense" as const,
-      category,
-      nature,
-      amountCents,
-      description,
-      propertyId,
-      propertyName: propertyId === COURT ? "Ubuntu Court" : "Ubuntu Campus Residence",
-      unitId: null,
-      unitLabel: null,
-      recordedBy: "Nomsa Dlamini",
-      createdAt: stamp(when === "this" ? -3 : -34),
-    }),
-  ).concat(receipts);
+  const ledger: LiveLedgerEntry[] = costs
+    .map<LiveLedgerEntry>(
+      (
+        [when, category, nature, amountCents, description, propertyId],
+        index,
+      ) => ({
+        id: `demo-ledger-${index + 1}`,
+        period:
+          when === "this" ? currentPeriod() : previousPeriod(currentPeriod()),
+        kind: "expense" as const,
+        category,
+        nature,
+        amountCents,
+        description,
+        propertyId,
+        propertyName:
+          propertyId === COURT ? "Ubuntu Court" : "Ubuntu Campus Residence",
+        unitId: null,
+        unitLabel: null,
+        recordedBy: "Nomsa Dlamini",
+        createdAt: stamp(when === "this" ? -3 : -34),
+      }),
+    )
+    .concat(receipts);
 
   return {
     organisation: {
@@ -747,7 +940,10 @@ export function seedWorld(): DemoWorld {
  * server applies in lib/server/workspace.ts. Switching roles in the demo shows
  * real isolation, not a different set of fixtures.
  */
-export function viewFor(world: DemoWorld, persona: DemoPersona): WorkspaceState {
+export function viewFor(
+  world: DemoWorld,
+  persona: DemoPersona,
+): WorkspaceState {
   const isManager = persona.role === "manager";
   const isSecurity = persona.role === "security";
   // Reception runs one building. Everything below that treats it like a

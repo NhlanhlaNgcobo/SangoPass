@@ -161,12 +161,7 @@ export interface LiveTenancy {
 }
 
 export type DocumentKind =
-  | "lease"
-  | "notice"
-  | "identity"
-  | "proof_of_payment"
-  | "inspection"
-  | "other";
+  "lease" | "notice" | "identity" | "proof_of_payment" | "inspection" | "other";
 
 /**
  * A filed document. The bytes are never here - only what it is and where to
@@ -192,12 +187,7 @@ export interface LiveDocument {
 
 export type RequestKind = "move_out" | "unit_change" | "property_change";
 export type RequestStatus =
-  | "open"
-  | "acknowledged"
-  | "approved"
-  | "declined"
-  | "withdrawn"
-  | "completed";
+  "open" | "acknowledged" | "approved" | "declined" | "withdrawn" | "completed";
 
 /** A resident telling the office something is about to change. */
 export interface LiveRequest {

@@ -91,7 +91,9 @@ test("version-one data migrates without changing passwords or unit assignments a
   // Uniqueness moved into reservations, and legacy rows are represented there.
   assert.ok(await store.get("reservations", "unitResident:unit1"));
   assert.ok(await store.get("reservations", "unit:property1:a1"));
-  assert.ok(await store.get("reservations", `loginCode:${property!.loginCode}`));
+  assert.ok(
+    await store.get("reservations", `loginCode:${property!.loginCode}`),
+  );
   assert.ok(await store.get("reservations", "userEmail:legacy@example.test"));
 
   await store.close();
@@ -248,7 +250,9 @@ PRAGMA user_version=2;
   );
   assert.equal(membership!.username, "SP-EXISTING-01");
   assert.equal(membership!.usernameKey, "sp-existing-01");
-  assert.ok(await store.get("reservations", "username:property1:sp-existing-01"));
+  assert.ok(
+    await store.get("reservations", "username:property1:sp-existing-01"),
+  );
   await store.close();
 });
 

@@ -72,7 +72,8 @@
 }
 .sp-org-select {
   padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--sp-on-forest) 22%, var(--sp-forest));
+  border: 1px solid
+    color-mix(in srgb, var(--sp-on-forest) 22%, var(--sp-forest));
   border-radius: 12px;
   display: block;
 }

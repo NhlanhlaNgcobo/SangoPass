@@ -57,7 +57,8 @@ function next(world: DemoWorld, prefix: string) {
 }
 
 const reference = (n: number) =>
-  "SP-" + (n * 2654435761).toString(36).toUpperCase().padStart(10, "X").slice(0, 10);
+  "SP-" +
+  (n * 2654435761).toString(36).toUpperCase().padStart(10, "X").slice(0, 10);
 
 const passToken = (n: number) =>
   (n.toString(16).padStart(4, "0") + "d3m0").repeat(8).slice(0, 64);
@@ -202,7 +203,8 @@ export function apply(
       );
       // A pass not yet used names the door a guard sends the visitor to.
       draft.visitors = draft.visitors.map((v) =>
-        v.unitId === id && (v.status === "upcoming" || v.status === "checked_in")
+        v.unitId === id &&
+        (v.status === "upcoming" || v.status === "checked_in")
           ? { ...v, unitLabel: label }
           : v,
       );
@@ -241,7 +243,8 @@ export function apply(
       const name = text(input.name, "property name", 100);
       if (
         draft.properties.some(
-          (p) => p.id !== property.id && p.name.toLowerCase() === name.toLowerCase(),
+          (p) =>
+            p.id !== property.id && p.name.toLowerCase() === name.toLowerCase(),
         )
       )
         throw new AppError("That record already exists.", 409);
@@ -356,10 +359,16 @@ export function apply(
       );
       draft.ledger = draft.ledger.filter(
         (entry) =>
-          !(entry.unitId === id && entry.period === period && entry.category === "rent"),
+          !(
+            entry.unitId === id &&
+            entry.period === period &&
+            entry.category === "rent"
+          ),
       );
       if (paid && target.rentCents > 0) {
-        const property = draft.properties.find((p) => p.id === target.propertyId);
+        const property = draft.properties.find(
+          (p) => p.id === target.propertyId,
+        );
         draft.ledger = [
           {
             id: next(draft, "ledger"),
@@ -793,7 +802,11 @@ export function apply(
         );
       draft.requests = draft.requests.map((r) =>
         r.id === id
-          ? { ...r, status: "withdrawn" as const, decidedAt: new Date().toISOString() }
+          ? {
+              ...r,
+              status: "withdrawn" as const,
+              decidedAt: new Date().toISOString(),
+            }
           : r,
       );
       break;

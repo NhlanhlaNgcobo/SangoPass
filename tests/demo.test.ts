@@ -16,10 +16,7 @@ import {
 import { sastToday } from "../lib/server/visits";
 import { DEFAULT_THEME } from "../lib/shared/theme";
 import { currentPeriod, summarise } from "../lib/shared/money";
-import {
-  normaliseEntryCode,
-  sameEntryCode,
-} from "../lib/shared/passcode";
+import { normaliseEntryCode, sameEntryCode } from "../lib/shared/passcode";
 
 const manager = PERSONAS.find((p) => p.role === "manager")!;
 const resident = PERSONAS.find((p) => p.role === "tenant")!;
@@ -48,7 +45,11 @@ test("the demo pass renders a QR code that decodes back to its payload", async (
   const svg = renderToStaticMarkup(
     createElement(QRCodeSVG, { value: payload, size: 320, level: "M" }),
   );
-  const png = await sharp(Buffer.from(svg)).resize(320, 320).ensureAlpha().raw().toBuffer();
+  const png = await sharp(Buffer.from(svg))
+    .resize(320, 320)
+    .ensureAlpha()
+    .raw()
+    .toBuffer();
   const decoded = jsQR(new Uint8ClampedArray(png), 320, 320);
 
   assert.ok(decoded, "the rendered pass is scannable");
@@ -140,7 +141,8 @@ test("a guest can be walked from request to gate", async (t) => {
   await t.test("the unit's guest limit is enforced", () => {
     // Ubuntu Court allows two active passes and the seed already used one.
     assert.throws(
-      () => apply(world, resident, guestRequest({ visitorName: "One too many" })),
+      () =>
+        apply(world, resident, guestRequest({ visitorName: "One too many" })),
       /already has 2 active guest passes/,
     );
   });
@@ -230,10 +232,7 @@ test("the demo enforces the sleepover budget the manager sets", () => {
       departure: "09:00",
     }),
   );
-  assert.equal(
-    ok.world.visitors.find((v) => v.id === ok.result.id)!.nights,
-    1,
-  );
+  assert.equal(ok.world.visitors.find((v) => v.id === ok.result.id)!.nights, 1);
 });
 
 test("residents log issues and the manager triages them", () => {
@@ -392,7 +391,9 @@ test("the demo issues a gate code for a guest with no smartphone", () => {
     (v) => v.id === booked.result.id,
   );
   assert.ok(atTheGate);
-  assert.ok(sameEntryCode(atTheGate.entryCode, `${code.slice(0, 4)}-${code.slice(4)}`));
+  assert.ok(
+    sameEntryCode(atTheGate.entryCode, `${code.slice(0, 4)}-${code.slice(4)}`),
+  );
 
   // No two sample passes share a code.
   const codes = viewFor(world, manager).visitors.map((v) => v.entryCode);
@@ -494,10 +495,19 @@ test("the demo books reconcile: what is marked paid is what was collected", () =
     paid.reduce((t, u) => t + u.rentCents, 0),
   );
   // And it shows every state a prospect should see: paid, owing, empty, filed.
-  assert.ok(open.some((u) => u.residentName && !u.rentPaid), "one still owing");
-  assert.ok(open.some((u) => !u.residentName), "one empty");
+  assert.ok(
+    open.some((u) => u.residentName && !u.rentPaid),
+    "one still owing",
+  );
+  assert.ok(
+    open.some((u) => !u.residentName),
+    "one empty",
+  );
   assert.ok(totals.vacancyCents > 0);
-  assert.ok(state.units.some((u) => u.archivedAt), "one archived");
+  assert.ok(
+    state.units.some((u) => u.archivedAt),
+    "one archived",
+  );
   // An archived unit is neither owed nor vacancy.
   const archived = state.units.filter((u) => u.archivedAt);
   for (const unit of archived)

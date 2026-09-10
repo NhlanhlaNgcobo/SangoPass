@@ -61,9 +61,17 @@ export interface Reader {
  * diverge in production.
  */
 export interface Tx extends Reader {
-  create(collection: Collection, id: string, data: Record<string, unknown>): void;
+  create(
+    collection: Collection,
+    id: string,
+    data: Record<string, unknown>,
+  ): void;
   set(collection: Collection, id: string, data: Record<string, unknown>): void;
-  update(collection: Collection, id: string, patch: Record<string, unknown>): void;
+  update(
+    collection: Collection,
+    id: string,
+    patch: Record<string, unknown>,
+  ): void;
   remove(collection: Collection, id: string): void;
   /** Claim a uniqueness key; throws ConflictError when already held. */
   reserve(key: string, owner: string): void;
