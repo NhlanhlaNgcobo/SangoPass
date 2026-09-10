@@ -29,6 +29,8 @@ export const COLLECTIONS = [
   "documents",
   "requests",
   "announcements",
+  "regulars",
+  "movements",
   "invoices",
   "audit",
   "contractors",
@@ -425,6 +427,91 @@ export interface AnnouncementRecord {
   authorName: string;
   /** When the office took it down early, or null. Never deleted: it was said. */
   archivedAt: string | null;
+}
+
+/**
+ * A standing authorisation for somebody who works here: the cleaner who comes
+ * every weekday, the gardening contractor on Tuesdays, a roofer for a month.
+ *
+ * Not a VisitorRecord with a longer window. A guest pass authorises one
+ * arrival and holds one status; this authorises an arrival on every allowed
+ * day for months, and the arrivals themselves are MovementRecords below. The
+ * two were kept apart rather than bent together because bending them would
+ * have meant a pass whose "checkedInAt" is whichever of ninety mornings was
+ * written last, which answers no question anybody has.
+ *
+ * Issued only by the office. A resident hosts guests; who works on the
+ * property is the office's decision, and a standing key to the gate is not
+ * something a tenancy should be able to mint.
+ */
+export interface RegularRecord {
+  id: string;
+  orgId: string;
+  propertyId: string;
+  propertyName: string;
+  /** The unit they work at, or null when they work for the property itself. */
+  unitId: string | null;
+  unitLabel: string | null;
+  personName: string;
+  /** What they do here: "Cleaner", "Gardener", "Site foreman". */
+  occupation: string;
+  /** Who they work for, when that is a company rather than the estate. */
+  employer: string;
+  phone: string;
+  /** staff | contractor | household. See lib/shared/regulars.ts. */
+  kind: string;
+  idType: string;
+  idNumber: string;
+  reference: string;
+  token: string;
+  entryCode: string;
+  /**
+   * Which weekdays they may come, as seven characters of 0 or 1 starting on
+   * Monday: "1111100" is a weekday cleaner. A string rather than a bitmask so
+   * that a person reading the row in either database can see what it means.
+   */
+  days: string;
+  /** The hours they may be admitted, SAST, as HH:MM. */
+  fromTime: string;
+  toTime: string;
+  startDate: string;
+  /**
+   * The last day it works. Required, and capped: a standing authorisation
+   * with no end is a key nobody ever takes back.
+   */
+  endDate: string;
+  /** When the office withdrew it early, or null. Never deleted: it was used. */
+  revokedAt: string | null;
+  revokedByName: string;
+  createdAt: string;
+  issuedBy: string;
+  issuedByName: string;
+}
+
+/**
+ * One arrival by a regular: in at 07:04, out at 17:12.
+ *
+ * The row the register is actually made of. Without it a regular pass is a
+ * laminated card the system knows nothing about, and "who is on site right
+ * now" - the question a gate exists to answer - has no answer at all.
+ */
+export interface MovementRecord {
+  id: string;
+  orgId: string;
+  propertyId: string;
+  regularId: string;
+  /** Denormalised, so the register needs no join. Firestore cannot do one. */
+  personName: string;
+  occupation: string;
+  unitLabel: string | null;
+  /** The SAST date of the arrival, so a night shift stays on one day. */
+  date: string;
+  inAt: string;
+  outAt: string | null;
+  /** 1 while they are inside, so "on site" is a query rather than a scan. */
+  open: number;
+  inByName: string;
+  outByName: string;
 }
 
 /** A maintenance contact: a directory entry, never an account. */

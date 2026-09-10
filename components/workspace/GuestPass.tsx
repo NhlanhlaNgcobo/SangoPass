@@ -3,13 +3,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { BadgeCheck, CalendarClock, Moon, Sun, XCircle } from "lucide-react";
 import Brand from "@/components/ui/Brand";
 import { formatEntryCode } from "@/lib/shared/passcode";
+import { ID_LABELS } from "@/lib/shared/identity";
 import type { IdType, VisitType } from "@/types/workspace";
-
-const ID_LABELS: Record<IdType, string> = {
-  sa_id: "SA ID number",
-  passport: "Passport",
-  student_number: "Student number",
-};
 
 export interface GuestPassView {
   visitorName: string;
@@ -119,9 +114,7 @@ export default function GuestPass({
           ) : (
             <Sun size={16} aria-hidden />
           )}
-          {sleepover
-            ? `Sleepover · ${nightsLabel(pass.nights)}`
-            : "Day visit"}
+          {sleepover ? `Sleepover · ${nightsLabel(pass.nights)}` : "Day visit"}
         </p>
 
         {live ? (
@@ -150,8 +143,8 @@ export default function GuestPass({
             <span className="sp-eyebrow">GATE CODE · NO PHONE NEEDED</span>
             <strong>{formatEntryCode(pass.entryCode)}</strong>
             <small>
-              Give this code and your identity document at the gate. It works
-              on its own — you do not have to show anything on a screen.
+              Give this code and your identity document at the gate. It works on
+              its own — you do not have to show anything on a screen.
             </small>
           </div>
         )}

@@ -11,6 +11,8 @@ import { currentPeriod, previousPeriod } from "@/lib/shared/money";
 import { encodeEntryCode } from "@/lib/shared/passcode";
 import type {
   LiveAnnouncement,
+  LiveMovement,
+  LiveRegular,
   LiveContractor,
   LiveDocument,
   LiveInvoice,
@@ -62,6 +64,8 @@ export interface DemoWorld {
   documents: LiveDocument[];
   requests: LiveRequest[];
   announcements: LiveAnnouncement[];
+  regulars: LiveRegular[];
+  movements: LiveMovement[];
   ledger: LiveLedgerEntry[];
   invoices: LiveInvoice[];
   invitations: WorkspaceState["invitations"];
@@ -839,6 +843,135 @@ export function seedWorld(): DemoWorld {
     },
   ];
 
+  // The people who work here. One of each kind, so a prospect switching to
+  // the guard sees the three shapes the pass takes: the estate's own cleaner
+  // on weekdays, an outside contractor on a short job, and a resident's
+  // domestic worker attached to one door.
+  const regulars: LiveRegular[] = [
+    {
+      id: "demo-regular-1",
+      propertyId: COURT,
+      propertyName: nameOf(COURT),
+      unitId: null,
+      unitLabel: null,
+      personName: "Grace Mthembu",
+      occupation: "Cleaner",
+      employer: "",
+      phone: "+27 82 555 0111",
+      kind: "staff",
+      idType: "sa_id",
+      idNumber: "••••••••• 5087",
+      reference: "SP-GRACE00001",
+      token: token(9101),
+      entryCode: demoGateCode(9101),
+      days: "1111100",
+      fromTime: "06:30",
+      toTime: "15:00",
+      startDate: day(-120),
+      endDate: day(180),
+      revokedAt: null,
+      revokedByName: "",
+      issuedByName: "Nomsa Dlamini",
+      createdAt: stamp(-120),
+    },
+    {
+      id: "demo-regular-2",
+      propertyId: COURT,
+      propertyName: nameOf(COURT),
+      unitId: null,
+      unitLabel: null,
+      personName: "Johan Pretorius",
+      occupation: "Site foreman",
+      employer: "Cape Roofing CC",
+      phone: "+27 83 555 0122",
+      kind: "contractor",
+      idType: "sa_id",
+      idNumber: "••••••••• 3081",
+      reference: "SP-ROOF000002",
+      token: token(9102),
+      entryCode: demoGateCode(9102),
+      days: "1111110",
+      fromTime: "07:00",
+      toTime: "17:30",
+      startDate: day(-9),
+      endDate: day(12),
+      revokedAt: null,
+      revokedByName: "",
+      issuedByName: "Fatima Jacobs",
+      createdAt: stamp(-9),
+    },
+    {
+      id: "demo-regular-3",
+      propertyId: COURT,
+      propertyName: nameOf(COURT),
+      unitId: "demo-unit-a204",
+      unitLabel: "A-204",
+      personName: "Nomvula Sithole",
+      occupation: "Domestic worker",
+      employer: "",
+      phone: "+27 71 555 0133",
+      kind: "household",
+      idType: "sa_id",
+      idNumber: "••••••••• 8083",
+      reference: "SP-HOUSE00003",
+      token: token(9103),
+      entryCode: demoGateCode(9103),
+      days: "1010100",
+      fromTime: "08:00",
+      toTime: "16:00",
+      startDate: day(-200),
+      endDate: day(90),
+      revokedAt: null,
+      revokedByName: "",
+      issuedByName: "Nomsa Dlamini",
+      createdAt: stamp(-200),
+    },
+  ];
+
+  // A few mornings of arrivals, with one person still on site right now so the
+  // gate register opens on the question it exists to answer.
+  const movements: LiveMovement[] = [
+    {
+      id: "demo-movement-1",
+      propertyId: COURT,
+      regularId: "demo-regular-1",
+      personName: "Grace Mthembu",
+      occupation: "Cleaner",
+      unitLabel: null,
+      date: sastToday(),
+      inAt: stamp(-0.2),
+      outAt: null,
+      inByName: "Sibusiso Khumalo",
+      outByName: "",
+    },
+    {
+      id: "demo-movement-2",
+      propertyId: COURT,
+      regularId: "demo-regular-2",
+      personName: "Johan Pretorius",
+      occupation: "Site foreman",
+      unitLabel: null,
+      date: day(-1),
+      inAt: stamp(-1.3),
+      outAt: stamp(-1.05),
+      inByName: "Sibusiso Khumalo",
+      outByName: "Sibusiso Khumalo",
+    },
+    {
+      id: "demo-movement-3",
+      propertyId: COURT,
+      regularId: "demo-regular-3",
+      personName: "Nomvula Sithole",
+      occupation: "Domestic worker",
+      unitLabel: "A-204",
+      date: day(-2),
+      inAt: stamp(-2.35),
+      outAt: stamp(-2.05),
+      inByName: "Sibusiso Khumalo",
+      outByName: "Fatima Jacobs",
+    },
+  ];
+
   // Two months of books, so a prospect opening Money sees a working set of
   // accounts rather than an empty screen, and can page back to a closed month.
   // Rent receipts are not seeded: they are produced by the rent register, and
@@ -969,6 +1102,8 @@ export function seedWorld(): DemoWorld {
     documents,
     requests,
     announcements,
+    regulars,
+    movements,
     ledger,
     invoices: [
       {
@@ -1080,6 +1215,23 @@ export function viewFor(
         (a) => showing(a, today) && addresses(a.audience, persona.role),
       );
 
+  // Who works here. The gate reads its own building's; a resident reads only
+  // the household worker attached to their own door, because the estate's
+  // staff list is not a tenancy's business.
+  const regulars = isManager
+    ? world.regulars
+    : persona.role === "tenant"
+      ? world.regulars.filter((r) => r.unitId === persona.unitId)
+      : world.regulars.filter((r) => r.propertyId === persona.propertyId);
+
+  // And who came and went. A resident gets none of it.
+  const movements =
+    persona.role === "tenant"
+      ? []
+      : isManager
+        ? world.movements
+        : world.movements.filter((mv) => mv.propertyId === persona.propertyId);
+
   let allowance: WorkspaceState["allowance"] = null;
   if (persona.role === "tenant" && persona.unitId && persona.propertyId) {
     const limits = limitsOf(
@@ -1150,6 +1302,10 @@ export function viewFor(
     requests: [...requests].sort((a, b) =>
       b.createdAt.localeCompare(a.createdAt),
     ),
+    regulars: [...regulars].sort((a, b) =>
+      a.personName.localeCompare(b.personName),
+    ),
+    movements: [...movements].sort((a, b) => b.inAt.localeCompare(a.inAt)),
     announcements: [...announcements].sort(
       (a, b) =>
         levelRank(a.level) - levelRank(b.level) ||

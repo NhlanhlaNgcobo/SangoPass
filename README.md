@@ -15,12 +15,12 @@ Open http://localhost:3000 and choose **Start your free trial**. Create your org
 
 - /register creates a real account and organisation with a 14-day Starter trial.
 - /login signs in to the live /workspace using a server session.
-- Managers manage properties, units, invitations, visitor movements, rent status, maintenance, maintenance contacts, tenant **Documents**, resident **Requests**, bulk resident **import**, **Announcements** to their buildings, the property's own books under **Money**, brand colours and billing.
+- Managers manage properties, units, invitations, visitor movements, rent status, maintenance, maintenance contacts, tenant **Documents**, resident **Requests**, bulk resident **import**, **Regular passes** for the people who work there, **Announcements** to their buildings, the property's own books under **Money**, brand colours and billing.
 - **Reception** is the front desk of one property: every manager screen for that building — properties, people, visitor passes, maintenance, contacts, documents, requests, announcements and brand — and never **Money** or **Billing**. It cannot create or remove manager and reception accounts either, because a role that can mint managers is a manager. A reception account uses one of the plan's sign-ins, for the same reason: it does nearly everything a manager does, so a free one would make the seat limit a formality.
 - Managers enrol residents by email and vacant unit. Apartment residents receive a generated unit-linked username; student accommodation requires their student number, preserved exactly (including leading zeroes).
 - The welcome email provides the username, property/unit and a one-use password-setup link. Tenant sign-in is at /tenant/login. The emailed login link pre-fills the property code so matching student numbers at different properties remain separate.
 - Residents activate their account by setting their own password, then request and cancel guest visits, submit reports, and give notice that they are moving out or want a different unit or property. Their **Notice board** carries whatever the office has announced to them. Existing account holders confirm their existing password instead of having it overwritten.
-- Security joins with an assigned property, scans QR passes, checks visitors in/out, submits reports, and reads the announcements written for the gate.
+- Security joins with an assigned property, scans QR passes, checks visitors in/out, signs the property’s regular workers in and out, submits reports, and reads the announcements written for the gate.
 - /pass/[token] is a private guest pass with a printable QR code and a gate code for a guest with no smartphone, emailed to the resident and to the visitor when an address is given, and texted to the visitor when SMS is configured. Its purpose is to let the invited visitor confirm they are on the system before they travel. It omits the visitor phone number, all host account details, and all but the last four characters of the identity document.
 - /demo is a full interactive demonstration: the real workspace running against a sample estate held in the visitor's browser. Pick a role, switch between them, and the data follows. Nothing is stored, nothing is sent, and no account is created. /dashboard now redirects there.
 
@@ -120,6 +120,24 @@ The bucket and the disk are both closed to the outside world. `storage.rules` is
 Deliberately not a maintenance report. A report says something is broken and someone should come and fix it; a notice says nothing is broken and a decision is needed. Filed in one queue, the notice that needs a month's warning would sit under the taps that need a plumber.
 
 Only the resident whose life is changing may raise one — "your tenant gave notice" is exactly the claim a register should not let anyone make on someone's behalf — and only they may withdraw it, while it is still unanswered. Once the office has answered, it stays answered: the record should say whether a resident withdrew or an office declined, because those are not the same thing.
+
+## Regular passes: the people who work here
+
+**A guest pass answers "may this person come on Saturday". A regular pass answers "may this person come every weekday until March"** — the cleaner, the gardening contractor, the roofer on a four-week job, a resident's domestic worker. Through the guest register, every one of them would have to be booked afresh each week, with a new gate code every time, burning the unit's two guest slots to do it.
+
+**Issued by the office only.** A resident hosts guests; who works on the property is the office's decision, and a standing key to the gate is not something a tenancy should be able to mint. A resident who wants one for their domestic worker asks the office, and the office issues it against their unit. Reception issues for the building it sits in.
+
+Each pass names **who they are here for** — property staff, an outside contractor, or a household worker — and that choice decides the shape: staff and contractors work across the building and carry no unit, a household worker works at one door and carries it. Then the week they may come (seven toggles, Monday first), the hours they may arrive, and a start and end date.
+
+**The end date is required and capped at a year.** A standing authorisation with no end is a key nobody ever takes back. Where a pass stands — in force, starts later, expired, revoked — is worked out from those dates on every read rather than stored, for the reason an announcement's expiry is: a stored flag is right the day it is written and wrong the morning after.
+
+**The gate records every arrival and departure**, not just the fact of the pass. One row per arrival — in at 07:04, out at 17:12, and who recorded each — which is what lets the register answer _who is on site right now_ and _was the cleaner here on the day the flat was emptied_. Without it a regular pass is a laminated card the system knows nothing about. **On site now** is the first thing the screen shows, and somebody still signed in from an earlier day is called out, so the register stops quietly saying they never went home.
+
+Check-in is refused, with the reason, when: the pass is revoked, has not started, has expired, today is not one of its days, or the clock is outside its hours. Check-out is never refused on those grounds — people stay late and people forget, and a guard who cannot close yesterday's arrival would have to leave the register wrong. Somebody revoked while they are still inside can always be signed out.
+
+**One scanner, one gate-code box, either kind of pass.** Regular passes claim their reference, token and gate code in the same uniqueness namespaces guest passes use, so no code can ever belong to two passes and the guard never has to know which list to look in. Scanning a worker's QR or typing their code takes the guard straight to Regular passes with the person named. `/pass/[token]` serves a worker's own printable pass — the QR, the gate code, the days, the hours, and all but the last four characters of the identity document.
+
+**Who sees them.** The office sees its own; security sees its gate's, because a guard admitting the same cleaner every morning is exactly who this is for; a resident sees only the household worker cleared for their own door, and none of the gate register — a neighbour's movements are not a neighbour's reading.
 
 ## Enrolling a building at once
 

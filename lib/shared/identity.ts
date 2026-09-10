@@ -11,6 +11,28 @@
 /** Characters the mask leaves readable, and so the most a search can match. */
 export const ID_VISIBLE = 4;
 
+export type IdType = "sa_id" | "passport" | "student_number";
+
+/**
+ * What each kind of document is called on screen.
+ *
+ * Here rather than beside the validation in lib/server/visits, because every
+ * screen that shows an identity number is a client component and none of them
+ * may reach into lib/server for a label.
+ */
+export const ID_LABELS: Record<IdType, string> = {
+  sa_id: "SA ID number",
+  passport: "Passport",
+  student_number: "Student number",
+};
+
+/** The same three, short enough for a table cell. */
+export const ID_LABELS_SHORT: Record<IdType, string> = {
+  sa_id: "SA ID",
+  passport: "Passport",
+  student_number: "Student no.",
+};
+
 /**
  * The stored form: what an identity number is reduced to before it is written
  * down, and what anyone typing one has to be reduced to before comparing.

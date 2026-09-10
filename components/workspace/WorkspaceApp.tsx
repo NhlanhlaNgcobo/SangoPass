@@ -35,12 +35,14 @@ import {
   FolderOpen,
   Inbox,
   Megaphone,
+  HardHat,
 } from "lucide-react";
 import PassScanner from "./PassScanner";
 import DocumentsPanel from "./DocumentsPanel";
 import RequestsPanel from "./RequestsPanel";
 import AnnouncementsPanel from "./AnnouncementsPanel";
 import ImportPanel from "./ImportPanel";
+import RegularsPanel from "./RegularsPanel";
 import CompanyIdentity, { logoUrl } from "./CompanyIdentity";
 import Brand from "@/components/ui/Brand";
 import type {
@@ -78,7 +80,7 @@ import {
   type BrandTheme,
 } from "@/lib/shared/theme";
 import { formatEntryCode, sameEntryCode } from "@/lib/shared/passcode";
-import { matchesMaskedId } from "@/lib/shared/identity";
+import { ID_LABELS_SHORT, matchesMaskedId } from "@/lib/shared/identity";
 import { smsNotice } from "@/lib/shared/sms";
 import { financeCsv, financeFilename } from "@/lib/server/finance";
 import {
@@ -113,8 +115,7 @@ const roleLabel = (role: string) =>
       : role === "reception"
         ? "Reception"
         : "Security";
-const idLabel = (type: IdType) =>
-  type === "sa_id" ? "SA ID" : type === "passport" ? "Passport" : "Student no.";
+const idLabel = (type: IdType) => ID_LABELS_SHORT[type];
 const day = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(
     new Date(),
@@ -128,6 +129,7 @@ type View =
   | "documents"
   | "requests"
   | "announcements"
+  | "regulars"
   | "contacts"
   | "money"
   | "billing"
@@ -480,6 +482,18 @@ export default function WorkspaceApp({
       title: security ? "Gate register" : "Visitor passes",
       icon: Ticket,
     },
+    // Beside the visitor register rather than inside it: a guest pass is one
+    // arrival and a regular pass is a standing arrangement, and a guard looking
+    // for the cleaner should not have to scroll past every guest booked today.
+    ...(office || security || tenant
+      ? [
+          {
+            id: "regulars",
+            title: tenant ? "Working here" : "Regular passes",
+            icon: HardHat,
+          },
+        ]
+      : []),
     {
       id: "reports",
       title: office ? "Maintenance" : "Reports",
@@ -1030,6 +1044,11 @@ export default function WorkspaceApp({
                     people: "The people who make your community.",
                     visitors: "A warm welcome. A clear record.",
                     reports: "Keep your community cared for.",
+                    regulars: office
+                      ? "The people who work here, and who is on site."
+                      : security
+                        ? "Who works here, and who is inside right now."
+                        : "Who the office has cleared to work at your unit.",
                     announcements: office
                       ? "Say it once, and everybody has it."
                       : "What the office wants you to know.",
@@ -1753,7 +1772,23 @@ export default function WorkspaceApp({
                       (v) =>
                         payload === `SANGOPASS-LIVE:${v.reference}:${v.token}`,
                     );
-                    if (!found) return false;
+                    if (!found) {
+                      // The guard has one scanner and the person at the gate
+                      // does not know which kind of pass they were given, so
+                      // a regular's QR has to answer here too rather than
+                      // reading as an unknown code.
+                      const worker = state.regulars.find(
+                        (r) =>
+                          payload ===
+                          `SANGOPASS-LIVE:${r.reference}:${r.token}`,
+                      );
+                      if (!worker) return false;
+                      setView("regulars");
+                      setNotice(
+                        `${worker.personName} holds a regular pass — ${worker.occupation}. Check their identity document, then sign them in from Regular passes.`,
+                      );
+                      return true;
+                    }
                     setSearch(found.reference);
                     setNotice(
                       `Pass verified for ${found.visitorName}. Check the status and arrival window before admitting them.`,
@@ -1767,7 +1802,20 @@ export default function WorkspaceApp({
                     const found = state.visitors.find((v) =>
                       sameEntryCode(v.entryCode, code),
                     );
-                    if (!found) return false;
+                    if (!found) {
+                      // Guest codes and regular codes are claimed in one
+                      // namespace, so at most one pass can match and the
+                      // guard never has to know which list to look in.
+                      const worker = state.regulars.find((r) =>
+                        sameEntryCode(r.entryCode, code),
+                      );
+                      if (!worker) return false;
+                      setView("regulars");
+                      setNotice(
+                        `Gate code matches ${worker.personName}, ${worker.occupation} at ${worker.propertyName}. Check their identity document, then sign them in from Regular passes.`,
+                      );
+                      return true;
+                    }
                     setSearch(found.reference);
                     setNotice(
                       `Gate code matches ${found.visitorName}, expected at ${found.propertyName}${
@@ -2244,6 +2292,17 @@ export default function WorkspaceApp({
                 setNotice("Document filed.");
               }}
               onError={setError}
+            />
+          )}
+          {view === "regulars" && (
+            <RegularsPanel
+              state={state}
+              today={day()}
+              office={office}
+              security={security}
+              tenant={tenant}
+              busy={busy}
+              onAct={(input) => void act(input)}
             />
           )}
           {view === "announcements" && (

@@ -12,6 +12,13 @@ import { currentPeriod } from "@/lib/shared/money";
 import { parseLedgerEntry } from "@/lib/server/finance";
 import { parseAnnouncement } from "@/lib/server/announcements";
 import {
+  allowsDay,
+  describeDays,
+  needsUnit,
+  parseRegular,
+  sastTime,
+} from "@/lib/server/regulars";
+import {
   DEFAULT_LIMITS,
   endsAt,
   limitsOf,
@@ -129,6 +136,8 @@ export function apply(
     documents: [...world.documents],
     requests: [...world.requests],
     announcements: [...world.announcements],
+    regulars: [...world.regulars],
+    movements: [...world.movements],
     invoices: [...world.invoices],
     invitations: [...world.invitations],
   };
@@ -859,6 +868,164 @@ export function apply(
         "The demo keeps nothing, so there is no logo to remove. Uploading one works on a real account.",
         409,
       );
+    }
+
+    case "regular": {
+      requireOffice(persona);
+      const property = requireProperty(world, persona, input.propertyId);
+      const pass = parseRegular(input, sastToday());
+      const identity = visitorIdentity(property.type, input);
+      // The same one message the server gives for a missing unit and a wrong
+      // one: to the person filling the form they are the same mistake.
+      const wanted =
+        typeof input.unitId === "string" ? input.unitId.trim() : "";
+      const unit = needsUnit(pass.kind)
+        ? draft.units.find((u) => u.id === wanted)
+        : undefined;
+      if (needsUnit(pass.kind) && (!unit || unit.propertyId !== property.id))
+        throw new AppError("Choose the unit this person works at.", 409);
+      const id = next(draft, "regular");
+      draft.regulars = [
+        {
+          id,
+          propertyId: property.id,
+          propertyName: property.name,
+          unitId: unit?.id ?? null,
+          unitLabel: unit?.label ?? null,
+          personName: pass.personName,
+          occupation: pass.occupation,
+          employer: pass.employer,
+          phone: pass.phone,
+          kind: pass.kind,
+          idType: identity.idType,
+          idNumber: maskIdNumber(identity.idNumber),
+          reference: reference(draft.seq),
+          token: passToken(draft.seq),
+          entryCode: gateCode(draft, draft.seq),
+          days: pass.days,
+          fromTime: pass.fromTime,
+          toTime: pass.toTime,
+          startDate: pass.startDate,
+          endDate: pass.endDate,
+          revokedAt: null,
+          revokedByName: "",
+          issuedByName: persona.name,
+          createdAt: now(),
+        },
+        ...draft.regulars,
+      ];
+      result = { id };
+      break;
+    }
+
+    case "regularRevoke": {
+      requireOffice(persona);
+      const id = text(input.id, "pass");
+      const pass = draft.regulars.find((r) => r.id === id);
+      if (
+        !pass ||
+        (persona.role !== "manager" && pass.propertyId !== persona.propertyId)
+      )
+        throw new AppError("Pass not found.", 404);
+      draft.regulars = draft.regulars.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              revokedAt: r.revokedAt || now(),
+              revokedByName: r.revokedAt ? r.revokedByName : persona.name,
+            }
+          : r,
+      );
+      break;
+    }
+
+    case "movement": {
+      if (persona.role === "tenant")
+        throw new AppError(
+          "Only the guard or reception records an arrival.",
+          403,
+        );
+      const id = text(input.id, "pass");
+      const pass = draft.regulars.find((r) => r.id === id);
+      if (!pass || pass.propertyId !== persona.propertyId)
+        throw new AppError("Pass not found.", 404);
+      const direction = choice(
+        input.direction,
+        ["in", "out"] as const,
+        "direction",
+      );
+      const open = draft.movements.find(
+        (mv) => mv.regularId === pass.id && !mv.outAt,
+      );
+
+      if (direction === "out") {
+        if (!open)
+          throw new AppError(
+            `${pass.personName} is not signed in, so there is nothing to sign out.`,
+            409,
+          );
+        draft.movements = draft.movements.map((mv) =>
+          mv.id === open.id
+            ? { ...mv, outAt: now(), outByName: persona.name }
+            : mv,
+        );
+        break;
+      }
+
+      if (open)
+        throw new AppError(
+          `${pass.personName} is already signed in. Sign them out first.`,
+          409,
+        );
+      // The same five refusals the server makes, in the same order, so a
+      // prospect who tries the wrong day sees the product's own answer.
+      const today = sastToday();
+      const clock = sastTime();
+      if (pass.revokedAt)
+        throw new AppError(
+          `This pass was revoked${pass.revokedByName ? ` by ${pass.revokedByName}` : ""}. Do not admit.`,
+          409,
+        );
+      if (today < pass.startDate)
+        throw new AppError(
+          `This pass does not start until ${pass.startDate}.`,
+          409,
+        );
+      if (today > pass.endDate)
+        throw new AppError(
+          `This pass expired on ${pass.endDate}. The office has to renew it.`,
+          409,
+        );
+      if (!allowsDay(pass.days, today))
+        throw new AppError(
+          `${pass.personName} is not down for today. This pass is good ${describeDays(pass.days).toLowerCase()}.`,
+          409,
+        );
+      if (clock < pass.fromTime || clock > pass.toTime)
+        throw new AppError(
+          `It is ${clock}. This pass admits between ${pass.fromTime} and ${pass.toTime}.`,
+          409,
+        );
+
+      const movementId = next(draft, "movement");
+      draft.movements = [
+        {
+          id: movementId,
+          propertyId: pass.propertyId,
+          regularId: pass.id,
+          personName: pass.personName,
+          occupation: pass.occupation,
+          unitLabel: pass.unitLabel,
+          date: today,
+          inAt: now(),
+          outAt: null,
+          inByName: persona.name,
+          outByName: "",
+        },
+        ...draft.movements,
+      ];
+      result = { movementId };
+      break;
     }
 
     case "announce": {

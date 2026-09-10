@@ -518,3 +518,94 @@ test("a v11 database gains the announcements board, empty", async () => {
   assert.equal(posted!.levelRank, 1);
   await reopened.close();
 });
+
+test("a v12 database gains regular passes and the gate register, empty", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "sangopass-migration-v12-"));
+  const file = join(folder, "v12.sqlite");
+
+  const seed = new DatabaseSync(file);
+  seed.exec(LEGACY_V1);
+  seed.close();
+  const built = new SqliteStore(file);
+  await built.close();
+  const raw = new DatabaseSync(file);
+  // Wind back to v12: neither table existed, so neither is dropped gently.
+  raw.exec("DROP TABLE regulars");
+  raw.exec("DROP TABLE movements");
+  raw.exec("PRAGMA user_version=12");
+  raw.close();
+
+  const upgraded = new SqliteStore(file);
+  // Nothing is invented. Nobody held a standing pass before there was one to
+  // hold, and no arrival before now was ever recorded as a movement.
+  assert.deepEqual(await upgraded.find("regulars"), []);
+  assert.deepEqual(await upgraded.find("movements"), []);
+  assert.equal(
+    (await upgraded.get<UnitRecord>("units", "unit1"))!.label,
+    "A1",
+    "and the rest of the database is untouched",
+  );
+
+  // Both tables take a row, and a movement survives a reopen.
+  await upgraded.tx(async (t) => {
+    t.create("regulars", "reg1", {
+      orgId: "org1",
+      propertyId: "property1",
+      propertyName: "Legacy Court",
+      unitId: null,
+      unitLabel: null,
+      personName: "Grace Mthembu",
+      occupation: "Cleaner",
+      employer: "",
+      phone: "+27 82 555 0111",
+      kind: "staff",
+      idType: "sa_id",
+      idNumber: "8001015009087",
+      reference: "SP-REG000001",
+      token: "a".repeat(64),
+      entryCode: "4XKD9PWH",
+      days: "1111100",
+      fromTime: "06:30",
+      toTime: "15:00",
+      startDate: "2026-09-01",
+      endDate: "2027-03-01",
+      revokedAt: null,
+      revokedByName: "",
+      createdAt: "2026-09-01T06:00:00.000Z",
+      issuedBy: "user2",
+      issuedByName: "Legacy Manager",
+    });
+    t.create("movements", "mv1", {
+      orgId: "org1",
+      propertyId: "property1",
+      regularId: "reg1",
+      personName: "Grace Mthembu",
+      occupation: "Cleaner",
+      unitLabel: null,
+      date: "2026-09-10",
+      inAt: "2026-09-10T04:32:00.000Z",
+      outAt: null,
+      open: 1,
+      inByName: "Piet Gate",
+      outByName: "",
+    });
+  });
+  await upgraded.close();
+
+  const reopened = new SqliteStore(file);
+  const pass = await reopened.get<{ days: string; personName: string }>(
+    "regulars",
+    "reg1",
+  );
+  assert.equal(pass!.days, "1111100");
+  assert.equal(pass!.personName, "Grace Mthembu");
+  // The open arrival is findable by the query the gate actually runs.
+  const open = await reopened.find("movements", {
+    where: [
+      ["regularId", "==", "reg1"],
+      ["open", "==", 1],
+    ],
+  });
+  assert.equal(open.length, 1);
+  await reopened.close();
+});

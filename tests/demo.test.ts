@@ -601,3 +601,145 @@ test("the demo board tells each role what it is addressed", async (t) => {
     );
   });
 });
+
+test("the demo shows who works here and who is on site", async (t) => {
+  const world = seedWorld();
+  const desk = PERSONAS.find((p) => p.role === "reception")!;
+
+  await t.test("the guard sees every regular at their gate", () => {
+    const names = viewFor(world, guard).regulars.map((r) => r.personName);
+    assert.equal(names.length, 3, "the cleaner, the contractor and the helper");
+    assert.ok(names.some((n) => /Grace/.test(n)));
+  });
+
+  await t.test("a resident sees only the one working at their unit", () => {
+    const mine = viewFor(world, resident).regulars;
+    assert.equal(mine.length, 1);
+    assert.equal(mine[0].kind, "household");
+    assert.equal(mine[0].unitId, resident.unitId);
+  });
+
+  await t.test("and never reads the gate register", () => {
+    assert.deepEqual(viewFor(world, resident).movements, []);
+  });
+
+  await t.test("somebody is on site, so the question has an answer", () => {
+    const open = viewFor(world, guard).movements.filter((m) => !m.outAt);
+    assert.equal(open.length, 1);
+    assert.match(open[0].personName, /Grace/);
+  });
+
+  await t.test("the guard signs somebody out and then back in", () => {
+    const out = apply(world, guard, {
+      action: "movement",
+      id: "demo-regular-1",
+      direction: "out",
+    });
+    assert.equal(
+      viewFor(out.world, guard).movements.filter((m) => !m.outAt).length,
+      0,
+    );
+    const back = apply(out.world, guard, {
+      action: "movement",
+      id: "demo-regular-1",
+      direction: "in",
+    });
+    assert.equal(
+      viewFor(back.world, guard).movements.filter((m) => !m.outAt).length,
+      1,
+    );
+  });
+
+  await t.test("signing in somebody already inside is refused", () => {
+    assert.throws(
+      () =>
+        apply(world, guard, {
+          action: "movement",
+          id: "demo-regular-1",
+          direction: "in",
+        }),
+      /already signed in/i,
+    );
+  });
+
+  await t.test("a resident cannot record an arrival", () => {
+    assert.throws(
+      () =>
+        apply(world, resident, {
+          action: "movement",
+          id: "demo-regular-1",
+          direction: "out",
+        }),
+      /guard or reception/i,
+    );
+  });
+
+  await t.test("the desk issues one and a resident cannot", () => {
+    const issued = apply(world, desk, {
+      action: "regular",
+      propertyId: desk.propertyId,
+      personName: "Thabo Ndlovu",
+      occupation: "Gardener",
+      phone: "+27 82 555 0199",
+      kind: "staff",
+      idType: "sa_id",
+      idNumber: "8001015009087",
+      days: "0100100",
+      fromTime: "07:00",
+      toTime: "12:00",
+      startDate: sastToday(),
+      endDate: new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10),
+    });
+    assert.ok(
+      viewFor(issued.world, guard).regulars.some(
+        (r) => r.personName === "Thabo Ndlovu",
+      ),
+    );
+    assert.throws(
+      () =>
+        apply(world, resident, {
+          action: "regular",
+          propertyId: resident.propertyId,
+          personName: "My own helper",
+          occupation: "Cleaner",
+          phone: "+27 82 555 0177",
+          kind: "household",
+          unitId: resident.unitId,
+          idType: "sa_id",
+          idNumber: "8001015009087",
+          days: "1111100",
+          fromTime: "08:00",
+          toTime: "16:00",
+          startDate: sastToday(),
+          endDate: new Date(Date.now() + 60 * 86400000)
+            .toISOString()
+            .slice(0, 10),
+        }),
+      /manager or reception/i,
+    );
+  });
+
+  await t.test("a household pass without a unit is refused", () => {
+    assert.throws(
+      () =>
+        apply(world, desk, {
+          action: "regular",
+          propertyId: desk.propertyId,
+          personName: "Unattached",
+          occupation: "Helper",
+          phone: "+27 82 555 0166",
+          kind: "household",
+          idType: "sa_id",
+          idNumber: "8001015009087",
+          days: "1111100",
+          fromTime: "08:00",
+          toTime: "16:00",
+          startDate: sastToday(),
+          endDate: new Date(Date.now() + 60 * 86400000)
+            .toISOString()
+            .slice(0, 10),
+        }),
+      /unit this person works at/i,
+    );
+  });
+});

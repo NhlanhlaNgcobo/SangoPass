@@ -18,6 +18,8 @@ import { bucket, throttle } from "./ratelimit";
 import { store } from "./store";
 import type {
   AnnouncementRecord,
+  MovementRecord,
+  RegularRecord,
   ContractorRecord,
   DocumentRecord,
   InvitationRecord,
@@ -44,6 +46,13 @@ import {
 import { parseContractor, parseUrgency, rank } from "./maintenance";
 import { createInvitation, tenantUsername } from "./enrolment";
 import { addresses, parseAnnouncement, showing } from "./announcements";
+import {
+  allowsDay,
+  describeDays,
+  needsUnit,
+  parseRegular,
+  sastTime,
+} from "./regulars";
 import {
   DEFAULT_LIMITS,
   endsAt,
@@ -74,6 +83,8 @@ import type {
   Account,
   LiveAnnouncement,
   LiveDocument,
+  LiveMovement,
+  LiveRegular,
   LiveInvoice,
   LiveLedgerEntry,
   LiveMember,
@@ -329,6 +340,8 @@ export async function workspace(
     documents,
     requests,
     announced,
+    regularPasses,
+    gateMovements,
   ] = await Promise.all([
     isManager || m.propertyId
       ? database.find<PropertyRecord>("properties", {
@@ -468,6 +481,55 @@ export async function workspace(
     // exactly who a "the boom is out, admit on the side entrance" notice is
     // for. Which of them this reader actually sees is settled below.
     announcementsFor(database, m.orgId, m.propertyId, isManager),
+    // Who works here. The gate needs it most - a guard admitting the same
+    // cleaner every morning is exactly who this exists for - so security
+    // reads its own property's. A resident sees only the household worker the
+    // office issued for their own door, because that is their arrangement;
+    // the estate's staff list is not theirs to read.
+    m.role === "tenant"
+      ? m.unitId
+        ? database.find<RegularRecord>("regulars", {
+            where: [
+              ["orgId", "==", m.orgId],
+              ["unitId", "==", m.unitId],
+            ],
+            orderBy: [{ field: "personName" }],
+          })
+        : Promise.resolve([])
+      : isManager
+        ? database.find<RegularRecord>("regulars", {
+            where: [["orgId", "==", m.orgId]],
+            orderBy: [{ field: "personName" }],
+          })
+        : m.propertyId
+          ? database.find<RegularRecord>("regulars", {
+              where: [
+                ["orgId", "==", m.orgId],
+                ["propertyId", "==", m.propertyId],
+              ],
+              orderBy: [{ field: "personName" }],
+            })
+          : Promise.resolve([]),
+    // The gate register. A resident gets none of it: who came and went is the
+    // building's record, and a neighbour's movements are not their reading.
+    m.role === "tenant"
+      ? Promise.resolve([])
+      : isManager
+        ? database.find<MovementRecord>("movements", {
+            where: [["orgId", "==", m.orgId]],
+            orderBy: [{ field: "inAt", direction: "desc" }],
+            limit: LIST_LIMIT,
+          })
+        : m.propertyId
+          ? database.find<MovementRecord>("movements", {
+              where: [
+                ["orgId", "==", m.orgId],
+                ["propertyId", "==", m.propertyId],
+              ],
+              orderBy: [{ field: "inAt", direction: "desc" }],
+              limit: LIST_LIMIT,
+            })
+          : Promise.resolve([]),
   ]);
 
   // The office sees its whole board, expired and taken-down announcements
@@ -701,6 +763,46 @@ export async function workspace(
       archivedAt: a.archivedAt ?? null,
       // authorId is deliberately absent: who wrote it is a name on the
       // board, and nothing a resident's browser needs an account id for.
+    })),
+    regulars: regularPasses.map((r): LiveRegular => ({
+      id: r.id,
+      propertyId: r.propertyId,
+      propertyName: r.propertyName || "",
+      unitId: r.unitId ?? null,
+      unitLabel: r.unitLabel ?? null,
+      personName: r.personName,
+      occupation: r.occupation || "",
+      employer: r.employer || "",
+      phone: r.phone || "",
+      kind: r.kind as LiveRegular["kind"],
+      idType: (r.idType || "sa_id") as LiveRegular["idType"],
+      // The gate reads the whole number off the card; a browser never does.
+      idNumber: r.idNumber ? maskIdNumber(r.idNumber) : "",
+      reference: r.reference,
+      token: r.token,
+      entryCode: r.entryCode || "",
+      days: r.days || "",
+      fromTime: r.fromTime || "",
+      toTime: r.toTime || "",
+      startDate: r.startDate,
+      endDate: r.endDate,
+      revokedAt: r.revokedAt ?? null,
+      revokedByName: r.revokedByName || "",
+      issuedByName: r.issuedByName || "",
+      createdAt: r.createdAt,
+    })),
+    movements: gateMovements.map((mv): LiveMovement => ({
+      id: mv.id,
+      propertyId: mv.propertyId,
+      regularId: mv.regularId,
+      personName: mv.personName || "",
+      occupation: mv.occupation || "",
+      unitLabel: mv.unitLabel ?? null,
+      date: mv.date,
+      inAt: mv.inAt,
+      outAt: mv.outAt ?? null,
+      inByName: mv.inByName || "",
+      outByName: mv.outByName || "",
     })),
     invoices: invoices.map((i): LiveInvoice => ({
       id: i.id,
@@ -1804,6 +1906,190 @@ export async function command(
               : notice.decisionNote,
         });
         subject = notice.id;
+        break;
+      }
+
+      /* --- Regular passes: the people who work here --- */
+
+      case "regular": {
+        // The office decides who works on the property. A resident hosts
+        // guests; a standing key to the gate is not something a tenancy gets
+        // to mint, even for their own helper - they ask the office, and the
+        // office issues it against their unit.
+        office(m);
+        const property = await requireOpenProperty(t, m, input.propertyId);
+        const pass = parseRegular(input, sastToday());
+        const identity = visitorIdentity(property.type, input);
+
+        // A household worker belongs to a door, and the other two to the
+        // building. Asked for rather than inferred, so a manager filing a
+        // domestic worker under the estate is corrected rather than obeyed.
+        let unit: UnitRecord | undefined;
+        if (needsUnit(pass.kind)) {
+          // One message for "you picked none" and "you picked a bad one",
+          // because to the person filling the form they are the same mistake
+          // and the generic "enter a valid unit" tells them nothing.
+          const wanted =
+            typeof input.unitId === "string" ? input.unitId.trim() : "";
+          unit = wanted ? await t.get<UnitRecord>("units", wanted) : undefined;
+          if (!unit || unit.propertyId !== property.id || unit.archivedAt)
+            throw new AppError("Choose the unit this person works at.", 409);
+        }
+
+        const id = randomUUID();
+        const token = newToken();
+        const reference = "SP-" + newToken().slice(0, 10).toUpperCase();
+        const entryCode = encodeEntryCode(randomBytes(ENTRY_CODE_BYTES));
+        // Claimed in the same namespaces a guest pass uses, so no regular's
+        // code can ever collide with a visitor's. The guard has one box and
+        // types what they were told into it; which kind of pass answers is
+        // the workspace's problem, not theirs.
+        t.reserve(`visitorRef:${reference}`, id);
+        t.reserve(`visitorToken:${token}`, id);
+        t.reserve(`visitorCode:${entryCode}`, id);
+        t.create("regulars", id, {
+          orgId,
+          propertyId: property.id,
+          propertyName: property.name,
+          unitId: unit?.id ?? null,
+          unitLabel: unit?.label ?? null,
+          ...pass,
+          idType: identity.idType,
+          idNumber: identity.idNumber,
+          reference,
+          token,
+          entryCode,
+          revokedAt: null,
+          revokedByName: "",
+          createdAt: now(),
+          issuedBy: user.id,
+          issuedByName: user.name,
+        });
+        result = { id, token, reference, entryCode };
+        subject = id;
+        break;
+      }
+
+      case "regularRevoke": {
+        office(m);
+        const pass = await t.get<RegularRecord>(
+          "regulars",
+          text(input.id, "pass"),
+        );
+        if (!pass || pass.orgId !== orgId)
+          throw new AppError("Pass not found.", 404);
+        if (m.role !== "manager" && pass.propertyId !== m.propertyId)
+          throw new AppError("Pass not found.", 404);
+        // Revoked, never deleted: this pass admitted somebody, and the
+        // movements filed against it have to keep naming a real record.
+        t.update("regulars", pass.id, {
+          revokedAt: pass.revokedAt || now(),
+          revokedByName: pass.revokedAt ? pass.revokedByName : user.name,
+        });
+        subject = pass.id;
+        break;
+      }
+
+      case "movement": {
+        // The gate records arrivals: security, or the office standing in for
+        // it. A resident never does, exactly as with a guest.
+        if (m.role === "tenant")
+          throw new AppError(
+            "Only the guard or reception records an arrival.",
+            403,
+          );
+        const pass = await t.get<RegularRecord>(
+          "regulars",
+          text(input.id, "pass"),
+        );
+        if (!pass || pass.orgId !== orgId)
+          throw new AppError("Pass not found.", 404);
+        await requireProperty(t, m, pass.propertyId);
+        const direction = choice(
+          input.direction,
+          ["in", "out"] as const,
+          "direction",
+        );
+
+        // One open arrival at a time. Reading it before any write, which is
+        // the transaction rule both backends are held to.
+        const open = await t.first<MovementRecord>("movements", {
+          where: [
+            ["regularId", "==", pass.id],
+            ["open", "==", 1],
+          ],
+          limit: 1,
+        });
+
+        if (direction === "out") {
+          if (!open)
+            throw new AppError(
+              `${pass.personName} is not signed in, so there is nothing to sign out.`,
+              409,
+            );
+          // No window check on the way out. People stay late and people
+          // forget, and a guard who cannot close yesterday's arrival would
+          // have to leave the register saying somebody never went home.
+          t.update("movements", open.id, {
+            outAt: now(),
+            open: 0,
+            outByName: user.name,
+          });
+          result = { movementId: open.id, direction };
+          subject = open.id;
+          break;
+        }
+
+        if (open)
+          throw new AppError(
+            `${pass.personName} is already signed in. Sign them out first.`,
+            409,
+          );
+        const today = sastToday();
+        const clock = sastTime();
+        if (pass.revokedAt)
+          throw new AppError(
+            `This pass was revoked${pass.revokedByName ? ` by ${pass.revokedByName}` : ""}. Do not admit.`,
+            409,
+          );
+        if (today < pass.startDate)
+          throw new AppError(
+            `This pass does not start until ${pass.startDate}.`,
+            409,
+          );
+        if (today > pass.endDate)
+          throw new AppError(
+            `This pass expired on ${pass.endDate}. The office has to renew it.`,
+            409,
+          );
+        if (!allowsDay(pass.days, today))
+          throw new AppError(
+            `${pass.personName} is not down for today. This pass is good ${describeDays(pass.days).toLowerCase()}.`,
+            409,
+          );
+        if (clock < pass.fromTime || clock > pass.toTime)
+          throw new AppError(
+            `It is ${clock}. This pass admits between ${pass.fromTime} and ${pass.toTime}.`,
+            409,
+          );
+
+        const movementId = randomUUID();
+        t.create("movements", movementId, {
+          orgId,
+          propertyId: pass.propertyId,
+          regularId: pass.id,
+          personName: pass.personName,
+          occupation: pass.occupation,
+          unitLabel: pass.unitLabel ?? null,
+          date: today,
+          inAt: now(),
+          outAt: null,
+          open: 1,
+          inByName: user.name,
+          outByName: "",
+        });
+        result = { movementId, direction };
+        subject = movementId;
         break;
       }
 

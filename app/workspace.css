@@ -1769,3 +1769,177 @@
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------- */
+/* Regular passes: the people who work here                           */
+/* ---------------------------------------------------------------- */
+
+/* Who is inside right now, as cards rather than a table row: at a gate this
+   is glanced at, not read, and a guard needs the sign-out button under a
+   thumb. */
+.sp-onsite {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+.sp-onsite article {
+  border: 1px solid var(--sp-line);
+  border-left: 3px solid #4b8a5c;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #f4f8ef;
+}
+.sp-onsite article strong {
+  font-size: 15px;
+}
+.sp-onsite article button {
+  margin-top: 10px;
+}
+
+/* The same stripe language as the maintenance queue and the notice board. */
+.sp-regular {
+  border-left: 3px solid transparent;
+  padding: 4px 0 18px 14px;
+  border-bottom: 1px solid var(--sp-line);
+}
+.sp-regular:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.sp-regular h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.sp-standing-active {
+  border-left-color: #cdd7c6;
+}
+/* Somebody inside outranks the colour of their pass: it is what a guard is
+   looking for when they scan the list. */
+.sp-regular.is-inside {
+  border-left-color: #4b8a5c;
+}
+.sp-standing-revoked {
+  border-left-color: #b8452f;
+}
+.sp-standing-expired,
+.sp-standing-pending {
+  border-left-color: #d99a2b;
+}
+.sp-standing-expired,
+.sp-standing-revoked {
+  opacity: 0.66;
+}
+.sp-regular .sp-inline-form {
+  margin-top: 10px;
+}
+.sp-regular-qr {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #f0f5e7;
+}
+.sp-regular-qr p {
+  margin: 0;
+  max-width: 340px;
+  line-height: 1.7;
+  font-size: 13px;
+}
+
+/* The week, as seven toggles rather than a multi-select nobody can operate on
+   a phone. */
+.sp-days {
+  border: 1px solid var(--sp-line);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.sp-days legend {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 6px;
+}
+.sp-days > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sp-day-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 11px;
+  border: 1px solid #dbe2d5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  /* Overrides the stacked .sp-form label layout: these read as a row. */
+  min-height: 0;
+}
+.sp-day-toggle:has(input:checked) {
+  background: var(--sp-lime);
+  color: var(--sp-on-lime);
+  border-color: var(--sp-lime);
+  font-weight: 600;
+}
+
+/* The standing pass, as the person holding it sees it. Facts as a list rather
+   than prose: a guard reads it at arm's length across a boom. */
+.sp-pass-facts {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  margin: 4px 0;
+}
+.sp-pass-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--sp-line);
+}
+.sp-pass-facts > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.sp-pass-facts dt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--sp-muted);
+}
+.sp-pass-facts dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+.sp-pass-code {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--sp-forest);
+  color: var(--sp-on-forest);
+}
+.sp-pass-code p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--sp-on-forest) 78%, var(--sp-forest));
+}
+.sp-pass-code strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 26px;
+  letter-spacing: 4px;
+  color: var(--sp-lime);
+}
+.sp-pass-private {
+  font-size: 12px;
+}

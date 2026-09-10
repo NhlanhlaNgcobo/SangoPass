@@ -235,6 +235,58 @@ export interface LiveAnnouncement {
   archivedAt: string | null;
 }
 
+export type RegularKind = "staff" | "contractor" | "household";
+
+/**
+ * A standing authorisation for somebody who works here.
+ *
+ * The identity number is masked in transit exactly as a visitor's is: the
+ * gate needs the whole number and a browser never does.
+ */
+export interface LiveRegular {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  unitId: string | null;
+  unitLabel: string | null;
+  personName: string;
+  occupation: string;
+  employer: string;
+  phone: string;
+  kind: RegularKind;
+  idType: IdType;
+  /** Masked: only the last four characters are ever sent. */
+  idNumber: string;
+  reference: string;
+  token: string;
+  entryCode: string;
+  /** Seven characters of 0 or 1, Monday first. */
+  days: string;
+  fromTime: string;
+  toTime: string;
+  startDate: string;
+  endDate: string;
+  revokedAt: string | null;
+  revokedByName: string;
+  issuedByName: string;
+  createdAt: string;
+}
+
+/** One arrival by a regular, as the gate recorded it. */
+export interface LiveMovement {
+  id: string;
+  propertyId: string;
+  regularId: string;
+  personName: string;
+  occupation: string;
+  unitLabel: string | null;
+  date: string;
+  inAt: string;
+  outAt: string | null;
+  inByName: string;
+  outByName: string;
+}
+
 export interface WorkspaceState {
   asOf: string;
   user: Account;
@@ -281,6 +333,18 @@ export interface WorkspaceState {
    * is the record of what it has said.
    */
   announcements: LiveAnnouncement[];
+  /**
+   * Standing passes for the people who work here. The office sees its own,
+   * security sees its gate's, and a resident sees only the household worker
+   * the office issued for their own door.
+   */
+  regulars: LiveRegular[];
+  /**
+   * Recent arrivals by those people, newest first. Empty for a resident: who
+   * comes and goes through the gate is the building's register, not a
+   * neighbour's reading.
+   */
+  movements: LiveMovement[];
   /** The organisation's own money. Empty for every role but manager. */
   ledger: LiveLedgerEntry[];
   invoices: LiveInvoice[];
