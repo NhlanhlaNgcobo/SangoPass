@@ -45,7 +45,6 @@ export default function RegularsPanel({
   today,
   office,
   security,
-  tenant,
   busy,
   onAct,
 }: {
@@ -54,7 +53,6 @@ export default function RegularsPanel({
   today: string;
   office: boolean;
   security: boolean;
-  tenant: boolean;
   busy: boolean;
   onAct: (input: Record<string, unknown>) => void;
 }) {
@@ -122,7 +120,7 @@ export default function RegularsPanel({
 
   return (
     <>
-      {onSite.length > 0 && !tenant && (
+      {onSite.length > 0 && (
         <section className="sp-panel">
           <div className="sp-section-head">
             <h2>
@@ -368,8 +366,7 @@ export default function RegularsPanel({
       <section className="sp-panel">
         <div className="sp-section-head">
           <h2>
-            {tenant ? "Working at your unit" : "Regular passes"}{" "}
-            <span className="sp-muted">({rows.length})</span>
+            Regular passes <span className="sp-muted">({rows.length})</span>
           </h2>
           {state.regulars.length > 0 && (
             <label className="sp-search">
@@ -387,11 +384,9 @@ export default function RegularsPanel({
         {!rows.length ? (
           <p className="sp-muted">
             <HardHat size={16} />{" "}
-            {tenant
-              ? "Nobody has a standing pass for your unit. Ask the office if you need one for a domestic worker."
-              : office
-                ? "Nobody has a standing pass yet. Issue one for the cleaner, the gardener or a contractor on a job."
-                : "No regular passes for this property."}
+            {office
+              ? "Nobody has a standing pass yet. Issue one for the cleaner, the gardener or a contractor on a job."
+              : "No regular passes for this property."}
           </p>
         ) : (
           rows.map((r) => {
@@ -422,13 +417,13 @@ export default function RegularsPanel({
                   {describeDays(r.days)}, {r.fromTime}–{r.toTime} ·{" "}
                   {r.startDate} to {r.endDate}
                 </small>
-                {!tenant && (
+                {
                   <small className="sp-block sp-muted">
                     {r.reference} · Gate code{" "}
                     <strong>{formatEntryCode(r.entryCode)}</strong> ·{" "}
                     {ID_LABELS[r.idType]} {r.idNumber}
                   </small>
-                )}
+                }
                 {r.revokedAt && (
                   <small className="sp-block sp-muted">
                     Revoked{r.revokedByName ? ` by ${r.revokedByName}` : ""}.
@@ -452,7 +447,7 @@ export default function RegularsPanel({
                       {here ? "Sign out" : "Sign in"}
                     </button>
                   )}
-                  {!tenant && (
+                  {
                     <button
                       className="sp-text-button"
                       onClick={() => setShowQr(showQr === r.id ? "" : r.id)}
@@ -460,7 +455,7 @@ export default function RegularsPanel({
                       <QrCode size={15} />
                       {showQr === r.id ? "Hide code" : "Show code"}
                     </button>
-                  )}
+                  }
                   {office && !r.revokedAt && (
                     <button
                       className="sp-text-button danger"
@@ -494,7 +489,7 @@ export default function RegularsPanel({
         )}
       </section>
 
-      {!tenant && state.movements.length > 0 && (
+      {state.movements.length > 0 && (
         <section className="sp-panel">
           <div className="sp-section-head">
             <h2>Gate register</h2>

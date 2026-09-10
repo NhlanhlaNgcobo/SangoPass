@@ -13,6 +13,7 @@ export const REQUEST_KINDS = [
   "move_out",
   "unit_change",
   "property_change",
+  "household_pass",
 ] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
 
@@ -20,7 +21,16 @@ export const REQUEST_LABELS: Record<RequestKind, string> = {
   move_out: "Moving out",
   unit_change: "Change of unit",
   property_change: "Change of property",
+  household_pass: "Pass for a household worker",
 };
+
+/**
+ * A standing gate pass is the office's to issue, so a resident asks for one
+ * here rather than holding a screen of their own. The office is the one that
+ * checks the identity document, and a tenancy that could mint a standing key
+ * to the gate would not be a tenancy for long.
+ */
+export const HOUSEHOLD_PASS: RequestKind = "household_pass";
 
 /**
  * The hint under the notice type. Addressed to the resident, because the only
@@ -30,6 +40,8 @@ export const REQUEST_DESCRIPTIONS: Record<RequestKind, string> = {
   move_out: "You are giving notice that you intend to leave.",
   unit_change: "You would like a different unit in the same property.",
   property_change: "You would like to move to a different property.",
+  household_pass:
+    "You are asking the office for a standing gate pass for somebody who works at your home — a domestic worker, a nanny, a carer. Reception issues it once they have seen their identity document.",
 };
 
 export const REQUEST_STATUSES = [

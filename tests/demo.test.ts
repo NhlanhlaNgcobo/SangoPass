@@ -612,11 +612,11 @@ test("the demo shows who works here and who is on site", async (t) => {
     assert.ok(names.some((n) => /Grace/.test(n)));
   });
 
-  await t.test("a resident sees only the one working at their unit", () => {
-    const mine = viewFor(world, resident).regulars;
-    assert.equal(mine.length, 1);
-    assert.equal(mine[0].kind, "household");
-    assert.equal(mine[0].unitId, resident.unitId);
+  await t.test("a resident reads none of the board", () => {
+    // A standing pass is the office's to issue and the estate's staff list
+    // was never a tenancy's business. A resident who wants one for their own
+    // home asks for it from My notices instead.
+    assert.deepEqual(viewFor(world, resident).regulars, []);
   });
 
   await t.test("and never reads the gate register", () => {
@@ -630,23 +630,36 @@ test("the demo shows who works here and who is on site", async (t) => {
   });
 
   await t.test("the guard signs somebody out and then back in", () => {
-    const out = apply(world, guard, {
+    // demo-regular-3 is the carer: every day, any hour, so this does not
+    // depend on what time the suite happens to run.
+    const inFirst = apply(world, guard, {
       action: "movement",
-      id: "demo-regular-1",
+      id: "demo-regular-3",
+      direction: "in",
+    });
+    assert.equal(
+      viewFor(inFirst.world, guard).movements.filter((m) => !m.outAt).length,
+      2,
+      "the cleaner who was already on site, and now the carer",
+    );
+    const out = apply(inFirst.world, guard, {
+      action: "movement",
+      id: "demo-regular-3",
       direction: "out",
     });
     assert.equal(
       viewFor(out.world, guard).movements.filter((m) => !m.outAt).length,
-      0,
+      1,
+      "the carer is out again",
     );
     const back = apply(out.world, guard, {
       action: "movement",
-      id: "demo-regular-1",
+      id: "demo-regular-3",
       direction: "in",
     });
     assert.equal(
       viewFor(back.world, guard).movements.filter((m) => !m.outAt).length,
-      1,
+      2,
     );
   });
 

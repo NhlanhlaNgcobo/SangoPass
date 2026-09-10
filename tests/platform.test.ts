@@ -4,7 +4,12 @@ process.env.SANGOPASS_DATABASE_PATH = ":memory:";
 process.env.SANGOPASS_BACKEND = "sqlite";
 
 import { login, register, tenantLogin } from "../lib/server/auth";
-import { BACKSTOPS, bucket, sweepRateLimits, throttle } from "../lib/server/ratelimit";
+import {
+  BACKSTOPS,
+  bucket,
+  sweepRateLimits,
+  throttle,
+} from "../lib/server/ratelimit";
 import { ConflictError, store } from "../lib/server/store";
 import { SqliteStore } from "../lib/server/store/sqlite";
 import {
@@ -21,19 +26,22 @@ import { assertDeployable, ephemeralHost } from "../lib/server/config";
 const pass = "A long secure test phrase 2026!";
 
 test("rate limiting is scoped per tenant, not shared across the platform", async (t) => {
-  await t.test("one account's exhausted bucket does not touch another", async () => {
-    const mine = bucket("scoped:account-a", 3);
-    const theirs = bucket("scoped:account-b", 3);
-    await throttle([mine]);
-    await throttle([mine]);
-    await throttle([mine]);
-    await assert.rejects(throttle([mine]), /Too many attempts/);
-    // The neighbour is completely unaffected.
-    await throttle([theirs]);
-    await throttle([theirs]);
-    await throttle([theirs]);
-    await assert.rejects(throttle([theirs]), /Too many attempts/);
-  });
+  await t.test(
+    "one account's exhausted bucket does not touch another",
+    async () => {
+      const mine = bucket("scoped:account-a", 3);
+      const theirs = bucket("scoped:account-b", 3);
+      await throttle([mine]);
+      await throttle([mine]);
+      await throttle([mine]);
+      await assert.rejects(throttle([mine]), /Too many attempts/);
+      // The neighbour is completely unaffected.
+      await throttle([theirs]);
+      await throttle([theirs]);
+      await throttle([theirs]);
+      await assert.rejects(throttle([theirs]), /Too many attempts/);
+    },
+  );
 
   await t.test(
     "a busy residence cannot lock every other organisation out of sign-in",
@@ -92,16 +100,22 @@ test("rate limiting is scoped per tenant, not shared across the platform", async
     },
   );
 
-  await t.test("elapsed windows are swept by maintenance, not by sign-in", async () => {
-    await store().tx(async (tx) => {
-      tx.set("rateLimits", "expired-window", {
-        count: 99,
-        resetsAt: Date.now() - 1000,
+  await t.test(
+    "elapsed windows are swept by maintenance, not by sign-in",
+    async () => {
+      await store().tx(async (tx) => {
+        tx.set("rateLimits", "expired-window", {
+          count: 99,
+          resetsAt: Date.now() - 1000,
+        });
       });
-    });
-    assert.ok((await sweepRateLimits()) >= 1);
-    assert.equal(await store().get("rateLimits", "expired-window"), undefined);
-  });
+      assert.ok((await sweepRateLimits()) >= 1);
+      assert.equal(
+        await store().get("rateLimits", "expired-window"),
+        undefined,
+      );
+    },
+  );
 });
 
 test("the store contract behaves the same way for every backend", async (t) => {
@@ -126,22 +140,25 @@ test("the store contract behaves the same way for every backend", async (t) => {
     });
   });
 
-  await t.test("a transaction refuses a read after its first write", async () => {
-    await assert.rejects(
-      isolated.tx(async (tx) => {
-        tx.set("organisations", "org-x", {
-          name: "X",
-          plan: "starter",
-          trialUntil: "2030-01-01T00:00:00.000Z",
-          paidUntil: null,
-          createdAt: "2026-01-01T00:00:00.000Z",
-        });
-        // Firestore forbids this outright; SQLite refuses so the two agree.
-        await tx.get("organisations", "org-x");
-      }),
-      /every read before the first write/,
-    );
-  });
+  await t.test(
+    "a transaction refuses a read after its first write",
+    async () => {
+      await assert.rejects(
+        isolated.tx(async (tx) => {
+          tx.set("organisations", "org-x", {
+            name: "X",
+            plan: "starter",
+            trialUntil: "2030-01-01T00:00:00.000Z",
+            paidUntil: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+          });
+          // Firestore forbids this outright; SQLite refuses so the two agree.
+          await tx.get("organisations", "org-x");
+        }),
+        /every read before the first write/,
+      );
+    },
+  );
 
   await t.test("a failed transaction commits nothing", async () => {
     await assert.rejects(
@@ -193,10 +210,7 @@ test("the store contract behaves the same way for every backend", async (t) => {
       await isolated.count("properties", { where: [["orgId", "==", "org-1"]] }),
       3,
     );
-    assert.equal(
-      (await isolated.find("properties", { limit: 2 })).length,
-      2,
-    );
+    assert.equal((await isolated.find("properties", { limit: 2 })).length, 2);
   });
 
   await t.test("null comparisons work like Firestore's", async () => {
@@ -368,4 +382,67 @@ test("plan limits have exactly one definition", () => {
   // Unknown or missing plans fall back to Starter rather than to no limits.
   assert.equal(plan(undefined).units, PLANS.starter.units);
   assert.equal(plan("enterprise-nonsense").units, PLANS.starter.units);
+});
+
+test("a showcase deployment really has accounts switched off", async (t) => {
+  const { POST } = await import("../app/api/auth/[action]/route");
+  const call = (action: string, payload: Record<string, unknown>) =>
+    POST(
+      new Request("https://demo.sangopass.test/api/auth/" + action, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://demo.sangopass.test",
+        },
+        body: JSON.stringify(payload),
+      }),
+      { params: Promise.resolve({ action }) },
+    );
+
+  const previousUrl = process.env.APP_URL;
+  process.env.APP_URL = "https://demo.sangopass.test";
+  process.env.SANGOPASS_DEMO = "true";
+
+  await t.test("registering is refused, and says where to go", async () => {
+    // The sign-in screens already told a visitor accounts were off. The API
+    // did not, and on a host with a throwaway filesystem that meant an
+    // account which worked once and then vanished.
+    const response = await call("register", {
+      name: "Curious Prospect",
+      email: "prospect@example.test",
+      organisation: "Anywhere",
+      password: "a long enough password 2026!",
+    });
+    assert.equal(response.status, 403);
+    assert.match((await response.json()).error, /\/demo/);
+  });
+
+  await t.test("so is signing in, joining and password recovery", async () => {
+    for (const action of ["login", "tenant-login", "join", "forgot", "reset"])
+      assert.equal(
+        (await call(action, {})).status,
+        403,
+        `${action} should be refused`,
+      );
+  });
+
+  await t.test("signing out is not refused by the mode", async () => {
+    // It takes access away rather than granting it, and refusing it would
+    // strand anyone holding a cookie from before the switch was thrown. The
+    // call cannot succeed in this harness, because reading the cookie needs a
+    // real request scope - what matters here is that the demo guard lets it
+    // through rather than answering 403 like everything else.
+    assert.notEqual((await call("logout", {})).status, 403);
+  });
+
+  await t.test("and none of this applies to a real deployment", async () => {
+    delete process.env.SANGOPASS_DEMO;
+    const response = await call("login", {
+      email: "nobody@example.test",
+      password: "wrong password entirely",
+    });
+    assert.notEqual(response.status, 403, "refused on its merits, not by mode");
+  });
+
+  process.env.APP_URL = previousUrl;
 });

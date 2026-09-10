@@ -9,6 +9,7 @@ import { importResidents } from "../lib/server/enrolment";
 import { csvDocument } from "../lib/shared/csv";
 import { PLANS, effectivePlanId } from "../lib/shared/plans";
 import { describeShape } from "../lib/server/occupancy-rules";
+import { sastToday } from "../lib/server/visits";
 import { store } from "../lib/server/store";
 import type {
   PropertyRecord,
@@ -18,6 +19,11 @@ import type {
 import type { Account } from "../types/workspace";
 
 const pass = "A long secure test phrase 2026!";
+
+const day = (offset: number) =>
+  new Date(Date.parse(`${sastToday()}T00:00:00Z`) + offset * 86400000)
+    .toISOString()
+    .slice(0, 10);
 
 interface Estate {
   owner: Account;
@@ -593,4 +599,122 @@ test("sharers draw on one guest allowance, because the door is one door", async 
   assert.equal(first.allowance!.activeGuests, second.allowance!.activeGuests);
   assert.equal(first.units[0].occupants, 2, "and each sees the flat is shared");
   assert.equal(first.units[0].maxOccupants, 3);
+});
+
+/* ------------------------------------------------------------------ */
+/* Asking the office for a household pass                              */
+/* ------------------------------------------------------------------ */
+
+test("a resident asks for a household pass; only the office issues it", async (t) => {
+  const e = await estate();
+  const unitId = await addUnit(e, "H1", { bedrooms: 2, maxOccupants: 3 });
+  const resident = await moveIn(e, unitId, "helper-host");
+
+  await t.test("a resident reads none of the standing passes", async () => {
+    await command(e.owner, e.orgId, {
+      action: "regular",
+      propertyId: e.propertyId,
+      personName: "Grace Mthembu",
+      occupation: "Cleaner",
+      phone: "+27 82 555 0111",
+      kind: "staff",
+      idType: "sa_id",
+      idNumber: "8001015009087",
+      days: "1111111",
+      fromTime: "00:00",
+      toTime: "23:59",
+      startDate: day(-1),
+      endDate: day(90),
+    });
+    const live = await workspace(resident, e.orgId);
+    // The estate's staff list was never a tenancy's business, and a standing
+    // key to the gate is not a resident's to mint.
+    assert.deepEqual(live.regulars, []);
+    assert.deepEqual(live.movements, []);
+  });
+
+  await t.test(
+    "they ask for one instead, and it lands in Requests",
+    async () => {
+      const asked = await command(resident, e.orgId, {
+        action: "notice",
+        kind: "household_pass",
+        effectiveDate: day(7),
+        details:
+          "Nomvula Sithole, my domestic worker. Mon, Wed, Fri 08:00-16:00. She will bring her ID to reception.",
+      });
+      assert.ok(asked.id);
+      const office = await workspace(e.owner, e.orgId);
+      const request = office.requests.find((r) => r.id === asked.id)!;
+      assert.equal(request.kind, "household_pass");
+      assert.equal(request.status, "open");
+      assert.equal(request.unitLabel, "H1");
+    },
+  );
+
+  await t.test("still nobody but the office may issue the pass", async () => {
+    await assert.rejects(
+      command(resident, e.orgId, {
+        action: "regular",
+        propertyId: e.propertyId,
+        unitId,
+        personName: "Nomvula Sithole",
+        occupation: "Domestic worker",
+        phone: "+27 71 555 0133",
+        kind: "household",
+        idType: "sa_id",
+        idNumber: "8001015009087",
+        days: "1010100",
+        fromTime: "08:00",
+        toTime: "16:00",
+        startDate: day(7),
+        endDate: day(90),
+      }),
+      /manager or reception/i,
+    );
+  });
+
+  await t.test("the office issues it against their unit", async () => {
+    const issued = await command(e.owner, e.orgId, {
+      action: "regular",
+      propertyId: e.propertyId,
+      unitId,
+      personName: "Nomvula Sithole",
+      occupation: "Domestic worker",
+      phone: "+27 71 555 0133",
+      kind: "household",
+      idType: "sa_id",
+      idNumber: "8001015009087",
+      days: "1010100",
+      fromTime: "08:00",
+      toTime: "16:00",
+      startDate: day(7),
+      endDate: day(90),
+    });
+    assert.ok(issued.id);
+    // And the resident still does not read the board - the answer reaches
+    // them through the request they raised.
+    assert.deepEqual((await workspace(resident, e.orgId)).regulars, []);
+  });
+
+  await t.test("only the office may answer the request", async () => {
+    const mine = (await workspace(resident, e.orgId)).requests[0];
+    await assert.rejects(
+      command(resident, e.orgId, {
+        action: "noticeStatus",
+        id: mine.id,
+        status: "approved",
+      }),
+      /manager or reception/i,
+    );
+    await command(e.owner, e.orgId, {
+      action: "noticeStatus",
+      id: mine.id,
+      status: "completed",
+      note: "Pass issued. Nomvula collected it at reception.",
+    });
+    const answered = (await workspace(resident, e.orgId)).requests[0];
+    assert.equal(answered.status, "completed");
+    assert.match(answered.decisionNote, /collected it at reception/);
+  });
 });

@@ -506,19 +506,13 @@ export async function workspace(
     announcementsFor(database, m.orgId, m.propertyId, isManager),
     // Who works here. The gate needs it most - a guard admitting the same
     // cleaner every morning is exactly who this exists for - so security
-    // reads its own property's. A resident sees only the household worker the
-    // office issued for their own door, because that is their arrangement;
-    // the estate's staff list is not theirs to read.
+    // reads its own property's, and the office reads the organisation's.
+    //
+    // A resident reads none of it. A standing pass is the office's to issue,
+    // and the estate's staff list was never a tenancy's business; a resident
+    // who wants one for their own home asks for it from My notices.
     m.role === "tenant"
-      ? m.unitId
-        ? database.find<RegularRecord>("regulars", {
-            where: [
-              ["orgId", "==", m.orgId],
-              ["unitId", "==", m.unitId],
-            ],
-            orderBy: [{ field: "personName" }],
-          })
-        : Promise.resolve([])
+      ? Promise.resolve([])
       : isManager
         ? database.find<RegularRecord>("regulars", {
             where: [["orgId", "==", m.orgId]],

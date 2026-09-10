@@ -513,18 +513,16 @@ test("a standing pass reaches the gate, the office, and the door it is for", asy
     assert.equal(live.regulars.length, 2);
   });
 
-  await t.test(
-    "the resident sees only their own household worker",
-    async () => {
-      const live = await workspace(e.resident, e.orgId);
-      assert.deepEqual(
-        live.regulars.map((r) => r.id),
-        [household],
-        "the estate's cleaner is not a tenancy's business",
-      );
-      assert.ok(!live.regulars.some((r) => r.id === staff));
-    },
-  );
+  await t.test("a resident reads none of the board", async () => {
+    const live = await workspace(e.resident, e.orgId);
+    // Not even the one working at their own door. A standing pass is the
+    // office's to issue and the estate's staff list was never a tenancy's
+    // business; a resident who wants one asks for it from My requests, and
+    // the answer comes back there.
+    assert.deepEqual(live.regulars, []);
+    void household;
+    void staff;
+  });
 
   await t.test("and no resident reads the gate register", async () => {
     await command(e.guard, e.orgId, {

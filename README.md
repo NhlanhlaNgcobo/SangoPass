@@ -208,6 +208,8 @@ board makes it visible in one click, since the guard's board carries the broken
 boom the residents never see and not the AGM they do. **Reset data** puts the
 world back.
 
+On a showcase deployment every account action is refused at the API, not only discouraged on the sign-in screens: registering, signing in, redeeming an invitation and password recovery all answer 403 and point at /demo. Signing out is the one exception, because it takes access away rather than granting it. Without that, a prospect could register against a filesystem the host throws away between invocations and get an account that worked once and then vanished.
+
 Set `SANGOPASS_DEMO=true` for a showcase deployment: the boot guard then allows
 ephemeral hosting (there is nothing to store), `APP_URL` becomes optional, and
 the sign-in screens say accounts are switched off and point at the demo. The

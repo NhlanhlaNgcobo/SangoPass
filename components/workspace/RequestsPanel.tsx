@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { Inbox, Send } from "lucide-react";
 import {
+  HOUSEHOLD_PASS,
   OFFICE_STATUSES,
   REQUEST_DESCRIPTIONS,
   REQUEST_KINDS,
@@ -61,13 +62,13 @@ export default function RequestsPanel({
       {tenant && (
         <section className="sp-panel">
           <div className="sp-section-head">
-            <h2>Give notice</h2>
+            <h2>Ask the office</h2>
           </div>
           <p className="sp-muted" style={{ marginTop: -4 }}>
-            Tell the office you are moving out, or that you would like a
-            different unit or property. It goes to reception and your manager,
-            and you can see what they decide below. Nothing changes until they
-            answer.
+            Tell them you are moving out or would like a different unit, or ask
+            for a standing gate pass for somebody who works at your home. It
+            goes to reception and your manager, and you can see what they decide
+            below. Nothing changes until they answer.
           </p>
           <form className="sp-form" onSubmit={raise}>
             <label>
@@ -89,22 +90,40 @@ export default function RequestsPanel({
               <span>From when</span>
               <input name="effectiveDate" type="date" required />
               <small className="sp-muted">
-                The date you intend it to take effect. Check your lease for how
-                much notice you owe.
+                {kind === HOUSEHOLD_PASS
+                  ? "The first day they would need to come in."
+                  : "The date you intend it to take effect. Check your lease for how much notice you owe."}
               </small>
             </label>
             <label>
-              <span>Anything the office should know</span>
+              <span>
+                {kind === HOUSEHOLD_PASS
+                  ? "Who they are, and when they come"
+                  : "Anything the office should know"}
+              </span>
               <textarea
                 name="details"
-                rows={3}
+                rows={kind === HOUSEHOLD_PASS ? 4 : 3}
                 maxLength={1000}
-                placeholder="A new job in another city, and I would like the exit inspection on a Saturday if possible."
+                required={kind === HOUSEHOLD_PASS}
+                placeholder={
+                  kind === HOUSEHOLD_PASS
+                    ? "Nomvula Sithole, my domestic worker. Mondays, Wednesdays and Fridays, 8am to 4pm. She will bring her ID to reception."
+                    : "A new job in another city, and I would like the exit inspection on a Saturday if possible."
+                }
               />
+              {kind === HOUSEHOLD_PASS && (
+                <small className="sp-muted">
+                  Reception issues the pass once they have seen the
+                  person&rsquo;s identity document, so send them in with it.
+                  Give their full name, what they do for you, and which days and
+                  hours they need.
+                </small>
+              )}
             </label>
             <button className="sp-primary" disabled={busy}>
               <Send size={15} />
-              Send notice
+              {kind === HOUSEHOLD_PASS ? "Send request" : "Send notice"}
             </button>
           </form>
         </section>
@@ -113,7 +132,7 @@ export default function RequestsPanel({
       <section className="sp-panel">
         <div className="sp-section-head">
           <h2>
-            {office ? "Resident notices" : "Your notices"}{" "}
+            {office ? "Resident requests" : "Your requests"}{" "}
             <span className="sp-muted">
               ({open} awaiting {office ? "you" : "the office"})
             </span>
@@ -124,7 +143,7 @@ export default function RequestsPanel({
           <p className="sp-muted">
             <Inbox size={16} />{" "}
             {office
-              ? "No notices. When a resident says they are moving out or want a different unit, it lands here."
+              ? "Nothing waiting. When a resident gives notice, or asks for a gate pass for their domestic worker, it lands here."
               : "You have not given any notice."}
           </p>
         ) : (
@@ -167,6 +186,13 @@ export default function RequestsPanel({
                       <strong>{REQUEST_LABELS[r.kind]}</strong>
                       {r.details && (
                         <small className="sp-block sp-muted">{r.details}</small>
+                      )}
+                      {office && r.kind === HOUSEHOLD_PASS && (
+                        <small className="sp-block sp-muted">
+                          Issue it from Regular passes as a household worker
+                          against {r.unitLabel || "their unit"}, once you have
+                          seen their identity document.
+                        </small>
                       )}
                       <small className="sp-block sp-muted">
                         Raised {asDate(r.createdAt)}

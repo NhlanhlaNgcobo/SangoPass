@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Camera, KeyRound, Upload, X } from "lucide-react";
+import { Camera, IdCard, KeyRound, Upload, X } from "lucide-react";
 import { formatEntryCode, normaliseEntryCode } from "@/lib/shared/passcode";
 export default function PassScanner({
   onScan,
   onCode,
+  onIdNumber,
 }: {
   onScan: (value: string) => boolean;
   /**
@@ -14,10 +15,18 @@ export default function PassScanner({
    * hidden behind the search box.
    */
   onCode: (code: string) => boolean;
+  /**
+   * The last resort, and the one that works when everything else has failed:
+   * the card in the visitor's hand. They forgot the pass, never got the text,
+   * and cannot remember the reference - but they are holding a document with
+   * a number on it, and that number is on the booking.
+   */
+  onIdNumber: (value: string) => boolean;
 }) {
   const [camera, setCamera] = useState(false),
     [error, setError] = useState(""),
     [typed, setTyped] = useState(""),
+    [document_, setDocument] = useState(""),
     [busy, setBusy] = useState(false);
   const video = useRef<HTMLVideoElement>(null),
     input = useRef<HTMLInputElement>(null),
@@ -133,6 +142,25 @@ export default function PassScanner({
       if (input.current) input.current.value = "";
     }
   }
+  function checkDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const value = document_.trim();
+    // Four is the most the mask leaves readable, so fewer than that would
+    // match half the register rather than narrow it.
+    if (value.length < 4) {
+      setError("Type at least the last four characters of their document.");
+      return;
+    }
+    if (!onIdNumber(value)) {
+      setError(
+        "No pass at this property carries that identity number. Check the document, or search by the visitor name.",
+      );
+      return;
+    }
+    setDocument("");
+  }
+
   function verify(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -182,6 +210,34 @@ export default function PassScanner({
           onChange={(e) => void upload(e.target.files?.[0])}
         />
       </div>
+      <form className="sp-code-check" onSubmit={checkDocument}>
+        <label>
+          <span>Identity number</span>
+          <input
+            value={document_}
+            onChange={(e) => setDocument(e.target.value)}
+            placeholder="8001015009087"
+            aria-label="Identity number on the document the visitor is holding"
+            autoCapitalize="characters"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={80}
+          />
+        </label>
+        <button
+          className="sp-secondary"
+          type="submit"
+          disabled={document_.trim().length < 4}
+        >
+          <IdCard size={15} />
+          Find by ID
+        </button>
+        <small className="sp-muted">
+          For a visitor who arrives with no pass and no code. The whole number
+          off the card, or just its last four characters — the full number never
+          reaches this screen, so both find the same booking.
+        </small>
+      </form>
       <form className="sp-code-check" onSubmit={verify}>
         <label>
           <span>Gate code</span>

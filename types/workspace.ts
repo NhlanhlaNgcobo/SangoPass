@@ -191,7 +191,8 @@ export interface LiveDocument {
   uploadedByName: string;
 }
 
-export type RequestKind = "move_out" | "unit_change" | "property_change";
+export type RequestKind =
+  "move_out" | "unit_change" | "property_change" | "household_pass";
 export type RequestStatus =
   "open" | "acknowledged" | "approved" | "declined" | "withdrawn" | "completed";
 

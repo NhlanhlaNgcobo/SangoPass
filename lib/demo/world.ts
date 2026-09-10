@@ -214,7 +214,18 @@ export function seedWorld(): DemoWorld {
   ];
 
   const units: LiveUnit[] = [
-    unit("demo-unit-a101", COURT, "A-101", 780000, "Thabo Molefe"),
+    unit(
+      "demo-unit-a101",
+      COURT,
+      "A-101",
+      780000,
+      "Thabo Molefe",
+      1,
+      false,
+      2,
+      3,
+      2,
+    ),
     unit("demo-unit-a204", COURT, "A-204", 810000, "Aisha Petersen"),
     unit("demo-unit-a205", COURT, "A-205", 810000, null, 0),
     unit("demo-unit-b102", COURT, "B-102", 690000, "Riaan van Wyk", 0),
@@ -271,6 +282,17 @@ export function seedWorld(): DemoWorld {
       propertyId: COURT,
       unitId: "demo-unit-a101",
       username: "SP-A101-3B7E20DD",
+    },
+    // Sharing A-101 with Thabo: two of its three places taken, so a prospect
+    // can see what a shared flat looks like in the register.
+    {
+      id: "demo-kagiso",
+      name: "Kagiso Mahlangu",
+      email: "kagiso@ubuntuliving.demo",
+      role: "tenant",
+      propertyId: COURT,
+      unitId: "demo-unit-a101",
+      username: "SP-A101-9C4F18AE",
     },
     {
       id: "demo-lerato",
@@ -915,7 +937,7 @@ export function seedWorld(): DemoWorld {
       unitId: "demo-unit-a204",
       unitLabel: "A-204",
       personName: "Nomvula Sithole",
-      occupation: "Domestic worker",
+      occupation: "Carer",
       employer: "",
       phone: "+27 71 555 0133",
       kind: "household",
@@ -924,9 +946,12 @@ export function seedWorld(): DemoWorld {
       reference: "SP-HOUSE00003",
       token: token(9103),
       entryCode: demoGateCode(9103),
-      days: "1010100",
-      fromTime: "08:00",
-      toTime: "16:00",
+      // Every day and any hour: a carer for an elderly resident is a real
+      // arrangement, and it means a prospect opening the demo at any time of
+      // day has one pass they can actually sign in and out.
+      days: "1111111",
+      fromTime: "00:00",
+      toTime: "23:59",
       startDate: day(-200),
       endDate: day(90),
       revokedAt: null,
@@ -970,7 +995,7 @@ export function seedWorld(): DemoWorld {
       propertyId: COURT,
       regularId: "demo-regular-3",
       personName: "Nomvula Sithole",
-      occupation: "Domestic worker",
+      occupation: "Carer",
       unitLabel: "A-204",
       date: day(-2),
       inAt: stamp(-2.35),
@@ -1225,14 +1250,15 @@ export function viewFor(
         (a) => showing(a, today) && addresses(a.audience, persona.role),
       );
 
-  // Who works here. The gate reads its own building's; a resident reads only
-  // the household worker attached to their own door, because the estate's
-  // staff list is not a tenancy's business.
-  const regulars = isManager
-    ? world.regulars
-    : persona.role === "tenant"
-      ? world.regulars.filter((r) => r.unitId === persona.unitId)
-      : world.regulars.filter((r) => r.propertyId === persona.propertyId);
+  // Who works here. The gate reads its own building's and the office reads
+  // the organisation's. A resident reads none of it: a standing pass is the
+  // office's to issue, and they ask for one from My notices.
+  const regulars =
+    persona.role === "tenant"
+      ? []
+      : isManager
+        ? world.regulars
+        : world.regulars.filter((r) => r.propertyId === persona.propertyId);
 
   // And who came and went. A resident gets none of it.
   const movements =

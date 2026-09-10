@@ -485,18 +485,18 @@ export default function WorkspaceApp({
     // Beside the visitor register rather than inside it: a guest pass is one
     // arrival and a regular pass is a standing arrangement, and a guard looking
     // for the cleaner should not have to scroll past every guest booked today.
-    ...(office || security || tenant
-      ? [
-          {
-            id: "regulars",
-            title: tenant ? "Working here" : "Regular passes",
-            icon: HardHat,
-          },
-        ]
+    //
+    // Not a resident's screen. A standing pass is the office's to issue, and a
+    // resident asks for one from My notices instead - which is where the
+    // answer comes back, and where the office's decision is recorded.
+    ...(office || security
+      ? [{ id: "regulars", title: "Regular passes", icon: HardHat }]
       : []),
     {
       id: "reports",
-      title: office ? "Maintenance" : "Reports",
+      // A resident sees only what they reported themselves, so the tab says
+      // so rather than leaving them to wonder whose issues these are.
+      title: office ? "Maintenance" : tenant ? "My reports" : "Reports",
       icon: ClipboardList,
     },
     // Everyone gets the board, under the name that describes their side of it:
@@ -516,7 +516,7 @@ export default function WorkspaceApp({
       : []),
     // A resident raises notices and watches what the office does with them, so
     // they get the same tab under the name that describes their side of it.
-    ...(tenant ? [{ id: "requests", title: "My notices", icon: Inbox }] : []),
+    ...(tenant ? [{ id: "requests", title: "My requests", icon: Inbox }] : []),
     // Money is the whole of what reception does not get: the books, and the
     // subscription that pays for the product.
     ...(manager
@@ -1049,9 +1049,7 @@ export default function WorkspaceApp({
                     reports: "Keep your community cared for.",
                     regulars: office
                       ? "The people who work here, and who is on site."
-                      : security
-                        ? "Who works here, and who is inside right now."
-                        : "Who the office has cleared to work at your unit.",
+                      : "Who works here, and who is inside right now.",
                     announcements: office
                       ? "Say it once, and everybody has it."
                       : "What the office wants you to know.",
@@ -1815,6 +1813,43 @@ export default function WorkspaceApp({
                     );
                     return true;
                   }}
+                  onIdNumber={(value) => {
+                    // The card in their hand is the one thing at a gate that
+                    // is certainly right: the name was spelt differently on
+                    // the booking, the pass is at home and nobody can recall
+                    // the reference. Because the whole number never reaches
+                    // this screen, the match is on the last four the mask
+                    // leaves readable - so the number off the card and those
+                    // four digits alone both land on the same booking.
+                    const guests = state.visitors.filter((v) =>
+                      matchesMaskedId(v.idNumber, value),
+                    );
+                    const workers = state.regulars.filter((r) =>
+                      matchesMaskedId(r.idNumber, value),
+                    );
+                    if (!guests.length && !workers.length) return false;
+                    // Four characters narrow a register rather than settle
+                    // it, so the guard is handed the shortlist and the name,
+                    // host and unit beside each row are what pick the person.
+                    if (guests.length) {
+                      setSearch(
+                        guests.length === 1 ? guests[0].reference : value,
+                      );
+                      setNotice(
+                        guests.length === 1
+                          ? `That document matches ${guests[0].visitorName}, expected at ${guests[0].propertyName}${guests[0].unitLabel ? ` for ${guests[0].unitLabel}` : ""}. Check the status and the arrival window before admitting them.`
+                          : `${guests.length} passes carry those last four characters. Pick the right person from the list — the name, host and unit are beside each one.`,
+                      );
+                      return true;
+                    }
+                    setView("regulars");
+                    setNotice(
+                      workers.length === 1
+                        ? `That document matches ${workers[0].personName}, ${workers[0].occupation} — a regular pass. Sign them in from Regular passes.`
+                        : `${workers.length} regular passes carry those last four characters. Pick the right person from Regular passes.`,
+                    );
+                    return true;
+                  }}
                   onCode={(code) => {
                     // Verification, not admission: the guard still reads the
                     // status and the arrival window, and still checks the
@@ -2337,13 +2372,12 @@ export default function WorkspaceApp({
               onError={setError}
             />
           )}
-          {view === "regulars" && (
+          {view === "regulars" && (office || security) && (
             <RegularsPanel
               state={state}
               today={day()}
               office={office}
               security={security}
-              tenant={tenant}
               busy={busy}
               onAct={(input) => void act(input)}
             />
