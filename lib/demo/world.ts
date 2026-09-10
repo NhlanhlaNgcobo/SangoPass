@@ -158,11 +158,19 @@ function unit(
   residentName: string | null = null,
   rentPaid = 1,
   archived = false,
+  // A two-bedroom taking three sharers is an ordinary South African letting,
+  // so the sample estate has one of those as well as single-occupant flats.
+  bedrooms = 1,
+  maxOccupants = 1,
+  occupants = residentName ? 1 : 0,
 ): LiveUnit {
   return {
     id,
     propertyId,
     label,
+    bedrooms,
+    maxOccupants,
+    occupants,
     rentCents,
     rentPaid,
     // A paid flag belongs to a month. The sample estate is paid up for the
@@ -1090,6 +1098,8 @@ export function seedWorld(): DemoWorld {
       trialUntil: stamp(-30),
       paidUntil: stamp(19),
       active: true,
+      activePlan: "growth",
+      suspended: false,
       theme: { ...DEFAULT_THEME },
     },
     properties,

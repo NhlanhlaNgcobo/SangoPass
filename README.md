@@ -13,9 +13,9 @@ npm run dev
 
 Open http://localhost:3000 and choose **Start your free trial**. Create your organisation, add a property and units, then invite residents or security. No cloud project is needed: records are saved to data/sangopass.sqlite (ignored by Git). Never commit customer databases or credentials.
 
-- /register creates a real account and organisation with a 14-day Starter trial.
+- /register creates a real account and organisation with a 14-day Starter trial. When it ends without a payment the organisation lands on the **Free** tier — 5 units, 10 residents, one sign-in — rather than being locked out.
 - /login signs in to the live /workspace using a server session.
-- Managers manage properties, units, invitations, visitor movements, rent status, maintenance, maintenance contacts, tenant **Documents**, resident **Requests**, bulk resident **import**, **Regular passes** for the people who work there, **Announcements** to their buildings, the property's own books under **Money**, brand colours and billing.
+- Managers manage properties, units (with bedrooms and how many people may live in each), invitations, visitor movements, rent status, maintenance, maintenance contacts, tenant **Documents**, resident **Requests**, bulk resident **import**, **Regular passes** for the people who work there, **Announcements** to their buildings, the property's own books under **Money**, brand colours and billing.
 - **Reception** is the front desk of one property: every manager screen for that building — properties, people, visitor passes, maintenance, contacts, documents, requests, announcements and brand — and never **Money** or **Billing**. It cannot create or remove manager and reception accounts either, because a role that can mint managers is a manager. A reception account uses one of the plan's sign-ins, for the same reason: it does nearly everything a manager does, so a free one would make the seat limit a formality.
 - Managers enrol residents by email and vacant unit. Apartment residents receive a generated unit-linked username; student accommodation requires their student number, preserved exactly (including leading zeroes).
 - The welcome email provides the username, property/unit and a one-use password-setup link. Tenant sign-in is at /tenant/login. The emailed login link pre-fills the property code so matching student numbers at different properties remain separate.
@@ -70,6 +70,22 @@ Codes verify; they do not admit. Security confirms the code, then still reads th
 - **Guest passes a unit may hold at once** (default 2). Upcoming and checked-in passes occupy a slot; checking out or cancelling frees it.
 
 Limits are enforced per unit, not per person, and enforced on the server. The resident sees where their unit stands for the current month before filling in the form.
+
+## How many people a unit holds
+
+**A manager says how many residents may live in each unit**, because they are the one who has been inside the building. A unit records its **bedrooms** and **how many people may be enrolled there**, and the second is never derived from the first: a two-bedroom taking three sharers and a family of five in the same flat are both ordinary South African lettings, and a product that computed the limit from the bedroom count would be arguing with the person who signed the lease.
+
+Enrolment is refused past that limit, counting **people already in and invitations nobody has redeemed yet** — without that, two invitations sent on the same evening both pass and the second one accepted overfills the flat, at which point the only remedy is asking a resident to leave. The limit cannot be lowered below the people already there, and a unit with anyone in it still cannot be archived.
+
+**Every unit created before this existed holds one person**, which is exactly what the product enforced then. Nothing about any building's rules changes until a manager says so. Bedrooms backfill to 0, meaning nobody has said — not "a studio".
+
+Three things deliberately did not change:
+
+- **Rent stays per unit.** The flat is let for one amount and the occupants settle it between themselves, which is how an ordinary apartment lease works. Money, vacancy and the rent register are untouched. Per-bed rent, as student residences are normally let, is its own piece of work.
+- **Guest limits stay per unit.** Two active passes and eight sleepover nights belong to the door, not to the person, because the door and the parking bay are what is actually constrained. Sharers draw on one pool.
+- **The rent flag is cleared only when the last occupant goes.** A flat that still has two sharers in it has not stopped having paid its rent because the third moved out.
+
+The register shows one name and a count — `Ayanda +2`, `3 of 3` — rather than three names in a column meant for one. The name shown is the first person enrolled, and when they leave it passes to whoever is still there, so it never points at nobody. Each occupant has their own tenancy record, so a departing resident's lease is filed under them rather than under a flatmate who still lives there.
 
 ## Editing and archiving
 
@@ -257,21 +273,23 @@ Not gated on billing. The trial gate exists to stop an unpaid organisation growi
 
 **Every published price includes 15% VAT.** Registration is compulsory above R1m of turnover in twelve months, which this business reaches at roughly seventy paying organisations, so the VAT inside the price was never the seller's to keep. What a customer sees is what they pay.
 
-| Tier      | Price     | Units  | Managers | Gate-code texts | For                                                       |
-| --------- | --------- | ------ | -------- | --------------- | --------------------------------------------------------- |
-| Starter   | R699/mo   | 25     | 1        | 75/mo           | One block, one person running it                          |
-| Growth    | R1,499/mo | 150    | 5        | 450/mo          | An agent with several buildings, or an estate with a team |
-| Premium   | R2,899/mo | 300    | 10       | 900/mo          | A larger estate or a full agency                          |
-| Portfolio | Quoted    | Custom | Custom   | Custom          | Above 300 units, or needing its own terms and an SLA      |
+| Tier      | Price     | Units  | Residents | Managers | Gate-code texts | For                                                       |
+| --------- | --------- | ------ | --------- | -------- | --------------- | --------------------------------------------------------- |
+| Free      | R0        | 5      | 10        | 1        | 15/mo           | A new client finding their feet                           |
+| Starter   | R699/mo   | 25     | Unlimited | 1        | 75/mo           | One block, one person running it                          |
+| Growth    | R1,499/mo | 150    | Unlimited | 5        | 450/mo          | An agent with several buildings, or an estate with a team |
+| Premium   | R2,899/mo | 300    | Unlimited | 10       | 900/mo          | A larger estate or a full agency                          |
+| Portfolio | Quoted    | Custom | Custom    | Custom   | Custom          | Above 300 units, or needing its own terms and an SLA      |
 
 The rules that hold on every tier:
 
 - **Units are counted while they are in use.** Archive a unit and it stops counting the same day — a manager who has closed a wing should not be paying for it, and should not be allowed for it either.
-- **Properties, residents, security accounts and guest passes are unlimited.** Only units and manager sign-ins are capped, because those are what the price is measured in.
+- **Properties, security accounts and guest passes are unlimited on every tier.** On a paid tier residents are unlimited too: the unit is what is being sold and people are what fill it, so counting them as well would be charging twice. **Free is the one tier that counts residents**, because a free tier has to be bounded by something the customer feels, and five units of a shared block is thirty people.
 - **Gate-code texts carry an allowance of three per unit per month.** SMS is the only cost that scales with how hard a customer uses the product rather than with how many customers there are, so it is the one thing with a stated limit. Beyond it, R0.60 each, raised with the customer before it reaches an invoice. Nothing is blocked at the gate: a guest who needs a code gets one.
-- **A 14-day Starter trial**, no card, nothing to cancel.
+- **A 14-day Starter trial**, no card, nothing to cancel — and when it ends, the organisation lands on **Free** rather than being locked out.
 - **Paid access runs for a month and is renewed by hand.** Nothing recurs on a card.
-- **When access lapses, nothing is taken away.** Every record stays readable and the gate keeps working; only new properties, units, enrolments and guest passes wait for renewal.
+- **When access lapses, nothing is taken away.** Every record stays readable and the gate keeps working. What changes is the ceiling: the free tier's caps apply until the organisation renews. A lapsed Premium customer with 300 units keeps all 300 and cannot add the 301st; their residents stay enrolled and cannot be added to past ten. Guest passes, reports and the gate are never gated at all — a building that has not renewed still has to open its door in the morning.
+- **Being suspended is not the same as not paying.** An operator suspension is its own state and refuses everything; it is what `npm run admin -- suspend` sets. Expressing it by zeroing the trial dates would now quietly hand a suspended customer a free account.
 - **The organisation's data is exportable at any time**, in full.
 
 Billing shows a manager exactly where they stand — units in use against the cap, manager seats used, and this month's gate-code texts against the allowance — so a cap is visible before it stops anyone. That usage panel counts passes created this month from the loaded register: it is a guide, not a meter, and no automatic overage billing exists.

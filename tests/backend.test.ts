@@ -12,11 +12,20 @@ import {
 } from "../lib/server/auth";
 import { command, join, workspace } from "../lib/server/workspace";
 import { store } from "../lib/server/store";
-import type { OrganisationRecord, UnitRecord, UserRecord } from "../lib/server/store";
+import type {
+  OrganisationRecord,
+  UnitRecord,
+  UserRecord,
+} from "../lib/server/store";
 import { checkout, notification, signature } from "../lib/server/billing";
 import { PLANS } from "../lib/server/plans";
 import { activity } from "../lib/server/audit";
-import { deleteTenant, exportTenant, listTenants } from "../lib/server/tenancy";
+import {
+  deleteTenant,
+  exportTenant,
+  listTenants,
+  suspendTenant,
+} from "../lib/server/tenancy";
 import { body } from "../lib/server/http";
 import type { Account } from "../types/workspace";
 
@@ -104,7 +113,10 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
         ).id,
       );
 
-      assert.equal((await workspace(a.user, a.orgId)).units[0].rentCents, 450000);
+      assert.equal(
+        (await workspace(a.user, a.orgId)).units[0].rentCents,
+        450000,
+      );
       assert.equal((await workspace(b.user, b.orgId)).properties.length, 0);
       await assert.rejects(workspace(b.user, a.orgId), /access/);
       await assert.rejects(
@@ -322,48 +334,56 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
     },
   );
 
-  await t.test("reports are scoped and residents cannot resolve reports", async () => {
-    const resident = (await session(residentToken))!;
-    await command(resident, a.orgId, {
-      action: "report",
-      propertyId,
-      category: "Maintenance",
-      urgency: "urgent",
-      description: "The entrance light needs replacing.",
-    });
-    const report = (await workspace(a.user, a.orgId)).reports[0];
-    assert.ok(report);
-    assert.equal(report.authorName, "Aisha");
-    assert.equal((await workspace(b.user, b.orgId)).reports.length, 0);
+  await t.test(
+    "reports are scoped and residents cannot resolve reports",
+    async () => {
+      const resident = (await session(residentToken))!;
+      await command(resident, a.orgId, {
+        action: "report",
+        propertyId,
+        category: "Maintenance",
+        urgency: "urgent",
+        description: "The entrance light needs replacing.",
+      });
+      const report = (await workspace(a.user, a.orgId)).reports[0];
+      assert.ok(report);
+      assert.equal(report.authorName, "Aisha");
+      assert.equal((await workspace(b.user, b.orgId)).reports.length, 0);
 
-    await assert.rejects(
-      command(resident, a.orgId, {
+      await assert.rejects(
+        command(resident, a.orgId, {
+          action: "reportStatus",
+          id: report.id,
+          status: "resolved",
+        }),
+        /manager/,
+      );
+      await command(a.user, a.orgId, {
         action: "reportStatus",
         id: report.id,
         status: "resolved",
-      }),
-      /manager/,
-    );
-    await command(a.user, a.orgId, {
-      action: "reportStatus",
-      id: report.id,
-      status: "resolved",
-    });
-    assert.equal(
-      (await workspace(resident, a.orgId)).reports[0].status,
-      "resolved",
-    );
-  });
+      });
+      assert.equal(
+        (await workspace(resident, a.orgId)).reports[0].status,
+        "resolved",
+      );
+    },
+  );
 
   await t.test("the audit trail is readable by managers only", async () => {
     const entries = await activity(a.user, a.orgId);
     assert.ok(entries.length > 5);
     assert.ok(entries.some((entry) => entry.action === "property"));
     assert.ok(entries.some((entry) => entry.action === "join"));
-    assert.equal(entries[0].createdAt >= entries[entries.length - 1].createdAt, true);
+    assert.equal(
+      entries[0].createdAt >= entries[entries.length - 1].createdAt,
+      true,
+    );
     // No entry from this organisation leaks into the other one.
     assert.equal(
-      (await activity(b.user, b.orgId)).every((entry) => entry.action !== "report"),
+      (await activity(b.user, b.orgId)).every(
+        (entry) => entry.action !== "report",
+      ),
       true,
     );
     await assert.rejects(
@@ -376,7 +396,10 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
   await t.test(
     "revocation removes access, frees the unit and keeps historic records",
     async () => {
-      await command(a.user, a.orgId, { action: "removeMember", id: residentId });
+      await command(a.user, a.orgId, {
+        action: "removeMember",
+        id: residentId,
+      });
       await assert.rejects(
         workspace((await session(residentToken))!, a.orgId),
         /access/,
@@ -405,7 +428,7 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
   );
 
   await t.test(
-    "expired trials prevent new records while retaining existing data",
+    "an expired trial drops to the free tier rather than shutting the door",
     async () => {
       await store().tx(async (tx) => {
         tx.update("organisations", b.orgId, {
@@ -413,18 +436,40 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
         });
       });
       const view = await workspace(b.user, b.orgId);
+      // Paying for nothing, and still working - on free caps.
       assert.equal(view.organisation.active, false);
-      assert.equal(view.properties.length, 1);
+      assert.equal(view.organisation.activePlan, "free");
+      assert.equal(view.organisation.suspended, false);
+      assert.equal(view.properties.length, 1, "and keeps every record it had");
+
+      // Properties are unlimited on every tier, free included, so this is
+      // allowed now where non-payment used to refuse it outright.
+      const late = await command(b.user, b.orgId, {
+        action: "property",
+        name: "Late",
+        address: "Johannesburg",
+        type: "apartment",
+      });
+
+      // The ceiling came down to meet them: five units, and then no more.
+      for (let n = 1; n <= PLANS.free.units; n += 1)
+        await command(b.user, b.orgId, {
+          action: "unit",
+          propertyId: late.id,
+          label: `F${n}`,
+          rent: 1000,
+        });
       await assert.rejects(
         command(b.user, b.orgId, {
-          action: "property",
-          name: "Late",
-          address: "Johannesburg",
-          type: "apartment",
+          action: "unit",
+          propertyId: late.id,
+          label: "F6",
+          rent: 1000,
         }),
-        /ended/,
+        /unit limit/i,
       );
-      // Gate operations and reports keep working after access lapses.
+
+      // Gate operations and reports keep working, as they always did.
       const existing = view.properties[0];
       await command(b.user, b.orgId, {
         action: "report",
@@ -432,6 +477,23 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
         category: "Security",
         urgency: "normal",
         description: "Boom gate sticking.",
+      });
+
+      // Suspension is the one state that still refuses everything, and it is
+      // now its own field rather than a zeroed trial - otherwise a suspended
+      // customer would simply land on the free tier and carry on.
+      await suspendTenant(b.orgId);
+      await assert.rejects(
+        command(b.user, b.orgId, {
+          action: "property",
+          name: "Later still",
+          address: "Johannesburg",
+          type: "apartment",
+        }),
+        /suspended/i,
+      );
+      await store().tx(async (tx) => {
+        tx.update("organisations", b.orgId, { suspendedAt: null });
       });
     },
   );
@@ -519,7 +581,10 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
         "activated",
       );
       const until = (await workspace(a.user, a.orgId)).organisation.paidUntil;
-      assert.equal((await workspace(a.user, a.orgId)).organisation.plan, "growth");
+      assert.equal(
+        (await workspace(a.user, a.orgId)).organisation.plan,
+        "growth",
+      );
 
       // A replayed notification is acknowledged, not retried into an error.
       assert.equal(
@@ -538,9 +603,9 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
       // A reference already applied elsewhere is acknowledged, never applied twice.
       const second = await checkout(a.user, a.orgId, "growth");
       const replay: Record<string, string> = {
-      ...fields,
-      m_payment_id: second.fields.m_payment_id,
-    };
+        ...fields,
+        m_payment_id: second.fields.m_payment_id,
+      };
       replay.signature = signature(replay, "test secret");
       assert.equal(
         await notification(
@@ -554,10 +619,7 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
   );
 
   await t.test("a plan smaller than current usage is refused", async () => {
-    await assert.rejects(
-      checkout(a.user, a.orgId, "nonsense"),
-      /valid plan/,
-    );
+    await assert.rejects(checkout(a.user, a.orgId, "nonsense"), /valid plan/);
     const organisation = await store().get<OrganisationRecord>(
       "organisations",
       a.orgId,
@@ -611,7 +673,11 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
 
     const dump = await exportTenant(b.orgId);
     assert.equal(dump.organisation.name, "Jacaranda Homes");
-    assert.equal(dump.properties.length, 1);
+    assert.equal(
+      dump.properties.length,
+      2,
+      "the twin and the one added on free",
+    );
     assert.equal(dump.reports.length, 1);
     assert.ok(dump.members.length >= 1);
 

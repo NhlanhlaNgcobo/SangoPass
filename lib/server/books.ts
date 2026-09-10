@@ -59,7 +59,7 @@ export async function financeExport(
       propertyName:
         properties.find((p) => p.id === unit.propertyId)?.name ?? "",
       rentCents: unit.rentCents,
-      occupied: Boolean(unit.residentId),
+      occupied: (unit.occupants ?? 0) > 0,
       // Only for the month being exported: a September flag says nothing
       // about October.
       paid: Boolean(unit.rentPaid) && unit.rentPaidPeriod === period,

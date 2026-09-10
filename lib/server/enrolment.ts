@@ -121,6 +121,8 @@ export function planImport(
   units: UnitRecord[],
   members: MembershipRecord[],
   pending: InvitationRecord[],
+  /** Residents the tier still has room for, or null when it does not count. */
+  residentsLeft: number | null = null,
 ): { plan: ImportPlan; problems: RowProblem[] } {
   const table = parseCsv(csv);
   if (!table.length) throw new AppError("That file has nothing in it.", 400);
@@ -154,14 +156,21 @@ export function planImport(
       .filter((unit) => !unit.archivedAt)
       .map((unit) => [unit.label.trim().toLowerCase(), unit]),
   );
-  const occupied = new Set(
-    units.filter((unit) => unit.residentId).map((unit) => unit.id),
-  );
   const live = pending.filter(
     (invitation) => !invitation.acceptedAt && invitation.expiresAt > now(),
   );
+  // How many more people each unit can take: its own limit, less the people
+  // already in it and the invitations nobody has redeemed yet. A file may put
+  // three sharers in a three-person flat, and may not put four.
+  const room = new Map(
+    units.map((unit) => [
+      unit.id,
+      (unit.maxOccupants ?? 1) - (unit.occupants ?? 0),
+    ]),
+  );
   for (const invitation of live)
-    if (invitation.unitId) occupied.add(invitation.unitId);
+    if (invitation.unitId && room.has(invitation.unitId))
+      room.set(invitation.unitId, (room.get(invitation.unitId) ?? 0) - 1);
   const takenEmails = new Set(members.map((m) => m.userEmail));
   const takenUsernames = new Set(
     [
@@ -174,8 +183,11 @@ export function planImport(
   // lists one unit twice would pass every check and then fail at the write,
   // or worse, enrol two people into one flat.
   const seenEmails = new Set<string>();
-  const seenUnits = new Set<string>();
   const seenUsernames = new Set<string>();
+  /** Residents this file has already placed, against the tier's remaining room. */
+  let placed = 0;
+  /** Per unit, how many this file has already put there - for the message. */
+  const fromThisFile = new Map<string, number>();
 
   const problems: RowProblem[] = [];
   const rows: ImportPlan["rows"] = [];
@@ -213,12 +225,28 @@ export function planImport(
       fail(`There is no unit called "${label}" at ${property.name}.`);
       return;
     }
-    if (occupied.has(unit.id)) {
-      fail(`${unit.label} already has a resident or a pending invitation.`);
+    const left = room.get(unit.id) ?? 0;
+    if (left <= 0) {
+      // Two different mistakes wear the same symptom, and the manager needs
+      // to know which: the unit was already full before this file arrived, or
+      // this file itself is trying to put too many people in it.
+      const claimed = fromThisFile.get(unit.id) ?? 0;
+      const capacity = unit.maxOccupants ?? 1;
+      fail(
+        claimed > 0
+          ? capacity === 1
+            ? `${unit.label} is claimed more than once in this file.`
+            : `This file puts ${claimed + 1} people in ${unit.label}, which holds ${capacity}.`
+          : capacity === 1
+            ? `${unit.label} already has a resident or a pending invitation.`
+            : `${unit.label} holds ${capacity} people and is already full.`,
+      );
       return;
     }
-    if (seenUnits.has(unit.id)) {
-      fail(`${unit.label} is claimed more than once in this file.`);
+    if (residentsLeft !== null && placed >= residentsLeft) {
+      fail(
+        `The free tier has room for ${residentsLeft} more ${residentsLeft === 1 ? "resident" : "residents"}, and this file goes past that. Upgrade from Billing, or send fewer.`,
+      );
       return;
     }
 
@@ -249,7 +277,9 @@ export function planImport(
     }
 
     seenEmails.add(address);
-    seenUnits.add(unit.id);
+    room.set(unit.id, left - 1);
+    fromThisFile.set(unit.id, (fromThisFile.get(unit.id) ?? 0) + 1);
+    placed += 1;
     rows.push({
       line,
       email: address,
@@ -277,6 +307,8 @@ export async function importResidents(
   orgId: string,
   property: PropertyRecord,
   csv: string,
+  /** Residents the tier still has room for, or null when it does not count. */
+  residentsLeft: number | null = null,
 ): Promise<
   | { ok: false; problems: RowProblem[] }
   | { ok: true; invitations: { id: string; token: string; email: string }[] }
@@ -297,7 +329,14 @@ export async function importResidents(
     }),
   ]);
 
-  const { plan, problems } = planImport(csv, property, units, members, pending);
+  const { plan, problems } = planImport(
+    csv,
+    property,
+    units,
+    members,
+    pending,
+    residentsLeft,
+  );
   if (problems.length) return { ok: false, problems };
 
   return database.tx(async (t) => {

@@ -191,6 +191,11 @@ test("a v3 database upgrades in place to the current version", async () => {
   raw.exec("ALTER TABLE organisations DROP COLUMN logoKey");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoMime");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoUpdatedAt");
+  // v14 let a unit hold several residents and gave suspension its own field.
+  raw.exec("ALTER TABLE units DROP COLUMN bedrooms");
+  raw.exec("ALTER TABLE units DROP COLUMN maxOccupants");
+  raw.exec("ALTER TABLE units DROP COLUMN occupants");
+  raw.exec("ALTER TABLE organisations DROP COLUMN suspendedAt");
   raw.exec("PRAGMA user_version=3");
   raw.close();
 
@@ -279,6 +284,11 @@ test("a v5 database gains the brand colours without losing anything", async () =
   raw.exec("ALTER TABLE organisations DROP COLUMN logoKey");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoMime");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoUpdatedAt");
+  // v14 let a unit hold several residents and gave suspension its own field.
+  raw.exec("ALTER TABLE units DROP COLUMN bedrooms");
+  raw.exec("ALTER TABLE units DROP COLUMN maxOccupants");
+  raw.exec("ALTER TABLE units DROP COLUMN occupants");
+  raw.exec("ALTER TABLE organisations DROP COLUMN suspendedAt");
   raw.exec("PRAGMA user_version=5");
   raw.close();
 
@@ -331,6 +341,11 @@ test("a v6 database gains entry codes without inventing one", async () => {
   raw.exec("ALTER TABLE organisations DROP COLUMN logoKey");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoMime");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoUpdatedAt");
+  // v14 let a unit hold several residents and gave suspension its own field.
+  raw.exec("ALTER TABLE units DROP COLUMN bedrooms");
+  raw.exec("ALTER TABLE units DROP COLUMN maxOccupants");
+  raw.exec("ALTER TABLE units DROP COLUMN occupants");
+  raw.exec("ALTER TABLE organisations DROP COLUMN suspendedAt");
   raw.exec("PRAGMA user_version=6");
   raw.close();
 
@@ -376,6 +391,11 @@ test("a v7 database gains the books and the rent period", async () => {
   raw.exec("ALTER TABLE organisations DROP COLUMN logoKey");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoMime");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoUpdatedAt");
+  // v14 let a unit hold several residents and gave suspension its own field.
+  raw.exec("ALTER TABLE units DROP COLUMN bedrooms");
+  raw.exec("ALTER TABLE units DROP COLUMN maxOccupants");
+  raw.exec("ALTER TABLE units DROP COLUMN occupants");
+  raw.exec("ALTER TABLE organisations DROP COLUMN suspendedAt");
   raw.exec("PRAGMA user_version=7");
   raw.close();
 
@@ -434,6 +454,11 @@ test("a v8 database gains archiving, with everything in use", async () => {
   raw.exec("ALTER TABLE organisations DROP COLUMN logoKey");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoMime");
   raw.exec("ALTER TABLE organisations DROP COLUMN logoUpdatedAt");
+  // v14 let a unit hold several residents and gave suspension its own field.
+  raw.exec("ALTER TABLE units DROP COLUMN bedrooms");
+  raw.exec("ALTER TABLE units DROP COLUMN maxOccupants");
+  raw.exec("ALTER TABLE units DROP COLUMN occupants");
+  raw.exec("ALTER TABLE organisations DROP COLUMN suspendedAt");
   raw.exec("PRAGMA user_version=8");
   raw.close();
 
@@ -476,6 +501,11 @@ test("a v11 database gains the announcements board, empty", async () => {
   // Wind the database back to v11: the board did not exist, so neither did
   // the table. Everything else about a v11 database stays as it was.
   raw.exec("DROP TABLE announcements");
+  // v14 let a unit hold several residents and gave suspension its own field.
+  raw.exec("ALTER TABLE units DROP COLUMN bedrooms");
+  raw.exec("ALTER TABLE units DROP COLUMN maxOccupants");
+  raw.exec("ALTER TABLE units DROP COLUMN occupants");
+  raw.exec("ALTER TABLE organisations DROP COLUMN suspendedAt");
   raw.exec("PRAGMA user_version=11");
   raw.close();
 
@@ -532,6 +562,11 @@ test("a v12 database gains regular passes and the gate register, empty", async (
   // Wind back to v12: neither table existed, so neither is dropped gently.
   raw.exec("DROP TABLE regulars");
   raw.exec("DROP TABLE movements");
+  // v14 let a unit hold several residents and gave suspension its own field.
+  raw.exec("ALTER TABLE units DROP COLUMN bedrooms");
+  raw.exec("ALTER TABLE units DROP COLUMN maxOccupants");
+  raw.exec("ALTER TABLE units DROP COLUMN occupants");
+  raw.exec("ALTER TABLE organisations DROP COLUMN suspendedAt");
   raw.exec("PRAGMA user_version=12");
   raw.close();
 

@@ -47,6 +47,12 @@ export interface LiveUnit {
   id: string;
   propertyId: string;
   label: string;
+  /** Bedrooms the manager recorded, or 0 when nobody has said. */
+  bedrooms: number;
+  /** How many residents may be enrolled here at once. Always at least 1. */
+  maxOccupants: number;
+  /** How many are enrolled here now. Zero is what vacancy means. */
+  occupants: number;
   rentCents: number;
   rentPaid: number;
   /** The month rentPaid refers to, YYYY-MM; empty when never marked. */
@@ -295,7 +301,17 @@ export interface WorkspaceState {
   organisation: {
     id: string;
     name: string;
+    /** The tier the organisation signed up on or last bought. */
     plan: string;
+    /**
+     * The tier whose caps actually apply today: the same as plan while a trial
+     * or paid month is live, and "free" once both have run out. An
+     * organisation is never locked out for not paying - the ceiling comes down
+     * to meet it.
+     */
+    activePlan: string;
+    /** An operator has stopped this organisation. The one hard refusal left. */
+    suspended: boolean;
     trialUntil: string;
     paidUntil: string | null;
     active: boolean;

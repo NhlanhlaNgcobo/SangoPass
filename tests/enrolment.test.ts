@@ -31,12 +31,14 @@ test("tenant enrolment emails and property-scoped username logins", async (t) =>
 
   const property = async (name: string, address: string, type: string) =>
     String(
-      (await command(owner.user, owner.orgId, {
-        action: "property",
-        name,
-        address,
-        type,
-      })).id,
+      (
+        await command(owner.user, owner.orgId, {
+          action: "property",
+          name,
+          address,
+          type,
+        })
+      ).id,
     );
   const propertyId = await property("Ubuntu Court", "Cape Town", "apartment");
   const studentProperty = await property(
@@ -46,12 +48,14 @@ test("tenant enrolment emails and property-scoped username logins", async (t) =>
   );
   const unit = async (p: string, label: string) =>
     String(
-      (await command(owner.user, owner.orgId, {
-        action: "unit",
-        propertyId: p,
-        label,
-        rent: 3000,
-      })).id,
+      (
+        await command(owner.user, owner.orgId, {
+          action: "unit",
+          propertyId: p,
+          label,
+          rent: 3000,
+        })
+      ).id,
     );
   const unitId = await unit(propertyId, "A-101");
   const studentUnit = await unit(studentProperty, "S-01");
@@ -62,8 +66,7 @@ test("tenant enrolment emails and property-scoped username logins", async (t) =>
   process.env.RESEND_API_KEY = "test-only-not-a-key";
 
   let message:
-    | { to: string[]; subject: string; text: string; html: string }
-    | undefined;
+    { to: string[]; subject: string; text: string; html: string } | undefined;
   const send: typeof fetch = async (_url, init) => {
     message = JSON.parse(String(init?.body));
     return Response.json({ id: "test-message" });
@@ -126,7 +129,10 @@ test("tenant enrolment emails and property-scoped username logins", async (t) =>
       residentToken = accepted.token;
       residentId = (await session(accepted.token))!.id;
 
-      const state = await workspace((await session(accepted.token))!, owner.orgId);
+      const state = await workspace(
+        (await session(accepted.token))!,
+        owner.orgId,
+      );
       assert.equal(state.membership.username, username);
       assert.equal(state.membership.unitId, unitId);
 
@@ -208,20 +214,24 @@ test("tenant enrolment emails and property-scoped username logins", async (t) =>
 
       // The same student number at a different property is a different person.
       const otherProperty = String(
-        (await command(other.user, other.orgId, {
-          action: "property",
-          name: "Another campus",
-          address: "Durban",
-          type: "student_accommodation",
-        })).id,
+        (
+          await command(other.user, other.orgId, {
+            action: "property",
+            name: "Another campus",
+            address: "Durban",
+            type: "student_accommodation",
+          })
+        ).id,
       );
       const otherUnit = String(
-        (await command(other.user, other.orgId, {
-          action: "unit",
-          propertyId: otherProperty,
-          label: "1",
-          rent: 0,
-        })).id,
+        (
+          await command(other.user, other.orgId, {
+            action: "unit",
+            propertyId: otherProperty,
+            label: "1",
+            rent: 0,
+          })
+        ).id,
       );
       const second = await commandAndNotify(
         other.user,
@@ -242,8 +252,8 @@ test("tenant enrolment emails and property-scoped username logins", async (t) =>
         name: "Pieter",
         password: password + " different",
       });
-      const otherCode = (await workspace(other.user, other.orgId))
-        .properties[0].loginCode;
+      const otherCode = (await workspace(other.user, other.orgId)).properties[0]
+        .loginCode;
       await assert.rejects(
         tenantLogin({
           propertyCode: otherCode,
@@ -350,7 +360,7 @@ test("tenant enrolment emails and property-scoped username logins", async (t) =>
   );
 
   await t.test(
-    "expired plans and non-manager roles cannot enrol tenants; removal revokes username login",
+    "a resident cannot enrol anyone, one organisation cannot enrol into another, and removal revokes the username login",
     async () => {
       const resident = (await session(residentToken))!;
       await assert.rejects(
@@ -364,6 +374,10 @@ test("tenant enrolment emails and property-scoped username logins", async (t) =>
         /manager/,
       );
 
+      // A lapsed organisation is no longer locked out: it drops to the free
+      // tier and carries on within those caps, which tests/backend covers.
+      // What it still cannot do is reach into somebody else's building, and
+      // that is the refusal this asserts.
       await store().tx(async (tx) => {
         tx.update("organisations", other.orgId, {
           trialUntil: "2020-01-01T00:00:00.000Z",
@@ -378,7 +392,7 @@ test("tenant enrolment emails and property-scoped username logins", async (t) =>
           propertyId,
           unitId,
         }),
-        /ended/,
+        /not available/i,
       );
 
       const code = (await workspace(owner.user, owner.orgId)).properties.find(

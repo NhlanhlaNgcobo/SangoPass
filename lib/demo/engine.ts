@@ -11,6 +11,7 @@ import { themeReadable } from "@/lib/shared/theme";
 import { currentPeriod } from "@/lib/shared/money";
 import { parseLedgerEntry } from "@/lib/server/finance";
 import { parseAnnouncement } from "@/lib/server/announcements";
+import { parseUnitShape } from "@/lib/server/occupancy-rules";
 import {
   allowsDay,
   describeDays,
@@ -210,8 +211,14 @@ export function apply(
         )
       )
         throw new AppError("That record already exists.", 409);
+      const shape = parseUnitShape(input, target);
+      if (shape.maxOccupants < target.occupants)
+        throw new AppError(
+          `${target.occupants} ${target.occupants === 1 ? "person lives" : "people live"} in ${target.label}, so it cannot be limited to ${shape.maxOccupants}. Remove a resident from People first.`,
+          409,
+        );
       draft.units = draft.units.map((u) =>
-        u.id === id ? { ...u, label, rentCents } : u,
+        u.id === id ? { ...u, label, rentCents, ...shape } : u,
       );
       // A pass not yet used names the door a guard sends the visitor to.
       draft.visitors = draft.visitors.map((v) =>
@@ -339,6 +346,8 @@ export function apply(
           id,
           propertyId: property.id,
           label,
+          ...parseUnitShape(input),
+          occupants: 0,
           rentCents: money(input.rent),
           rentPaid: 0,
           rentPaidPeriod: "",

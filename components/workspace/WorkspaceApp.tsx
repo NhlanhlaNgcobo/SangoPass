@@ -696,7 +696,7 @@ export default function WorkspaceApp({
         propertyName:
           state.properties.find((p) => p.id === u.propertyId)?.name ?? "",
         rentCents: u.rentCents,
-        occupied: Boolean(u.residentName),
+        occupied: u.occupants > 0,
         paid: paidThisMonth(u),
       })),
     );
@@ -775,11 +775,11 @@ export default function WorkspaceApp({
   // counts something, only what is in use belongs.
   const openProperties = state.properties.filter((p) => !p.archivedAt);
   const openUnits = state.units.filter((u) => !u.archivedAt);
-  const occupied = openUnits.filter((u) => u.residentName);
+  const occupied = openUnits.filter((u) => u.occupants > 0);
   // A vacant unit owes nothing, so it is never in arrears. What it is, is rent
   // the property is not earning - which is the figure an owner asks about, and
   // is reported on its own rather than hidden inside the rent lines.
-  const vacant = openUnits.filter((u) => !u.residentName);
+  const vacant = openUnits.filter((u) => u.occupants === 0);
   const paidThisMonth = (unit: LiveUnit) =>
     Boolean(unit.rentPaid) && unit.rentPaidPeriod === currentPeriod();
   const rentOf = (rows: LiveUnit[]) =>
@@ -803,7 +803,10 @@ export default function WorkspaceApp({
   // What this organisation is entitled to, and what it is actually using.
   // Seats and units are counted live so the billing screen agrees with the
   // limits the server enforces rather than describing them separately.
-  const planNow = planFor(state.organisation.plan);
+  const planNow = planFor(state.organisation.activePlan);
+  /** True when the caps on screen are the free ones, not the tier they bought. */
+  const onFree = state.organisation.activePlan === "free";
+  const residentCount = state.members.filter((m) => m.role === "tenant").length;
   // Reception spends a seat too, exactly as the server counts it on invite.
   const managerSeats = state.members.filter(
     (m) => m.role === "manager" || m.role === "reception",
@@ -1347,7 +1350,7 @@ export default function WorkspaceApp({
                             units ·{" "}
                             {
                               state.units.filter(
-                                (u) => u.propertyId === p.id && u.residentName,
+                                (u) => u.propertyId === p.id && u.occupants > 0,
                               ).length
                             }{" "}
                             occupied
@@ -1501,7 +1504,24 @@ export default function WorkspaceApp({
                               }
                             </td>
                             <td data-label="Resident" role="cell">
-                              {u.residentName || "Vacant"}
+                              {u.occupants === 0 ? (
+                                "Vacant"
+                              ) : (
+                                <>
+                                  {u.residentName}
+                                  {u.occupants > 1 && (
+                                    <span className="sp-badge">
+                                      +{u.occupants - 1}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                              <small className="sp-block sp-muted">
+                                {u.occupants} of {u.maxOccupants}
+                                {u.bedrooms > 0
+                                  ? ` · ${u.bedrooms} ${u.bedrooms === 1 ? "bed" : "beds"}`
+                                  : ""}
+                              </small>
                             </td>
                             <td data-label="Monthly rent" role="cell">
                               {rand(u.rentCents)}
@@ -2137,7 +2157,18 @@ export default function WorkspaceApp({
                 to it before it stops them.
               */}
               <section className="sp-panel">
-                <h2>What you are using</h2>
+                <h2>
+                  What you are using{" "}
+                  <span className="sp-badge">{planNow.name}</span>
+                </h2>
+                {onFree && (
+                  <p className="sp-muted">
+                    Your trial or paid month has ended, so these are the free
+                    tier&rsquo;s limits. Nothing has been taken away &mdash;
+                    every record is still here and the gate still works. You can
+                    add more once you renew below.
+                  </p>
+                )}
                 <div className="sp-money-tiles">
                   {[
                     {
@@ -2154,14 +2185,26 @@ export default function WorkspaceApp({
                       value: `${managerSeats} of ${planNow.managers}`,
                       hint:
                         planNow.managers === 1
-                          ? "One seat on Starter"
+                          ? `One seat on ${planNow.name}`
                           : "Across the organisation",
                       warn: managerSeats > planNow.managers,
                     },
+                    // Only the free tier counts people. On a paid tier the
+                    // unit is what is sold, so this tile has nothing to say.
+                    ...(planNow.residents !== null
+                      ? [
+                          {
+                            name: "Residents enrolled",
+                            value: `${residentCount} of ${planNow.residents}`,
+                            hint: "Counted across every property",
+                            warn: residentCount >= planNow.residents,
+                          },
+                        ]
+                      : []),
                     {
                       name: "Gate-code texts",
                       value: `${passesThisMonth} of ${includedSms(
-                        state.organisation.plan,
+                        state.organisation.activePlan,
                         openUnits.length,
                       )}`,
                       hint: `${periodLabel(currentPeriod())} · R0.60 each beyond`,
@@ -2937,6 +2980,30 @@ export default function WorkspaceApp({
                 <Field name="rent" type="number" defaultValue={0}>
                   Monthly rent (ZAR)
                 </Field>
+                <div className="sp-two-col">
+                  <Field
+                    name="bedrooms"
+                    type="number"
+                    required={false}
+                    defaultValue={1}
+                  >
+                    Bedrooms
+                  </Field>
+                  <Field
+                    name="maxOccupants"
+                    type="number"
+                    required={false}
+                    defaultValue={1}
+                  >
+                    People allowed
+                  </Field>
+                </div>
+                <small className="sp-muted">
+                  How many residents may be enrolled here at once. A two-bedroom
+                  might take three sharers, or one family — you know the
+                  building, so the number is yours to set. Leave it at 1 for a
+                  flat let to one person.
+                </small>
               </>
             )}
             {modal === "invite" && (
@@ -2976,15 +3043,17 @@ export default function WorkspaceApp({
                 {inviteRole !== "manager" && propertySelect}
                 {inviteRole === "tenant" && (
                   <label>
-                    Vacant unit
+                    Unit with room
                     <select name="unitId" required>
                       <option value="">Select a unit</option>
                       {openUnits
                         .filter(
                           (u) =>
                             u.propertyId === selectedProperty &&
-                            !u.residentName &&
-                            !state.invitations.some((i) => i.unitId === u.id),
+                            u.occupants +
+                              state.invitations.filter((i) => i.unitId === u.id)
+                                .length <
+                              u.maxOccupants,
                         )
                         .map((u) => (
                           <option key={u.id} value={u.id}>
@@ -3416,6 +3485,35 @@ export default function WorkspaceApp({
                 >
                   Unit / room number
                 </Field>
+                <div className="sp-two-col">
+                  <Field
+                    name="bedrooms"
+                    type="number"
+                    required={false}
+                    defaultValue={editingUnit?.bedrooms ?? 0}
+                    key={`beds-${editing}`}
+                  >
+                    Bedrooms
+                  </Field>
+                  <Field
+                    name="maxOccupants"
+                    type="number"
+                    required={false}
+                    defaultValue={editingUnit?.maxOccupants ?? 1}
+                    key={`occ-${editing}`}
+                  >
+                    People allowed
+                  </Field>
+                </div>
+                {(editingUnit?.occupants ?? 0) > 0 && (
+                  <small className="sp-muted">
+                    {editingUnit?.occupants === 1
+                      ? "One resident lives here"
+                      : `${editingUnit?.occupants} residents live here`}
+                    , so the limit cannot go below that. Remove someone from
+                    People first.
+                  </small>
+                )}
                 <Field
                   name="rent"
                   type="number"

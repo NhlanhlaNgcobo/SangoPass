@@ -39,8 +39,13 @@ export default function ImportPanel({
   const open = state.properties.filter((p) => !p.archivedAt);
   const chosen = open.find((p) => p.id === (propertyId || open[0]?.id));
   const student = chosen?.type === "student_accommodation";
+  // Units with a bed still free, not only empty ones: a three-person flat
+  // with one sharer in it still has two places for this roll to fill.
   const vacant = state.units.filter(
-    (u) => !u.archivedAt && !u.residentName && u.propertyId === chosen?.id,
+    (u) =>
+      !u.archivedAt &&
+      u.propertyId === chosen?.id &&
+      u.occupants < u.maxOccupants,
   );
 
   /** The blank roll, built in the browser and already listing the empty units. */

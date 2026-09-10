@@ -136,6 +136,16 @@ export interface OrganisationRecord {
   logoMime: string;
   /** Changes on every upload, so a replaced logo is never served from cache. */
   logoUpdatedAt: string;
+  /**
+   * When an operator suspended this organisation, or null.
+   *
+   * Kept apart from the trial and paid dates on purpose. Not paying is an
+   * ordinary state that drops an organisation to the free tier and leaves the
+   * gate working; being suspended is a decision somebody made, and it stops
+   * everything. Zeroing the dates used to mean both, which would now quietly
+   * hand a suspended customer a free account.
+   */
+  suspendedAt: string | null;
   createdAt: string;
 }
 
@@ -180,9 +190,43 @@ export interface UnitRecord {
   orgId: string;
   propertyId: string;
   label: string;
+  /**
+   * How many bedrooms the unit has, or 0 when nobody has said.
+   *
+   * Recorded because it is what a manager reasons about when they decide how
+   * many people may live there - a two-bedroom taking three sharers, or a
+   * family. It informs maxOccupants and is never used to derive it: a manager
+   * who wants four in a two-bedroom is describing a real building.
+   */
+  bedrooms: number;
+  /**
+   * How many residents may be enrolled here at once. Always at least 1.
+   *
+   * Enforced at enrolment, counting people already in and invitations not yet
+   * redeemed, so a unit cannot be oversubscribed by two invitations landing
+   * on the same evening.
+   */
+  maxOccupants: number;
+  /**
+   * How many residents are enrolled here now.
+   *
+   * Denormalised because both backends have to answer "is this unit full" and
+   * "is it vacant" without a join, and the money screen asks it of every unit
+   * on the property at once.
+   */
+  occupants: number;
   rentCents: number;
   rentPaid: number;
   frequency: string;
+  /**
+   * The occupant shown beside the unit in the register: the first one
+   * enrolled, and when they leave, whoever of the remaining occupants was
+   * enrolled next. Null when the unit is empty.
+   *
+   * A display convenience, not a status - a unit with three sharers has three
+   * equal residents, and the register needs one name and a count rather than
+   * three names in a column meant for one.
+   */
   residentId: string | null;
   residentName: string | null;
   /** When the unit was archived, or null while it is in use. */

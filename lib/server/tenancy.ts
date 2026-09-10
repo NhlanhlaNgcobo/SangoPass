@@ -225,8 +225,13 @@ export async function suspendTenant(orgId: string) {
     });
     await identity().revoke(member.userId);
   }
+  // Recorded as a suspension rather than by zeroing the dates alone. An
+  // organisation that is merely not paying now falls to the free tier and
+  // keeps working, so the old expression of this would have handed a
+  // suspended customer a free account instead of stopping them.
   await store().tx(async (t) => {
     t.update("organisations", orgId, {
+      suspendedAt: now(),
       trialUntil: "1970-01-01T00:00:00.000Z",
       paidUntil: null,
     });

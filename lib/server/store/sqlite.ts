@@ -31,6 +31,7 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "logoKey",
     "logoMime",
     "logoUpdatedAt",
+    "suspendedAt",
     "createdAt",
   ],
   memberships: [
@@ -63,6 +64,9 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "orgId",
     "propertyId",
     "label",
+    "bedrooms",
+    "maxOccupants",
+    "occupants",
     "rentCents",
     "rentPaid",
     "frequency",
@@ -300,10 +304,10 @@ export const FIELDS: Record<Collection, readonly string[]> = {
 
 const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL, password TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS organisations(id TEXT PRIMARY KEY, name TEXT NOT NULL, plan TEXT NOT NULL DEFAULT 'starter', trialUntil TEXT NOT NULL, paidUntil TEXT, brandPrimary TEXT NOT NULL DEFAULT '#143E35', brandAccent TEXT NOT NULL DEFAULT '#D5ED9F', logoKey TEXT NOT NULL DEFAULT '', logoMime TEXT NOT NULL DEFAULT '', logoUpdatedAt TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS organisations(id TEXT PRIMARY KEY, name TEXT NOT NULL, plan TEXT NOT NULL DEFAULT 'starter', trialUntil TEXT NOT NULL, paidUntil TEXT, brandPrimary TEXT NOT NULL DEFAULT '#143E35', brandAccent TEXT NOT NULL DEFAULT '#D5ED9F', logoKey TEXT NOT NULL DEFAULT '', logoMime TEXT NOT NULL DEFAULT '', logoUpdatedAt TEXT NOT NULL DEFAULT '', suspendedAt TEXT, createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS memberships(id TEXT PRIMARY KEY, userId TEXT NOT NULL, orgId TEXT NOT NULL, role TEXT NOT NULL, propertyId TEXT, unitId TEXT, username TEXT, usernameKey TEXT, orgName TEXT NOT NULL DEFAULT '', memberName TEXT NOT NULL DEFAULT '', userEmail TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS properties(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, name TEXT NOT NULL, address TEXT NOT NULL, type TEXT NOT NULL, loginCode TEXT NOT NULL DEFAULT '', sleepoverNightsPerMonth INTEGER NOT NULL DEFAULT 8, maxConsecutiveNights INTEGER NOT NULL DEFAULT 3, maxActiveGuests INTEGER NOT NULL DEFAULT 2, archivedAt TEXT)",
-  "CREATE TABLE IF NOT EXISTS units(id TEXT PRIMARY KEY, orgId TEXT NOT NULL DEFAULT '', propertyId TEXT NOT NULL, label TEXT NOT NULL, rentCents INTEGER NOT NULL DEFAULT 0, rentPaid INTEGER NOT NULL DEFAULT 0, frequency TEXT NOT NULL DEFAULT 'monthly', residentId TEXT, residentName TEXT, rentPaidPeriod TEXT NOT NULL DEFAULT '', archivedAt TEXT, archivedWithProperty INTEGER NOT NULL DEFAULT 0)",
+  "CREATE TABLE IF NOT EXISTS units(id TEXT PRIMARY KEY, orgId TEXT NOT NULL DEFAULT '', propertyId TEXT NOT NULL, label TEXT NOT NULL, bedrooms INTEGER NOT NULL DEFAULT 0, maxOccupants INTEGER NOT NULL DEFAULT 1, occupants INTEGER NOT NULL DEFAULT 0, rentCents INTEGER NOT NULL DEFAULT 0, rentPaid INTEGER NOT NULL DEFAULT 0, frequency TEXT NOT NULL DEFAULT 'monthly', residentId TEXT, residentName TEXT, rentPaidPeriod TEXT NOT NULL DEFAULT '', archivedAt TEXT, archivedWithProperty INTEGER NOT NULL DEFAULT 0)",
   "CREATE TABLE IF NOT EXISTS invitations(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, propertyId TEXT, unitId TEXT, hash TEXT NOT NULL, expiresAt TEXT NOT NULL, acceptedAt TEXT, username TEXT, usernameKey TEXT, emailStatus TEXT NOT NULL DEFAULT 'not_sent', emailSentAt TEXT)",
   "CREATE TABLE IF NOT EXISTS visitors(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, unitId TEXT, hostId TEXT NOT NULL, visitorName TEXT NOT NULL, phone TEXT NOT NULL, visitorEmail TEXT, idType TEXT NOT NULL DEFAULT 'sa_id', idNumber TEXT NOT NULL DEFAULT '', reference TEXT NOT NULL, token TEXT NOT NULL, entryCode TEXT NOT NULL DEFAULT '', visitType TEXT NOT NULL DEFAULT 'daily', visitDate TEXT NOT NULL, endDate TEXT NOT NULL DEFAULT '', arrival TEXT NOT NULL, departure TEXT NOT NULL, nights INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'upcoming', active INTEGER NOT NULL DEFAULT 1, createdAt TEXT NOT NULL, checkedInAt TEXT, checkedOutAt TEXT, propertyName TEXT NOT NULL DEFAULT '', hostName TEXT NOT NULL DEFAULT '', unitLabel TEXT)",
   "CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, authorId TEXT NOT NULL, authorName TEXT NOT NULL DEFAULT '', category TEXT NOT NULL, description TEXT NOT NULL, urgency TEXT NOT NULL DEFAULT 'normal', urgencyRank INTEGER NOT NULL DEFAULT 2, status TEXT NOT NULL DEFAULT 'open', createdAt TEXT NOT NULL, unitLabel TEXT)",
@@ -395,7 +399,24 @@ const REBUILT = [
 /* Migration                                                           */
 /* ------------------------------------------------------------------ */
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
+
+// v14 lets a unit hold more than one resident, and separates an operator
+// suspension from an unpaid month.
+//
+// maxOccupants backfills to 1 and occupants to whether somebody is living
+// there, which is exactly what the product enforced before this existed: one
+// resident per unit. No building's rules change until a manager says so.
+// bedrooms backfills to 0, meaning nobody has said - not "a studio".
+const ALTERS_V14 = [
+  "ALTER TABLE units ADD COLUMN bedrooms INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE units ADD COLUMN maxOccupants INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE units ADD COLUMN occupants INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE organisations ADD COLUMN suspendedAt TEXT",
+];
+
+const BACKFILL_V14 =
+  "UPDATE units SET occupants=CASE WHEN residentId IS NOT NULL AND residentId<>'' THEN 1 ELSE 0 END";
 
 // v13 adds regular passes - the people who work here - and the movements they
 // make through the gate. Two new tables, which the schema re-run at the end of
@@ -525,6 +546,9 @@ const BACKFILL_V4 = [
 // what every organisation upgrading has, so their dashboards look unchanged.
 // v12 to v13 adds regular passes for the people who work at a property, and
 // the movement log the gate writes for them. Two new tables and nothing else.
+// v13 to v14 lets a unit hold several residents and records how many it may
+// hold, and gives an operator suspension its own field so that not paying and
+// being suspended stop meaning the same thing.
 // v11 to v12 adds the announcements the office makes to its buildings. A new
 // table and nothing else: an upgraded database has made none.
 function migrate(database: DatabaseSync) {
@@ -575,6 +599,7 @@ function migrate(database: DatabaseSync) {
     if (from < 8) steps.push(...ALTERS_V8);
     if (from < 9) steps.push(...ALTERS_V9);
     if (from < 11) steps.push(...ALTERS_V11);
+    if (from < 14) steps.push(...ALTERS_V14, BACKFILL_V14);
     database.exec("BEGIN IMMEDIATE");
     try {
       database.exec(

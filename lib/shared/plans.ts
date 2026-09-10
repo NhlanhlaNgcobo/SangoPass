@@ -10,8 +10,16 @@
 // customer pays and the VAT inside it was never the seller's to keep. Deciding
 // this now matters: moving from exclusive to inclusive later is a 15% price
 // rise to every existing customer.
+/** The tiers a customer can buy. Free is not among them: nobody checks out. */
 export const PLAN_IDS = ["starter", "growth", "premium"] as const;
-export type PlanId = (typeof PLAN_IDS)[number];
+export type PaidPlanId = (typeof PLAN_IDS)[number];
+
+/**
+ * Every tier an organisation can be on, including the one it lands on when a
+ * trial ends without a payment.
+ */
+export const ALL_PLAN_IDS = ["free", ...PLAN_IDS] as const;
+export type PlanId = (typeof ALL_PLAN_IDS)[number];
 
 /** South African VAT, included in every published price. */
 export const VAT_RATE = 0.15;
@@ -23,6 +31,15 @@ export interface Plan {
   priceCents: number;
   units: number;
   managers: number;
+  /**
+   * Residents this tier may have enrolled at once, or null for no limit.
+   *
+   * Only the free tier carries one. On a paid tier a unit is what is being
+   * sold and people are what fill it, so counting them twice would be
+   * charging twice - but a free tier has to be bounded by something the
+   * customer feels, and five units of a shared block is thirty people.
+   */
+  residents: number | null;
   /**
    * Gate-code text messages included each month, per unit.
    *
@@ -40,12 +57,32 @@ export interface Plan {
 }
 
 export const PLANS: Record<PlanId, Plan> = {
+  free: {
+    id: "free",
+    name: "Free",
+    priceCents: 0,
+    units: 5,
+    managers: 1,
+    residents: 10,
+    smsPerUnit: 3,
+    audience:
+      "A new client finding their feet: one small block, or a landlord trying the product on real residents.",
+    rules: [
+      "Up to 5 units in use at once",
+      "Up to 10 residents enrolled at once",
+      "One property manager sign-in",
+      "Unlimited properties, security accounts and guest passes",
+      "15 gate-code texts a month included",
+      "No card, no expiry, nothing to cancel",
+    ],
+  },
   starter: {
     id: "starter",
     name: "Starter",
     priceCents: 69900,
     units: 25,
     managers: 1,
+    residents: null,
     smsPerUnit: 3,
     audience:
       "One block, one person running it. A landlord or a small managing agent.",
@@ -63,6 +100,7 @@ export const PLANS: Record<PlanId, Plan> = {
     priceCents: 149900,
     units: 150,
     managers: 5,
+    residents: null,
     smsPerUnit: 3,
     audience:
       "A managing agent with several buildings, or one estate with a team.",
@@ -80,6 +118,7 @@ export const PLANS: Record<PlanId, Plan> = {
     priceCents: 289900,
     units: 300,
     managers: 10,
+    residents: null,
     smsPerUnit: 3,
     audience:
       "A larger estate or a full agency, with an office team and night security.",
@@ -95,12 +134,39 @@ export const PLANS: Record<PlanId, Plan> = {
 
 export const DEFAULT_PLAN: PlanId = "starter";
 
+/** The tier an organisation lands on when it is paying for nothing. */
+export const FREE_PLAN: PlanId = "free";
+
+/**
+ * Which tier's limits actually apply right now.
+ *
+ * An organisation carries the tier it signed up on or last bought. That tier
+ * only applies while a trial or a paid month is live; once both have run out
+ * the organisation falls to Free rather than being shut out. It keeps every
+ * record it already had - a building that has stopped paying still has to open
+ * its gate - and simply cannot grow past the free caps until it renews.
+ *
+ * So a lapsed Premium customer with 300 units keeps all 300 readable and
+ * working, and cannot add the 301st. Nothing is taken away; the ceiling comes
+ * down to meet them.
+ */
+export function effectivePlanId(organisation: {
+  plan: string;
+  trialUntil: string;
+  paidUntil: string | null;
+}): PlanId {
+  const now = new Date().toISOString();
+  const live =
+    (organisation.paidUntil || "") > now || organisation.trialUntil > now;
+  return live ? plan(organisation.plan).id : FREE_PLAN;
+}
+
 export function plan(value: string | null | undefined): Plan {
   return PLANS[(value || "") as PlanId] || PLANS[DEFAULT_PLAN];
 }
 
 /** Kept for callers that only need the amount, e.g. the PayFast field set. */
-export const PRICES: Record<PlanId, number> = {
+export const PRICES: Record<PaidPlanId, number> = {
   starter: PLANS.starter.priceCents,
   growth: PLANS.growth.priceCents,
   premium: PLANS.premium.priceCents,
@@ -141,14 +207,18 @@ export interface PlanCard {
 }
 
 const priceLabel = (cents: number) =>
-  "R" + new Intl.NumberFormat("en-ZA").format(cents / 100) + "/mo";
+  cents === 0
+    ? "Free"
+    : "R" + new Intl.NumberFormat("en-ZA").format(cents / 100) + "/mo";
 
 /**
  * The published pricing table. Portfolio is quoted directly rather than sold
  * self-serve, so it has no caps and no checkout.
  */
 export const PLAN_CARDS: PlanCard[] = [
-  ...PLAN_IDS.map((id): PlanCard => ({
+  // Free leads, because it is where a new client actually starts and the
+  // pricing page should say so before it asks anybody for money.
+  ...ALL_PLAN_IDS.map((id): PlanCard => ({
     id,
     name: PLANS[id].name,
     priceLabel: priceLabel(PLANS[id].priceCents),

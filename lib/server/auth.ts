@@ -130,9 +130,11 @@ export async function register(
     BACKSTOPS.registrations,
   ]);
 
-  if (await store().first<UserRecord>("users", {
-    where: [["email", "==", emailAddress]],
-  }))
+  if (
+    await store().first<UserRecord>("users", {
+      where: [["email", "==", emailAddress]],
+    })
+  )
     throw new AppError(
       "An account already exists for this email. Please sign in.",
       409,
@@ -171,6 +173,10 @@ export async function register(
         paidUntil: null,
         brandPrimary: DEFAULT_THEME.primary,
         brandAccent: DEFAULT_THEME.accent,
+        // Written rather than left absent: a missing field is null in SQLite
+        // and undefined in Firestore, and every record here states its fields
+        // so the two backends cannot answer differently.
+        suspendedAt: null,
         createdAt: timestamp,
       });
       t.create("memberships", membershipId(userId, orgId), {

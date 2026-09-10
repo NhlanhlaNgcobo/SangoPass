@@ -6,7 +6,12 @@ import {
   MAX_IMPORT_ROWS,
   importResidents,
 } from "@/lib/server/enrolment";
-import { access, entitled, workspace } from "@/lib/server/workspace";
+import {
+  access,
+  activePlan,
+  suspended,
+  workspace,
+} from "@/lib/server/workspace";
 import { store } from "@/lib/server/store";
 import type { OrganisationRecord, PropertyRecord } from "@/lib/server/store";
 import { AppError, text } from "@/lib/server/validation";
@@ -48,11 +53,36 @@ export async function POST(request: Request) {
       "organisations",
       orgId,
     );
-    if (!organisation || !entitled(organisation))
+    if (!organisation) throw new AppError("Organisation not found.", 404);
+    // Not paying drops an organisation to the free tier rather than shutting
+    // it out, so what an import has to respect is that tier's resident cap.
+    // Only a suspension still refuses outright.
+    if (suspended(organisation))
       throw new AppError(
-        "Your trial or paid month has ended. Ask a manager to renew from Billing.",
+        "This organisation has been suspended. Contact SangoPass support.",
         402,
       );
+    const residentCap = activePlan(organisation).residents;
+    let residentsLeft: number | null = null;
+    if (residentCap !== null) {
+      const database = store();
+      const enrolled = await database.count("memberships", {
+        where: [
+          ["orgId", "==", orgId],
+          ["role", "==", "tenant"],
+        ],
+      });
+      const invited = (
+        await database.find<{ id: string }>("invitations", {
+          where: [
+            ["orgId", "==", orgId],
+            ["role", "==", "tenant"],
+            ["acceptedAt", "==", null],
+          ],
+        })
+      ).length;
+      residentsLeft = Math.max(0, residentCap - enrolled - invited);
+    }
 
     const property = await store().get<PropertyRecord>(
       "properties",
@@ -70,7 +100,12 @@ export async function POST(request: Request) {
         409,
       );
 
-    const outcome = await importResidents(orgId, property, await file.text());
+    const outcome = await importResidents(
+      orgId,
+      property,
+      await file.text(),
+      residentsLeft,
+    );
 
     // Nothing was written: hand back every line that has to be fixed, so the
     // manager corrects the file once rather than discovering the next problem

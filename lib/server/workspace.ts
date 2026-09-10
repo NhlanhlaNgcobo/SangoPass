@@ -14,6 +14,8 @@ import {
 import { billingConfigured, emailConfigured } from "./config";
 import { identity } from "./identity";
 import { plan as planFor } from "./plans";
+import { effectivePlanId } from "@/lib/shared/plans";
+import { assertRoom, parseUnitShape } from "./occupancy-rules";
 import { bucket, throttle } from "./ratelimit";
 import { store } from "./store";
 import type {
@@ -207,9 +209,30 @@ async function requireOpenProperty(
   return property;
 }
 
+/**
+ * Whether an organisation is paying for something right now.
+ *
+ * Read for what to show a manager and what to charge them, never for whether
+ * they may act: an organisation that stops paying drops to the free tier and
+ * carries on, because a building that has not renewed still has to open its
+ * gate in the morning.
+ */
 export function entitled(org: OrganisationRecord) {
   return (org.paidUntil || "") > now() || org.trialUntil > now();
 }
+
+/** The tier whose caps apply right now: theirs while paid, otherwise free. */
+export const activePlan = (org: OrganisationRecord) =>
+  planFor(effectivePlanId(org));
+
+/**
+ * An operator has stopped this organisation.
+ *
+ * The one state that still refuses everything. It used to be expressed by
+ * zeroing the trial, which now reads as "not paying" and would hand a
+ * suspended customer a free account instead of stopping them.
+ */
+export const suspended = (org: OrganisationRecord) => Boolean(org.suspendedAt);
 
 /* ------------------------------------------------------------------ */
 /* Read model                                                          */
@@ -582,6 +605,11 @@ export async function workspace(
       id: organisation.id,
       name: organisation.name,
       plan: organisation.plan,
+      // What the organisation is paying for, and what it may actually do
+      // today - the same while a trial or paid month is live, and free once
+      // both have run out.
+      activePlan: activePlan(organisation).id,
+      suspended: suspended(organisation),
       trialUntil: organisation.trialUntil,
       paidUntil: organisation.paidUntil,
       active: entitled(organisation),
@@ -611,6 +639,9 @@ export async function workspace(
         id: u.id,
         propertyId: u.propertyId,
         label: u.label,
+        bedrooms: u.bedrooms ?? 0,
+        maxOccupants: u.maxOccupants ?? 1,
+        occupants: u.occupants ?? 0,
         rentCents: u.rentCents,
         rentPaid: u.rentPaid,
         rentPaidPeriod: u.rentPaidPeriod || "",
@@ -871,9 +902,12 @@ export async function command(
   const outcome = await store().tx(async (t) => {
     const m = await access(user, orgId, t);
     const org = (await t.get<OrganisationRecord>("organisations", orgId))!;
-    if (GATED.has(action) && !entitled(org))
+    // Not paying is no longer a reason to refuse: the caps below come from
+    // activePlan(), which is the free tier once a trial or paid month has run
+    // out. Only an operator suspension stops the product outright.
+    if (GATED.has(action) && suspended(org))
       throw new AppError(
-        "Your trial or paid month has ended. Ask a manager to renew from Billing.",
+        "This organisation has been suspended. Contact SangoPass support.",
         402,
       );
 
@@ -985,6 +1019,16 @@ export async function command(
         await requireProperty(t, m, unit.propertyId);
         const label = text(input.label, "unit label", 50);
         const rentCents = money(input.rent);
+        // Omitted fields keep what the unit already says, so a manager fixing
+        // a rent does not silently reset how many people may live there.
+        const shape = parseUnitShape(input, unit);
+        // A limit below the people already in it would leave the unit over its
+        // own capacity with no way back except asking somebody to leave.
+        if (shape.maxOccupants < unit.occupants)
+          throw new AppError(
+            `${unit.occupants} ${unit.occupants === 1 ? "person lives" : "people live"} in ${unit.label}, so it cannot be limited to ${shape.maxOccupants}. Remove a resident from People first.`,
+            409,
+          );
         const renamed = label.toLowerCase() !== unit.label.toLowerCase();
         // A pass that has not been used yet names the door a guard will send
         // the visitor to, so a rename has to reach it. Passes already closed
@@ -1001,10 +1045,10 @@ export async function command(
           t.reserve(`unit:${unit.propertyId}:${label.toLowerCase()}`, unit.id);
           t.release(`unit:${unit.propertyId}:${unit.label.toLowerCase()}`);
         }
-        t.update("units", unit.id, { label, rentCents });
+        t.update("units", unit.id, { label, rentCents, ...shape });
         for (const visit of live)
           t.update("visitors", visit.id, { unitLabel: label });
-        result = { id: unit.id, label, rentCents };
+        result = { id: unit.id, label, rentCents, ...shape };
         subject = unit.id;
         break;
       }
@@ -1026,9 +1070,11 @@ export async function command(
         await requireProperty(t, m, unit.propertyId);
         const archive = input.archived !== false;
         // Somebody lives there. Archiving it would hide a real tenancy.
-        if (archive && unit.residentId)
+        if (archive && unit.occupants > 0)
           throw new AppError(
-            `${unit.residentName || "A resident"} still lives in ${unit.label}. Remove them from People first.`,
+            unit.occupants === 1
+              ? `${unit.residentName || "A resident"} still lives in ${unit.label}. Remove them from People first.`
+              : `${unit.occupants} residents still live in ${unit.label}. Remove them from People first.`,
             409,
           );
         if (!archive) {
@@ -1041,7 +1087,7 @@ export async function command(
               "Restore the property first: a unit cannot be in use inside an archived property.",
               409,
             );
-          const limit = planFor(org.plan).units;
+          const limit = activePlan(org).units;
           const units = await t.find<UnitRecord>("units", {
             where: [["orgId", "==", orgId]],
           });
@@ -1108,7 +1154,9 @@ export async function command(
         });
         const units = orgUnits.filter((u) => u.propertyId === property.id);
         if (archive) {
-          const occupied = units.filter((u) => !u.archivedAt && u.residentId);
+          const occupied = units.filter(
+            (u) => !u.archivedAt && u.occupants > 0,
+          );
           if (occupied.length)
             throw new AppError(
               `${occupied.length} ${occupied.length === 1 ? "unit is" : "units are"} still occupied at ${property.name}. Remove those residents from People first.`,
@@ -1123,7 +1171,7 @@ export async function command(
           archive ? !u.archivedAt : u.archivedAt && u.archivedWithProperty,
         );
         if (!archive) {
-          const limit = planFor(org.plan).units;
+          const limit = activePlan(org).units;
           const inUse = orgUnits.filter((u) => !u.archivedAt).length;
           if (inUse + following.length > limit)
             throw new AppError(
@@ -1160,7 +1208,8 @@ export async function command(
         const property = await requireOpenProperty(t, m, input.propertyId);
         const label = text(input.label, "unit label", 50);
         const rentCents = money(input.rent);
-        const limit = planFor(org.plan).units;
+        const shape = parseUnitShape(input);
+        const limit = activePlan(org).units;
         // Archived units do not occupy a paid slot: a manager who has closed
         // a wing should not be paying for it. Counted in memory rather than
         // queried, because a missing field is not null in Firestore and the
@@ -1179,6 +1228,8 @@ export async function command(
           orgId,
           propertyId: property.id,
           label,
+          ...shape,
+          occupants: 0,
           rentCents,
           rentPaid: 0,
           rentPaidPeriod: "",
@@ -1338,7 +1389,7 @@ export async function command(
           // formality - invite reception instead of managers and never
           // upgrade. Counted in two queries because the store contract has no
           // OR, and both backends must answer it the same way.
-          const limit = planFor(org.plan).managers;
+          const limit = activePlan(org).managers;
           let taken = 0;
           for (const seat of OFFICE_ROLES) {
             taken += await t.count("memberships", {
@@ -1370,9 +1421,11 @@ export async function command(
             "units",
             text(input.unitId, "unit"),
           );
-          if (!unit || unit.propertyId !== propertyId || unit.archivedAt)
+          if (!unit || unit.propertyId !== propertyId)
+            throw new AppError("Choose a unit at this property.", 409);
+          if (unit.archivedAt)
             throw new AppError(
-              "Choose a vacant unit without a pending invitation.",
+              `${unit.label} is archived, so nobody can be enrolled into it. Restore it from Properties, or choose a vacant unit.`,
               409,
             );
           const pendingForUnit = await t.find<InvitationRecord>("invitations", {
@@ -1382,11 +1435,39 @@ export async function command(
               ["expiresAt", ">", now()],
             ],
           });
-          if (unit.residentId || pendingForUnit.length)
-            throw new AppError(
-              "Choose a vacant unit without a pending invitation.",
-              409,
-            );
+          // A unit holds as many people as its manager says it holds. Two
+          // sharers in a two-bedroom and a family of five in the same flat are
+          // both ordinary, so the number is set on the unit rather than
+          // assumed here.
+          assertRoom(unit, pendingForUnit.length);
+
+          // The free tier is the only one that counts people. On a paid tier
+          // the unit is what is being sold, and charging for the unit and then
+          // again for the people in it would be charging twice.
+          const residentCap = activePlan(org).residents;
+          if (residentCap !== null) {
+            const enrolled = await t.count("memberships", {
+              where: [
+                ["orgId", "==", orgId],
+                ["role", "==", "tenant"],
+              ],
+            });
+            const invited = (
+              await t.find<InvitationRecord>("invitations", {
+                where: [
+                  ["orgId", "==", orgId],
+                  ["role", "==", "tenant"],
+                  ["acceptedAt", "==", null],
+                  ["expiresAt", ">", now()],
+                ],
+              })
+            ).length;
+            if (enrolled + invited >= residentCap)
+              throw new AppError(
+                `The free tier holds ${residentCap} residents at once, and ${enrolled + invited} are already enrolled or invited. Upgrade from Billing to add more.`,
+                409,
+              );
+          }
           unitId = unit.id;
           // One definition of the credential format, shared with the bulk
           // import: two copies is how the two quietly drift apart.
@@ -1517,23 +1598,50 @@ export async function command(
         // Read before the first write: the stay is closed, never deleted, so
         // the lease and the inspections filed against it still belong to
         // somebody once the account is gone.
+        // This resident's own stay, not the unit's: a shared flat has one
+        // open tenancy per occupant and closing the wrong one would file the
+        // departing resident's lease under somebody who still lives there.
         const stay =
           target.role === "tenant" && target.unitId
-            ? await currentTenancy(t, target.unitId)
+            ? await currentTenancy(t, target.unitId, target.userId)
+            : undefined;
+        // Who else is still in the flat, read before any write.
+        const sharers =
+          target.role === "tenant" && target.unitId
+            ? (
+                await t.find<MembershipRecord>("memberships", {
+                  where: [
+                    ["orgId", "==", orgId],
+                    ["unitId", "==", target.unitId],
+                    ["role", "==", "tenant"],
+                  ],
+                })
+              ).filter((other) => other.userId !== target.userId)
+            : [];
+        const home =
+          target.role === "tenant" && target.unitId
+            ? await t.get<UnitRecord>("units", target.unitId)
             : undefined;
         t.remove("memberships", target.id);
         if (stay) closeTenancy(t, stay, "removed");
         if (target.role === "tenant" && target.unitId) {
-          t.release(`unitResident:${target.unitId}`);
-          // The rent flag belongs to the resident who was living there, not to
-          // the unit. Left set, the next tenant would move in already marked
-          // paid for the month. Their predecessor keeps the receipt they
-          // earned: the money was received, and the books say so.
+          const next = sharers[0];
+          // The rent flag belongs to the tenancy, not to the unit, and is only
+          // cleared when the last occupant goes: a flat that still has two
+          // sharers in it has not stopped having paid its rent because the
+          // third moved out. Their predecessor keeps the receipt either way -
+          // the money was received, and the books say so.
           t.update("units", target.unitId, {
-            residentId: null,
-            residentName: null,
-            rentPaid: 0,
-            rentPaidPeriod: "",
+            occupants: Math.max(0, (home?.occupants ?? 1) - 1),
+            residentId:
+              target.userId === home?.residentId
+                ? (next?.userId ?? null)
+                : (home?.residentId ?? null),
+            residentName:
+              target.userId === home?.residentId
+                ? (next?.memberName ?? null)
+                : (home?.residentName ?? null),
+            ...(sharers.length ? {} : { rentPaid: 0, rentPaidPeriod: "" }),
           });
         }
         if (target.role === "tenant" && target.propertyId && target.usernameKey)
@@ -2301,9 +2409,17 @@ export async function join(
       const unit = invitation.unitId
         ? await t.get<UnitRecord>("units", invitation.unitId)
         : undefined;
-      if (invitation.unitId && (!unit || unit.residentId))
+      // Re-checked at redemption, not just at invitation: an invitation is a
+      // claim on a place that somebody else may have taken in the meantime,
+      // and the unit's own limit may have been lowered since.
+      if (invitation.unitId && !unit)
         throw new AppError(
-          "This unit is already occupied. Ask your manager for a new invitation.",
+          "That unit is no longer available. Ask your manager for a new invitation.",
+          409,
+        );
+      if (unit && unit.occupants >= unit.maxOccupants)
+        throw new AppError(
+          `${unit.label} is full. Ask your manager for a new invitation.`,
           409,
         );
       // Read before the first write, so the tenancy can name its building.
@@ -2320,8 +2436,6 @@ export async function join(
           createdAt: now(),
         });
       }
-      if (invitation.unitId)
-        t.reserve(`unitResident:${invitation.unitId}`, userId);
       if (
         invitation.role === "tenant" &&
         invitation.propertyId &&
@@ -2345,8 +2459,11 @@ export async function join(
       });
       if (unit) {
         t.update("units", unit.id, {
-          residentId: userId,
-          residentName: name,
+          occupants: unit.occupants + 1,
+          // The register shows one name beside a unit. The first person in
+          // gets it; when they leave, whoever is still there takes it over.
+          residentId: unit.residentId || userId,
+          residentName: unit.residentName || name,
         });
         // The stay starts the moment the keys do. Recorded here rather than on
         // the unit, because the unit only ever remembers its current resident.

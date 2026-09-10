@@ -41,14 +41,23 @@ export function openTenancy(t: Tx, input: OpenTenancy): string {
   return id;
 }
 
-/** The stay in progress for a unit, if the register knows of one. */
+/**
+ * One resident's stay in progress at a unit.
+ *
+ * Addressed by the person as well as the unit, because a shared flat has one
+ * open tenancy per occupant. Closing "the unit's" stay when three people live
+ * there would file a departing resident's lease under whichever of their
+ * flatmates the query happened to return first.
+ */
 export async function currentTenancy(
   reader: Reader,
   unitId: string,
+  residentId: string,
 ): Promise<TenancyRecord | undefined> {
   return reader.first<TenancyRecord>("tenancies", {
     where: [
       ["unitId", "==", unitId],
+      ["residentId", "==", residentId],
       ["current", "==", 1],
     ],
     limit: 1,
