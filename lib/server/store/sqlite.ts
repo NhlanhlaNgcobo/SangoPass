@@ -127,6 +127,62 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "createdAt",
     "unitLabel",
   ],
+  tenancies: [
+    "id",
+    "orgId",
+    "propertyId",
+    "propertyName",
+    "unitId",
+    "unitLabel",
+    "residentId",
+    "residentName",
+    "residentEmail",
+    "username",
+    "startedAt",
+    "endedAt",
+    "endedReason",
+    "current",
+  ],
+  documents: [
+    "id",
+    "orgId",
+    "propertyId",
+    "propertyName",
+    "unitId",
+    "unitLabel",
+    "tenancyId",
+    "residentId",
+    "residentName",
+    "title",
+    "kind",
+    "filename",
+    "mime",
+    "bytes",
+    "storageKey",
+    "uploadedAt",
+    "uploadedBy",
+    "uploadedByName",
+  ],
+  requests: [
+    "id",
+    "orgId",
+    "propertyId",
+    "propertyName",
+    "unitId",
+    "unitLabel",
+    "residentId",
+    "residentName",
+    "kind",
+    "effectiveDate",
+    "details",
+    "status",
+    "open",
+    "createdAt",
+    "decidedAt",
+    "decidedBy",
+    "decidedByName",
+    "decisionNote",
+  ],
   contractors: [
     "id",
     "orgId",
@@ -180,6 +236,9 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS invitations(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, propertyId TEXT, unitId TEXT, hash TEXT NOT NULL, expiresAt TEXT NOT NULL, acceptedAt TEXT, username TEXT, usernameKey TEXT, emailStatus TEXT NOT NULL DEFAULT 'not_sent', emailSentAt TEXT)",
   "CREATE TABLE IF NOT EXISTS visitors(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, unitId TEXT, hostId TEXT NOT NULL, visitorName TEXT NOT NULL, phone TEXT NOT NULL, visitorEmail TEXT, idType TEXT NOT NULL DEFAULT 'sa_id', idNumber TEXT NOT NULL DEFAULT '', reference TEXT NOT NULL, token TEXT NOT NULL, entryCode TEXT NOT NULL DEFAULT '', visitType TEXT NOT NULL DEFAULT 'daily', visitDate TEXT NOT NULL, endDate TEXT NOT NULL DEFAULT '', arrival TEXT NOT NULL, departure TEXT NOT NULL, nights INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'upcoming', active INTEGER NOT NULL DEFAULT 1, createdAt TEXT NOT NULL, checkedInAt TEXT, checkedOutAt TEXT, propertyName TEXT NOT NULL DEFAULT '', hostName TEXT NOT NULL DEFAULT '', unitLabel TEXT)",
   "CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, authorId TEXT NOT NULL, authorName TEXT NOT NULL DEFAULT '', category TEXT NOT NULL, description TEXT NOT NULL, urgency TEXT NOT NULL DEFAULT 'normal', urgencyRank INTEGER NOT NULL DEFAULT 2, status TEXT NOT NULL DEFAULT 'open', createdAt TEXT NOT NULL, unitLabel TEXT)",
+  "CREATE TABLE IF NOT EXISTS tenancies(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, propertyName TEXT NOT NULL DEFAULT '', unitId TEXT NOT NULL, unitLabel TEXT NOT NULL DEFAULT '', residentId TEXT NOT NULL, residentName TEXT NOT NULL DEFAULT '', residentEmail TEXT NOT NULL DEFAULT '', username TEXT, startedAt TEXT NOT NULL, endedAt TEXT, endedReason TEXT NOT NULL DEFAULT '', current INTEGER NOT NULL DEFAULT 1)",
+  "CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, propertyName TEXT NOT NULL DEFAULT '', unitId TEXT, unitLabel TEXT, tenancyId TEXT, residentId TEXT, residentName TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'other', filename TEXT NOT NULL, mime TEXT NOT NULL DEFAULT 'application/octet-stream', bytes INTEGER NOT NULL DEFAULT 0, storageKey TEXT NOT NULL, uploadedAt TEXT NOT NULL, uploadedBy TEXT NOT NULL DEFAULT '', uploadedByName TEXT NOT NULL DEFAULT '')",
+  "CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, propertyId TEXT NOT NULL, propertyName TEXT NOT NULL DEFAULT '', unitId TEXT, unitLabel TEXT, residentId TEXT NOT NULL, residentName TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, effectiveDate TEXT NOT NULL DEFAULT '', details TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open', open INTEGER NOT NULL DEFAULT 1, createdAt TEXT NOT NULL, decidedAt TEXT, decidedBy TEXT, decidedByName TEXT NOT NULL DEFAULT '', decisionNote TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS contractors(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, name TEXT NOT NULL, trade TEXT NOT NULL, company TEXT, phone TEXT NOT NULL, email TEXT, kind TEXT NOT NULL DEFAULT 'contractor', notes TEXT, createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS ledger(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, period TEXT NOT NULL, kind TEXT NOT NULL, category TEXT NOT NULL, nature TEXT NOT NULL DEFAULT 'variable', amountCents INTEGER NOT NULL DEFAULT 0, description TEXT NOT NULL DEFAULT '', propertyId TEXT, propertyName TEXT NOT NULL DEFAULT '', unitId TEXT, unitLabel TEXT, recordedBy TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS invoices(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, plan TEXT NOT NULL, amountCents INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', paymentId TEXT, createdAt TEXT NOT NULL)",
@@ -208,6 +267,19 @@ const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS report_author ON reports(orgId, authorId, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS report_property ON reports(orgId, propertyId, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS report_queue ON reports(orgId, urgencyRank, createdAt DESC)",
+  "CREATE INDEX IF NOT EXISTS tenancy_org ON tenancies(orgId, startedAt DESC)",
+  "CREATE INDEX IF NOT EXISTS tenancy_unit ON tenancies(unitId, startedAt DESC)",
+  "CREATE INDEX IF NOT EXISTS tenancy_resident ON tenancies(orgId, residentId)",
+  "CREATE INDEX IF NOT EXISTS tenancy_current ON tenancies(orgId, current)",
+  "CREATE INDEX IF NOT EXISTS tenancy_property ON tenancies(orgId, propertyId, startedAt DESC)",
+  "CREATE INDEX IF NOT EXISTS document_org ON documents(orgId, uploadedAt DESC)",
+  "CREATE INDEX IF NOT EXISTS document_property ON documents(orgId, propertyId, uploadedAt DESC)",
+  "CREATE INDEX IF NOT EXISTS document_unit ON documents(unitId, uploadedAt DESC)",
+  "CREATE INDEX IF NOT EXISTS document_tenancy ON documents(tenancyId)",
+  "CREATE INDEX IF NOT EXISTS request_org ON requests(orgId, createdAt DESC)",
+  "CREATE INDEX IF NOT EXISTS request_property ON requests(orgId, propertyId, createdAt DESC)",
+  "CREATE INDEX IF NOT EXISTS request_resident ON requests(orgId, residentId, createdAt DESC)",
+  "CREATE INDEX IF NOT EXISTS request_open ON requests(orgId, open, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS contractor_org ON contractors(orgId, name)",
   "CREATE INDEX IF NOT EXISTS ledger_org ON ledger(orgId, period DESC, createdAt DESC)",
   "CREATE INDEX IF NOT EXISTS ledger_unit ON ledger(unitId, period)",
@@ -240,7 +312,30 @@ const REBUILT = [
 /* Migration                                                           */
 /* ------------------------------------------------------------------ */
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
+
+// v10 adds occupancy history, the tenant document archive and the resident
+// notice queue. All three are new tables, which the schema re-run at the end
+// of a migration creates, so there is nothing to alter and no column to
+// backfill. Occupancy before the upgrade was never recorded and none is
+// invented: a unit's current resident is opened as a tenancy starting now,
+// and the register reads as having no history before that, which is the
+// truth. See openingTenancies() below.
+
+// Opens a tenancy for every unit that has a resident in it right now, so an
+// upgraded database knows who is living where. The start date is the moment of
+// the upgrade rather than a guess: when they actually moved in was never
+// recorded, and inventing a date would put a number on a lease dispute that
+// nothing in the database supports. Units standing empty get no row - a
+// tenancy is a stay, and an empty unit has not had one.
+const BACKFILL_V10 = `INSERT INTO tenancies(id,orgId,propertyId,propertyName,unitId,unitLabel,residentId,residentName,residentEmail,username,startedAt,endedAt,endedReason,current)
+SELECT 'tncy_' || u.id, u.orgId, u.propertyId, coalesce(p.name,''), u.id, u.label,
+       u.residentId, coalesce(u.residentName,''), coalesce(m.userEmail,''), m.username,
+       strftime('%Y-%m-%dT%H:%M:%fZ','now'), NULL, '', 1
+FROM units u
+LEFT JOIN properties p ON p.id=u.propertyId
+LEFT JOIN memberships m ON m.userId=u.residentId AND m.orgId=u.orgId
+WHERE u.residentId IS NOT NULL AND u.residentId<>''`;
 
 // v9 lets a property or a unit be archived instead of deleted, so a sold
 // building or a unit that no longer exists leaves last year's books, the
@@ -318,6 +413,10 @@ const BACKFILL_V4 = [
 // v7 to v8 adds the finance ledger and the period a rent flag belongs to.
 // v8 to v9 adds archiving for properties and units; every existing row is in
 // use, which is what a null archivedAt means.
+// v9 to v10 adds occupancy history, the tenant document archive and the
+// resident notice queue. Whoever is living in a unit today becomes that unit's
+// current tenancy; nothing is claimed about who lived there before, because
+// nothing ever recorded it.
 function migrate(database: DatabaseSync) {
   const version = () =>
     (database.prepare("PRAGMA user_version").get() as { user_version: number })
@@ -377,6 +476,9 @@ function migrate(database: DatabaseSync) {
     }
     // Creates the contractors table and the new indexes.
     database.exec(SCHEMA);
+    // Only now do the v10 tables exist, so the occupancy this database already
+    // knows about can be opened as history.
+    if (from < 10) database.exec(BACKFILL_V10);
     return;
   }
 

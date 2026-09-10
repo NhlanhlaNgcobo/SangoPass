@@ -18,6 +18,7 @@ import { bucket, throttle } from "./ratelimit";
 import { store } from "./store";
 import type {
   ContractorRecord,
+  DocumentRecord,
   InvitationRecord,
   InvoiceRecord,
   LedgerRecord,
@@ -26,16 +27,24 @@ import type {
   PropertyRecord,
   Reader,
   ReportRecord,
+  RequestRecord,
+  TenancyRecord,
   UnitRecord,
   UserRecord,
   VisitorRecord,
 } from "./store";
+import { closeTenancy, currentTenancy, openTenancy } from "./occupancy";
+import { documentStorage } from "./documents";
+import {
+  OFFICE_STATUSES,
+  REQUEST_KINDS,
+  stillOpen,
+} from "@/lib/shared/notices";
 import { parseContractor, parseUrgency, rank } from "./maintenance";
 import {
   DEFAULT_LIMITS,
   endsAt,
   limitsOf,
-  maskIdNumber,
   monthBounds,
   nightsUsed,
   parseLimits,
@@ -55,15 +64,19 @@ import {
 } from "./validation";
 import { resolveTheme, themeReadable } from "@/lib/shared/theme";
 import { ENTRY_CODE_BYTES, encodeEntryCode } from "@/lib/shared/passcode";
+import { maskIdNumber } from "@/lib/shared/identity";
 import { currentPeriod } from "@/lib/shared/money";
 import { LEDGER_LIMIT, parseLedgerEntry } from "./finance";
 import type {
   Account,
+  LiveDocument,
   LiveInvoice,
   LiveLedgerEntry,
   LiveMember,
   LiveProperty,
   LiveReport,
+  LiveRequest,
+  LiveTenancy,
   LiveUnit,
   LiveVisitor,
   Membership,
@@ -71,6 +84,27 @@ import type {
 } from "@/types/workspace";
 
 const LIST_LIMIT = 500;
+
+/** The roles that run a building, and that a plan sells seats for. */
+const OFFICE_ROLES: readonly string[] = ["manager", "reception"];
+
+/**
+ * The date a resident intends a change to take effect.
+ *
+ * Not required to be in the future: a resident who has already moved out and
+ * is only now telling the office is describing something true, and refusing
+ * the notice would leave the register saying they still live there. Bounded at
+ * both ends only to keep a typo from filing a notice for the year 3000.
+ */
+function noticeDate(value: unknown): string {
+  const date = text(value, "date", 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)))
+    throw new AppError("Enter the date as YYYY-MM-DD.");
+  const year = Number(date.slice(0, 4));
+  if (year < 2000 || year > 2100)
+    throw new AppError("Enter a date within the next few years.");
+  return date;
+}
 
 /* ------------------------------------------------------------------ */
 /* Access                                                              */
@@ -99,6 +133,21 @@ export async function access(
 function manager(m: MembershipRecord) {
   if (m.role !== "manager")
     throw new AppError("A manager account is required.", 403);
+}
+
+/**
+ * The office: a manager, or the reception desk acting for them.
+ *
+ * Reception runs a building - its properties, units, people, visitors,
+ * maintenance and paperwork - because at most places that is who is actually
+ * at the desk when a resident hands in a notice. Two things stay with
+ * manager() above and never widen to here: the money, which is the books, the
+ * rent receipts and the subscription; and creating other office accounts,
+ * because a role that could mint managers is a manager.
+ */
+function office(m: MembershipRecord) {
+  if (m.role !== "manager" && m.role !== "reception")
+    throw new AppError("A manager or reception account is required.", 403);
 }
 
 /**
@@ -160,36 +209,51 @@ export async function workspace(
     m.orgId,
   ))!;
 
-  const scopedProperties =
-    m.role === "manager"
-      ? { where: [["orgId", "==", m.orgId]] as never }
-      : { where: [["id", "==", m.propertyId]] as never };
+  // A manager runs the organisation; reception runs one building of it. The
+  // two see the same kinds of thing, and reception sees them only for the
+  // property it sits in - which is what makes a reception account safe to hand
+  // to a desk in a single block.
+  const isManager = m.role === "manager";
+  const isOffice = isManager || m.role === "reception";
+  /** Everything the office may read, narrowed to reception's own building. */
+  const officeScope = isManager
+    ? [["orgId", "==", m.orgId]]
+    : [
+        ["orgId", "==", m.orgId],
+        ["propertyId", "==", m.propertyId],
+      ];
 
+  const scopedProperties = isManager
+    ? { where: [["orgId", "==", m.orgId]] as never }
+    : { where: [["id", "==", m.propertyId]] as never };
+
+  // A resident sees only the guests they are hosting. Everyone else at the
+  // gate or the desk sees the building's register.
   const visitorScope =
-    m.role === "manager"
-      ? [["orgId", "==", m.orgId]]
-      : m.role === "security"
-        ? [
-            ["orgId", "==", m.orgId],
-            ["propertyId", "==", m.propertyId],
-          ]
-        : [
-            ["orgId", "==", m.orgId],
-            ["hostId", "==", user.id],
-          ];
+    m.role === "tenant"
+      ? [
+          ["orgId", "==", m.orgId],
+          ["hostId", "==", user.id],
+        ]
+      : officeScope;
 
   const reportScope =
-    m.role === "manager"
-      ? [["orgId", "==", m.orgId]]
-      : m.role === "security"
-        ? [
-            ["orgId", "==", m.orgId],
-            ["propertyId", "==", m.propertyId],
-          ]
-        : [
-            ["orgId", "==", m.orgId],
-            ["authorId", "==", user.id],
-          ];
+    m.role === "tenant"
+      ? [
+          ["orgId", "==", m.orgId],
+          ["authorId", "==", user.id],
+        ]
+      : officeScope;
+
+  // A resident sees the notices they raised; the office sees the ones it owes
+  // an answer to.
+  const requestScope =
+    m.role === "tenant"
+      ? [
+          ["orgId", "==", m.orgId],
+          ["residentId", "==", user.id],
+        ]
+      : officeScope;
 
   const [
     properties,
@@ -201,8 +265,11 @@ export async function workspace(
     invitations,
     contractors,
     ledger,
+    tenancies,
+    documents,
+    requests,
   ] = await Promise.all([
-      m.role === "manager" || m.propertyId
+      isManager || m.propertyId
         ? database.find<PropertyRecord>("properties", {
             ...scopedProperties,
             orderBy: [{ field: "name" }],
@@ -216,15 +283,27 @@ export async function workspace(
                 where: [["id", "==", m.unitId]],
               })
             : Promise.resolve([])
-          : database.find<UnitRecord>("units", {
-              where: [["orgId", "==", m.orgId]],
-              orderBy: [{ field: "label" }],
-            }),
-      m.role === "manager"
+          : isManager
+            ? database.find<UnitRecord>("units", {
+                where: [["orgId", "==", m.orgId]],
+                orderBy: [{ field: "label" }],
+              })
+            : database.find<UnitRecord>("units", {
+                where: [["propertyId", "==", m.propertyId]],
+                orderBy: [{ field: "label" }],
+              }),
+      isManager
         ? database.find<MembershipRecord>("memberships", {
             where: [["orgId", "==", m.orgId]],
           })
-        : Promise.resolve([]),
+        : m.role === "reception"
+          ? database.find<MembershipRecord>("memberships", {
+              where: [
+                ["orgId", "==", m.orgId],
+                ["propertyId", "==", m.propertyId],
+              ],
+            })
+          : Promise.resolve([]),
       database.find<VisitorRecord>("visitors", {
         where: visitorScope as never,
         orderBy: [
@@ -243,23 +322,27 @@ export async function workspace(
         ],
         limit: LIST_LIMIT,
       }),
-      m.role === "manager"
+      // What the organisation pays SangoPass. The subscription is the account
+      // holder's business, so reception never sees it.
+      isManager
         ? database.find<InvoiceRecord>("invoices", {
             where: [["orgId", "==", m.orgId]],
             orderBy: [{ field: "createdAt", direction: "desc" }],
             limit: 100,
           })
         : Promise.resolve([]),
-      m.role === "manager"
+      isOffice
         ? database.find<InvitationRecord>("invitations", {
             where: [
-              ["orgId", "==", m.orgId],
+              ...officeScope,
               ["acceptedAt", "==", null],
               ["expiresAt", ">", now()],
-            ],
+            ] as never,
           })
         : Promise.resolve([]),
-      m.role === "manager"
+      // The trades directory is one list for the whole organisation: the
+      // plumber does not belong to a building.
+      isOffice
         ? database.find<ContractorRecord>("contractors", {
             where: [["orgId", "==", m.orgId]],
             orderBy: [{ field: "name" }],
@@ -268,7 +351,7 @@ export async function workspace(
       // The organisation's own money. Managers only: a resident has no
       // business seeing what the building costs to run, and neither has a
       // guard. Newest month first, so the screen opens on the current one.
-      m.role === "manager"
+      isManager
         ? database.find<LedgerRecord>("ledger", {
             where: [["orgId", "==", m.orgId]],
             orderBy: [
@@ -278,6 +361,48 @@ export async function workspace(
             limit: LEDGER_LIMIT,
           })
         : Promise.resolve([]),
+      // Occupancy history, newest stay first. The office needs the whole
+      // register to answer "who was in A1 last year"; a resident needs only
+      // their own stays, which is what the filing cabinet holds about them.
+      isOffice
+        ? database.find<TenancyRecord>("tenancies", {
+            where: officeScope as never,
+            orderBy: [{ field: "startedAt", direction: "desc" }],
+            limit: LIST_LIMIT,
+          })
+        : m.role === "tenant"
+          ? database.find<TenancyRecord>("tenancies", {
+              where: [
+                ["orgId", "==", m.orgId],
+                ["residentId", "==", user.id],
+              ],
+              orderBy: [{ field: "startedAt", direction: "desc" }],
+            })
+          : Promise.resolve([]),
+      // The filing cabinet. A resident sees their own papers; security sees
+      // none, because nothing at the gate is answered by a lease.
+      isOffice
+        ? database.find<DocumentRecord>("documents", {
+            where: officeScope as never,
+            orderBy: [{ field: "uploadedAt", direction: "desc" }],
+            limit: LIST_LIMIT,
+          })
+        : m.role === "tenant"
+          ? database.find<DocumentRecord>("documents", {
+              where: [
+                ["orgId", "==", m.orgId],
+                ["residentId", "==", user.id],
+              ],
+              orderBy: [{ field: "uploadedAt", direction: "desc" }],
+            })
+          : Promise.resolve([]),
+      m.role === "security"
+        ? Promise.resolve([])
+        : database.find<RequestRecord>("requests", {
+            where: requestScope as never,
+            orderBy: [{ field: "createdAt", direction: "desc" }],
+            limit: LIST_LIMIT,
+          }),
     ]);
 
   // What this resident has left this month, so the form can say so before they
@@ -445,6 +570,63 @@ export async function workspace(
       kind: c.kind,
       notes: c.notes,
     })),
+    tenancies: tenancies.map(
+      (s): LiveTenancy => ({
+        id: s.id,
+        propertyId: s.propertyId,
+        propertyName: s.propertyName,
+        unitId: s.unitId,
+        unitLabel: s.unitLabel,
+        residentId: s.residentId,
+        residentName: s.residentName,
+        residentEmail: s.residentEmail,
+        username: s.username,
+        startedAt: s.startedAt,
+        endedAt: s.endedAt,
+        endedReason: s.endedReason,
+        current: s.current === 1,
+      }),
+    ),
+    documents: documents.map(
+      (d): LiveDocument => ({
+        id: d.id,
+        propertyId: d.propertyId,
+        propertyName: d.propertyName,
+        unitId: d.unitId,
+        unitLabel: d.unitLabel,
+        tenancyId: d.tenancyId,
+        residentId: d.residentId,
+        residentName: d.residentName,
+        title: d.title,
+        kind: d.kind as LiveDocument["kind"],
+        filename: d.filename,
+        mime: d.mime,
+        bytes: d.bytes,
+        uploadedAt: d.uploadedAt,
+        uploadedByName: d.uploadedByName,
+        // storageKey is deliberately absent: where the file sits on disk is
+        // the server's business, and the id is all a download needs.
+      }),
+    ),
+    requests: requests.map(
+      (r): LiveRequest => ({
+        id: r.id,
+        propertyId: r.propertyId,
+        propertyName: r.propertyName,
+        unitId: r.unitId,
+        unitLabel: r.unitLabel,
+        residentId: r.residentId,
+        residentName: r.residentName,
+        kind: r.kind as LiveRequest["kind"],
+        effectiveDate: r.effectiveDate,
+        details: r.details,
+        status: r.status as LiveRequest["status"],
+        createdAt: r.createdAt,
+        decidedAt: r.decidedAt,
+        decidedByName: r.decidedByName,
+        decisionNote: r.decisionNote,
+      }),
+    ),
     invoices: invoices.map(
       (i): LiveInvoice => ({
         id: i.id,
@@ -508,7 +690,10 @@ export async function command(
 ): Promise<Record<string, unknown>> {
   const action = String(input.action);
   if (action === "visitor") await reauthenticate(user, input);
-  return store().tx(async (t) => {
+  // A file to delete once the record is certainly gone. Removing bytes is the
+  // one thing in here a rollback cannot undo, so it waits for the commit.
+  let discard: string | null = null;
+  const outcome = await store().tx(async (t) => {
     const m = await access(user, orgId, t);
     const org = (await t.get<OrganisationRecord>("organisations", orgId))!;
     if (GATED.has(action) && !entitled(org))
@@ -522,7 +707,7 @@ export async function command(
 
     switch (action) {
       case "property": {
-        manager(m);
+        office(m);
         const name = text(input.name, "property name", 100);
         const addressLine = text(input.address, "address", 250);
         const type = choice(
@@ -557,7 +742,7 @@ export async function command(
        * fault rather than a prompt to pay.
        */
       case "branding": {
-        manager(m);
+        office(m);
         const theme = {
           primary: colour(input.primary, "primary colour"),
           accent: colour(input.accent, "accent colour"),
@@ -585,7 +770,7 @@ export async function command(
        * what was actually paid, at the price that applied when it was paid.
        */
       case "unitUpdate": {
-        manager(m);
+        office(m);
         const unit = await t.get<UnitRecord>("units", text(input.id, "unit"));
         if (!unit || unit.orgId !== orgId)
           throw new AppError("Unit not found.", 404);
@@ -625,7 +810,7 @@ export async function command(
        * vacant income the property is failing to earn.
        */
       case "unitArchive": {
-        manager(m);
+        office(m);
         const unit = await t.get<UnitRecord>("units", text(input.id, "unit"));
         if (!unit || unit.orgId !== orgId)
           throw new AppError("Unit not found.", 404);
@@ -672,7 +857,7 @@ export async function command(
 
       /** The property's own details. Its login code and limits are unchanged. */
       case "propertyUpdate": {
-        manager(m);
+        office(m);
         const property = await requireProperty(t, m, input.id);
         const name = text(input.name, "property name", 100);
         const addressLine = text(input.address, "address", 250);
@@ -704,7 +889,7 @@ export async function command(
        * a filing one, and it has to be answered in People first.
        */
       case "propertyArchive": {
-        manager(m);
+        office(m);
         const property = await requireProperty(t, m, input.id);
         const archive = input.archived !== false;
         // The whole organisation's units: the plan cap is counted across
@@ -752,7 +937,7 @@ export async function command(
       }
 
       case "propertyLimits": {
-        manager(m);
+        office(m);
         const property = await requireProperty(t, m, input.propertyId);
         const limits = parseLimits(input);
         t.update("properties", property.id, { ...limits });
@@ -762,7 +947,7 @@ export async function command(
       }
 
       case "unit": {
-        manager(m);
+        office(m);
         const property = await requireOpenProperty(t, m, input.propertyId);
         const label = text(input.label, "unit label", 50);
         const rentCents = money(input.rent);
@@ -910,12 +1095,20 @@ export async function command(
       }
 
       case "invite": {
-        manager(m);
+        office(m);
         const role = choice(
           input.role,
-          ["manager", "tenant", "security"] as const,
+          ["manager", "reception", "tenant", "security"] as const,
           "role",
         );
+        // A role that can create office accounts is an office account maker,
+        // and reception is not one: it would let a front desk promote itself
+        // to manager and walk into the books it was kept out of.
+        if (m.role !== "manager" && OFFICE_ROLES.includes(role))
+          throw new AppError(
+            "Only a manager can create manager or reception accounts.",
+            403,
+          );
         const invitee = email(input.email);
         let propertyId: string | null = null;
         let unitId: string | null = null;
@@ -927,27 +1120,35 @@ export async function command(
           propertyId = property.id;
         }
 
-        if (role === "manager") {
+        if (OFFICE_ROLES.includes(role)) {
+          // Reception spends a manager seat. It does nearly everything a
+          // manager does, so letting it in free would make the plan limit a
+          // formality - invite reception instead of managers and never
+          // upgrade. Counted in two queries because the store contract has no
+          // OR, and both backends must answer it the same way.
           const limit = planFor(org.plan).managers;
-          const seats = await t.count("memberships", {
-            where: [
-              ["orgId", "==", orgId],
-              ["role", "==", "manager"],
-            ],
-          });
-          const pending = (
-            await t.find<InvitationRecord>("invitations", {
+          let taken = 0;
+          for (const seat of OFFICE_ROLES) {
+            taken += await t.count("memberships", {
               where: [
                 ["orgId", "==", orgId],
-                ["role", "==", "manager"],
-                ["acceptedAt", "==", null],
-                ["expiresAt", ">", now()],
+                ["role", "==", seat],
               ],
-            })
-          ).length;
-          if (seats + pending >= limit)
+            });
+            taken += (
+              await t.find<InvitationRecord>("invitations", {
+                where: [
+                  ["orgId", "==", orgId],
+                  ["role", "==", seat],
+                  ["acceptedAt", "==", null],
+                  ["expiresAt", ">", now()],
+                ],
+              })
+            ).length;
+          }
+          if (taken >= limit)
             throw new AppError(
-              "Your plan's manager limit has been reached.",
+              `Your plan includes ${limit} manager or reception sign-in${limit === 1 ? "" : "s"}, and they are all taken. Upgrade the plan, or remove an account you no longer need.`,
               409,
             );
         }
@@ -1043,7 +1244,7 @@ export async function command(
       }
 
       case "resendInvitation": {
-        manager(m);
+        office(m);
         const invitation = await t.get<InvitationRecord>(
           "invitations",
           text(input.id, "invitation"),
@@ -1074,7 +1275,7 @@ export async function command(
       }
 
       case "revokeInvitation": {
-        manager(m);
+        office(m);
         const invitation = await t.get<InvitationRecord>(
           "invitations",
           text(input.id, "invitation"),
@@ -1087,7 +1288,7 @@ export async function command(
       }
 
       case "removeMember": {
-        manager(m);
+        office(m);
         const id = text(input.id, "member");
         if (id === user.id)
           throw new AppError("You cannot remove your own access.", 409);
@@ -1096,6 +1297,17 @@ export async function command(
           membershipId(id, orgId),
         );
         if (!target) throw new AppError("Member not found.", 404);
+        // The other half of the escalation rule on invite: a desk that cannot
+        // create office accounts must not be able to delete them either, or it
+        // removes the managers and is the only thing left holding the keys.
+        if (m.role !== "manager" && OFFICE_ROLES.includes(target.role))
+          throw new AppError(
+            "Only a manager can remove a manager or reception account.",
+            403,
+          );
+        // Reception runs its own building and nobody else's.
+        if (m.role !== "manager" && target.propertyId !== m.propertyId)
+          throw new AppError("Member not found.", 404);
         const upcoming = await t.find<VisitorRecord>("visitors", {
           where: [
             ["orgId", "==", orgId],
@@ -1103,7 +1315,15 @@ export async function command(
             ["status", "==", "upcoming"],
           ],
         });
+        // Read before the first write: the stay is closed, never deleted, so
+        // the lease and the inspections filed against it still belong to
+        // somebody once the account is gone.
+        const stay =
+          target.role === "tenant" && target.unitId
+            ? await currentTenancy(t, target.unitId)
+            : undefined;
         t.remove("memberships", target.id);
+        if (stay) closeTenancy(t, stay, "removed");
         if (target.role === "tenant" && target.unitId) {
           t.release(`unitResident:${target.unitId}`);
           // The rent flag belongs to the resident who was living there, not to
@@ -1318,7 +1538,7 @@ export async function command(
       }
 
       case "reportStatus": {
-        manager(m);
+        office(m);
         const report = await t.get<ReportRecord>(
           "reports",
           text(input.id, "report"),
@@ -1337,8 +1557,8 @@ export async function command(
       }
 
       case "reportUrgency": {
-        // Residents say how bad it feels; the manager triages what it is.
-        manager(m);
+        // Residents say how bad it feels; the office triages what it is.
+        office(m);
         const report = await t.get<ReportRecord>(
           "reports",
           text(input.id, "report"),
@@ -1352,7 +1572,7 @@ export async function command(
       }
 
       case "contractor": {
-        manager(m);
+        office(m);
         const details = parseContractor(input);
         const id = randomUUID();
         t.create("contractors", id, {
@@ -1366,7 +1586,7 @@ export async function command(
       }
 
       case "contractorUpdate": {
-        manager(m);
+        office(m);
         const existing = await t.get<ContractorRecord>(
           "contractors",
           text(input.id, "contact"),
@@ -1379,7 +1599,7 @@ export async function command(
       }
 
       case "contractorRemove": {
-        manager(m);
+        office(m);
         const existing = await t.get<ContractorRecord>(
           "contractors",
           text(input.id, "contact"),
@@ -1388,6 +1608,123 @@ export async function command(
           throw new AppError("Contact not found.", 404);
         t.remove("contractors", existing.id);
         subject = existing.id;
+        break;
+      }
+
+      case "notice": {
+        // Only the resident whose life is changing may say so. The office can
+        // answer a notice and record what happened; it cannot raise one on
+        // somebody's behalf, because "your tenant gave notice" is exactly the
+        // claim a register should not let anyone make for them.
+        if (m.role !== "tenant")
+          throw new AppError(
+            "Only a resident can give notice. The office answers notices instead.",
+            403,
+          );
+        if (!m.propertyId)
+          throw new AppError("You are not assigned to a property.", 409);
+        const kind = choice(input.kind, REQUEST_KINDS, "notice type");
+        const property = await requireProperty(t, m, m.propertyId);
+        const unit = m.unitId
+          ? await t.get<UnitRecord>("units", m.unitId)
+          : undefined;
+        const effectiveDate = noticeDate(input.effectiveDate);
+        const details = text(input.details, "details", 1000);
+        const id = randomUUID();
+        t.create("requests", id, {
+          orgId,
+          propertyId: property.id,
+          propertyName: property.name,
+          unitId: unit?.id ?? null,
+          unitLabel: unit?.label ?? null,
+          residentId: user.id,
+          residentName: user.name,
+          kind,
+          effectiveDate,
+          details,
+          status: "open",
+          open: 1,
+          createdAt: now(),
+          decidedAt: null,
+          decidedBy: null,
+          decidedByName: "",
+          decisionNote: "",
+        });
+        result = { id };
+        subject = id;
+        break;
+      }
+
+      case "noticeWithdraw": {
+        const notice = await t.get<RequestRecord>(
+          "requests",
+          text(input.id, "notice"),
+        );
+        if (!notice || notice.orgId !== orgId)
+          throw new AppError("Notice not found.", 404);
+        if (notice.residentId !== user.id)
+          throw new AppError("That is not your notice.", 403);
+        if (!stillOpen(notice.status))
+          throw new AppError(
+            "This notice has already been answered, so it can no longer be withdrawn. Speak to the office.",
+            409,
+          );
+        t.update("requests", notice.id, {
+          status: "withdrawn",
+          open: 0,
+          decidedAt: now(),
+        });
+        subject = notice.id;
+        break;
+      }
+
+      case "noticeStatus": {
+        office(m);
+        const notice = await t.get<RequestRecord>(
+          "requests",
+          text(input.id, "notice"),
+        );
+        if (!notice || notice.orgId !== orgId)
+          throw new AppError("Notice not found.", 404);
+        if (m.role !== "manager" && notice.propertyId !== m.propertyId)
+          throw new AppError("Notice not found.", 404);
+        if (notice.status === "withdrawn")
+          throw new AppError(
+            "The resident withdrew this notice. It stays withdrawn.",
+            409,
+          );
+        const status = choice(input.status, OFFICE_STATUSES, "status");
+        t.update("requests", notice.id, {
+          status,
+          open: stillOpen(status) ? 1 : 0,
+          decidedAt: now(),
+          decidedBy: user.id,
+          decidedByName: user.name,
+          decisionNote:
+            typeof input.note === "string" && input.note.trim()
+              ? text(input.note, "note", 1000)
+              : notice.decisionNote,
+        });
+        subject = notice.id;
+        break;
+      }
+
+      case "documentRemove": {
+        office(m);
+        const document = await t.get<DocumentRecord>(
+          "documents",
+          text(input.id, "document"),
+        );
+        if (!document || document.orgId !== orgId)
+          throw new AppError("Document not found.", 404);
+        if (m.role !== "manager" && document.propertyId !== m.propertyId)
+          throw new AppError("Document not found.", 404);
+        t.remove("documents", document.id);
+        // The file itself is removed after the transaction commits, below:
+        // deleting bytes is not something a rollback can undo, so it must not
+        // happen until the record is certainly gone.
+        discard = document.storageKey;
+        subject = document.id;
         break;
       }
 
@@ -1405,6 +1742,14 @@ export async function command(
     });
     return result;
   });
+  // The record is gone; the file may follow. A failure here leaves an orphaned
+  // file rather than a document row pointing at nothing, which is the harmless
+  // way round: storage costs a little, a broken lease link costs trust.
+  if (discard)
+    await documentStorage()
+      .remove(discard)
+      .catch(() => undefined);
+  return outcome;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1488,6 +1833,10 @@ export async function join(
           "This unit is already occupied. Ask your manager for a new invitation.",
           409,
         );
+      // Read before the first write, so the tenancy can name its building.
+      const building = unit
+        ? await t.get<PropertyRecord>("properties", unit.propertyId)
+        : undefined;
 
       if (created) {
         t.reserve(`userEmail:${invitee}`, userId);
@@ -1516,11 +1865,25 @@ export async function join(
         memberName: name,
         userEmail: invitee,
       });
-      if (unit)
+      if (unit) {
         t.update("units", unit.id, {
           residentId: userId,
           residentName: name,
         });
+        // The stay starts the moment the keys do. Recorded here rather than on
+        // the unit, because the unit only ever remembers its current resident.
+        openTenancy(t, {
+          orgId: invitation.orgId,
+          propertyId: unit.propertyId,
+          propertyName: building?.name ?? "",
+          unitId: unit.id,
+          unitLabel: unit.label,
+          residentId: userId,
+          residentName: name,
+          residentEmail: invitee,
+          username: invitation.username,
+        });
+      }
       t.update("invitations", invitation.id, { acceptedAt: now() });
       t.create("audit", randomUUID(), {
         orgId: invitation.orgId,

@@ -25,6 +25,9 @@ export const COLLECTIONS = [
   "invitations",
   "visitors",
   "reports",
+  "tenancies",
+  "documents",
+  "requests",
   "invoices",
   "audit",
   "contractors",
@@ -117,7 +120,7 @@ export interface MembershipRecord {
   id: string;
   userId: string;
   orgId: string;
-  role: "manager" | "tenant" | "security";
+  role: "manager" | "reception" | "tenant" | "security";
   propertyId: string | null;
   unitId: string | null;
   username: string | null;
@@ -252,6 +255,103 @@ export interface ReportRecord {
   status: string;
   createdAt: string;
   unitLabel: string | null;
+}
+
+/**
+ * Who occupied a unit, and when.
+ *
+ * A membership says who lives there now and is deleted the day they leave, so
+ * on its own the register can only ever answer "who is in A1 today". A lease
+ * outlives the tenancy it belongs to and a deposit dispute arrives months
+ * after the keys came back, so occupancy is recorded as history: one row per
+ * stay, closed rather than removed when the resident moves out.
+ */
+export interface TenancyRecord {
+  id: string;
+  orgId: string;
+  propertyId: string;
+  propertyName: string;
+  unitId: string;
+  unitLabel: string;
+  residentId: string;
+  residentName: string;
+  residentEmail: string;
+  /** The unit-linked username or student number they signed in with. */
+  username: string | null;
+  startedAt: string;
+  /** Null while they are still living there. */
+  endedAt: string | null;
+  /** Why the stay ended: moved_out | removed | transferred. */
+  endedReason: string;
+  /** 1 while this is the current stay, so neither backend needs a null test. */
+  current: number;
+}
+
+/**
+ * A file kept against a tenancy: the signed lease, an inspection, a notice.
+ *
+ * The bytes live in the storage port (lib/server/documents), never in the
+ * record - the store holds scalars only, and both backends cap a document
+ * far below the size of a scanned agreement. What is kept here is where to
+ * find the file and who it belongs to.
+ *
+ * It is filed against the tenancy rather than the membership, so a lease is
+ * still there long after the resident's account has gone.
+ */
+export interface DocumentRecord {
+  id: string;
+  orgId: string;
+  propertyId: string;
+  propertyName: string;
+  unitId: string | null;
+  unitLabel: string | null;
+  tenancyId: string | null;
+  residentId: string | null;
+  residentName: string;
+  title: string;
+  /** lease | notice | identity | proof_of_payment | inspection | other. */
+  kind: string;
+  filename: string;
+  mime: string;
+  bytes: number;
+  /** What the storage port was given to write, and needs back to read. */
+  storageKey: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  uploadedByName: string;
+}
+
+/**
+ * A resident telling the office something is about to change: they are moving
+ * out, they want a different unit, or a different property.
+ *
+ * A notice is a statement of intent, not a decision. It is raised by the
+ * resident, and a manager or reception answers it - which is why it is its own
+ * queue rather than a maintenance report: nothing here is broken.
+ */
+export interface RequestRecord {
+  id: string;
+  orgId: string;
+  propertyId: string;
+  propertyName: string;
+  unitId: string | null;
+  unitLabel: string | null;
+  residentId: string;
+  residentName: string;
+  /** move_out | unit_change | property_change. */
+  kind: string;
+  /** The date the resident intends the change to take effect. */
+  effectiveDate: string;
+  details: string;
+  /** open | acknowledged | approved | declined | withdrawn | completed. */
+  status: string;
+  /** 1 while the office still owes an answer, for counting without a scan. */
+  open: number;
+  createdAt: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  decidedByName: string;
+  decisionNote: string;
 }
 
 /** A maintenance contact: a directory entry, never an account. */

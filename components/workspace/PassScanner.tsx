@@ -145,7 +145,7 @@ export default function PassScanner({
     }
     if (!onCode(code)) {
       setError(
-        `No pass at this property has the code ${formatEntryCode(code)}. Check the code, or search by the visitor's name.`,
+        `No pass at this property has the code ${formatEntryCode(code)}. Check the code, or search by the visitor's name or identity number.`,
       );
       return;
     }

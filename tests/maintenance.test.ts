@@ -154,7 +154,7 @@ test("residents log complaints and maintenance with an urgency", async (t) => {
         id: report.id,
         urgency: "emergency",
       }),
-      /manager account is required/,
+      /manager or reception account is required/,
     );
     await command(estate.owner, estate.orgId, {
       action: "reportUrgency",
@@ -243,14 +243,14 @@ test("the maintenance contacts directory", async (t) => {
     );
     await assert.rejects(
       command(estate.resident, estate.orgId, contact({ name: "Sneaky" })),
-      /manager account is required/,
+      /manager or reception account is required/,
     );
     await assert.rejects(
       command(estate.resident, estate.orgId, {
         action: "contractorRemove",
         id: contactId,
       }),
-      /manager account is required/,
+      /manager or reception account is required/,
     );
   });
 

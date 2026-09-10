@@ -371,6 +371,14 @@
   text-transform: capitalize;
   white-space: nowrap;
 }
+/*
+  Badges normally carry a raw enum - checked_in, upcoming - and capitalize is
+  what makes those readable. A label already written as a phrase does not want
+  it: "Awaiting the office" would be shouted back as "Awaiting The Office".
+*/
+.sp-badge.phrase {
+  text-transform: none;
+}
 .sp-badge.success {
   background: #e4f0d6;
   color: #2c623f;
@@ -1459,4 +1467,153 @@
   color: var(--sp-muted);
   line-height: 1.6;
   margin-top: 10px;
+}
+
+/* ------------------------------------------------------------------ */
+/* The filing cabinet, and the resident notice queue                   */
+/* ------------------------------------------------------------------ */
+
+/*
+  A folder is one stay. Past stays are dimmed rather than hidden, because
+  finding the tenant who left is most of why this screen exists.
+*/
+.sp-folders {
+  display: grid;
+  gap: 10px;
+}
+.sp-folder {
+  border: 1px solid var(--sp-line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.sp-folder.past {
+  background: #fbfcfa;
+}
+.sp-folder-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.sp-folder-head:hover {
+  background: color-mix(in srgb, var(--sp-lime) 18%, #fff);
+}
+.sp-folder-title {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sp-folder-title small {
+  color: var(--sp-muted);
+  font-size: 12px;
+}
+.sp-folder-head > small {
+  flex: none;
+  font-size: 12px;
+}
+.sp-folder-body {
+  padding: 4px 14px 16px;
+  border-top: 1px solid var(--sp-line);
+}
+.sp-folder-passes {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--sp-line);
+}
+.sp-folder-passes h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  margin: 0 0 8px;
+}
+.sp-folder-qr {
+  flex-basis: 100%;
+  padding: 12px 0 4px;
+}
+
+.sp-doc-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.sp-doc-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--sp-line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.sp-doc-list li > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sp-doc-list svg {
+  flex: none;
+  color: var(--sp-muted);
+}
+.sp-doc-list a {
+  color: var(--sp-forest);
+  text-decoration: underline;
+}
+
+.sp-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 14px;
+  border: 1px dashed var(--sp-line);
+  border-radius: 10px;
+}
+.sp-upload label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sp-upload select,
+.sp-upload input {
+  min-width: 170px;
+  max-width: 100%;
+}
+.sp-upload > small {
+  flex-basis: 100%;
+}
+
+.sp-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.sp-inline-form input {
+  min-width: 150px;
+  flex: 1 1 150px;
+}
+.sp-text-button.danger {
+  color: #a3302a;
+}
+
+@media (max-width: 720px) {
+  .sp-folder-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sp-folder-title {
+    flex-basis: 100%;
+  }
 }

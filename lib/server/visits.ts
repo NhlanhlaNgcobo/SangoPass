@@ -1,4 +1,5 @@
 import { AppError, choice, text } from "./validation";
+import { normaliseIdNumber } from "@/lib/shared/identity";
 
 /* ------------------------------------------------------------------ */
 /* Visit types                                                         */
@@ -81,9 +82,9 @@ export function visitorIdentity(
       ? ["student_number", "sa_id", "passport"]
       : ["sa_id", "passport"];
   const idType = choice(input.idType, allowed, "visitor identity type");
-  const idNumber = text(input.idNumber, "visitor identity number", 80)
-    .replace(/[\s-]/g, "")
-    .toUpperCase();
+  const idNumber = normaliseIdNumber(
+    text(input.idNumber, "visitor identity number", 80),
+  );
 
   if (idType === "sa_id" && !validSaId(idNumber))
     throw new AppError(
@@ -98,12 +99,6 @@ export function visitorIdentity(
       "Enter a valid student number: 2 to 80 letters, digits, dots, hyphens or underscores.",
     );
   return { idType, idNumber };
-}
-
-/** Shows enough to confirm the right person, never the whole document. */
-export function maskIdNumber(value: string) {
-  if (value.length <= 4) return "••••";
-  return "•".repeat(Math.max(4, value.length - 4)) + value.slice(-4);
 }
 
 /* ------------------------------------------------------------------ */

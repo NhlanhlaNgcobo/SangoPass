@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Building2, RotateCcw, Shield, User, X } from "lucide-react";
+import { Building2, ConciergeBell, RotateCcw, Shield, User, X } from "lucide-react";
 import WorkspaceApp, {
   type DemoDriver,
 } from "@/components/workspace/WorkspaceApp";
@@ -17,6 +17,7 @@ import {
 
 const ICONS = {
   manager: Building2,
+  reception: ConciergeBell,
   tenant: User,
   security: Shield,
 } as const;

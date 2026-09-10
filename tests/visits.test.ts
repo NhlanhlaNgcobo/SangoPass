@@ -8,12 +8,8 @@ import { command, join, workspace } from "../lib/server/workspace";
 import { commandAndNotify } from "../lib/server/notifications";
 import { store } from "../lib/server/store";
 import type { VisitorRecord } from "../lib/server/store";
-import {
-  maskIdNumber,
-  sastToday,
-  validPassport,
-  validSaId,
-} from "../lib/server/visits";
+import { sastToday, validPassport, validSaId } from "../lib/server/visits";
+import { maskIdNumber } from "../lib/shared/identity";
 import type { Account } from "../types/workspace";
 
 const pass = "A long secure test phrase 2026!";
@@ -350,7 +346,7 @@ test("the property manager sets the visitor limits", async (t) => {
         maxConsecutiveNights: 30,
         maxActiveGuests: 20,
       }),
-      /manager account is required/,
+      /manager or reception account is required/,
     );
   });
 

@@ -64,6 +64,11 @@ export function firebase() {
     clientEmail,
     privateKey,
     apiKey: process.env.FIREBASE_API_KEY || "",
+    // Where tenant documents are kept when Firebase is the backend. Defaults
+    // to the project's own bucket, which is what the console hands out.
+    storageBucket:
+      process.env.FIREBASE_STORAGE_BUCKET ||
+      (projectId ? `${projectId}.firebasestorage.app` : ""),
     emulator: process.env.FIRESTORE_EMULATOR_HOST || "",
     authEmulator: process.env.FIREBASE_AUTH_EMULATOR_HOST || "",
   };

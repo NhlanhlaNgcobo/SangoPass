@@ -265,7 +265,7 @@ test("residents log issues and the manager triages them", () => {
         id,
         urgency: "emergency",
       }),
-    /manager account is required/,
+    /manager or reception account is required/,
   );
 
   world = apply(world, manager, {
@@ -293,7 +293,7 @@ test("the maintenance contacts directory is manager-only", () => {
         phone: "0821234567",
         kind: "contractor",
       }),
-    /manager account is required/,
+    /manager or reception account is required/,
   );
 
   const before = viewFor(world, manager).contractors.length;
@@ -356,7 +356,7 @@ test("the manager's colours follow every persona", () => {
         primary: "#3D1F42",
         accent: "#E7C6F0",
       }),
-    /manager account is required/,
+    /manager or reception account is required/,
   );
   assert.throws(
     () =>
@@ -424,6 +424,8 @@ test("the demo keeps books a prospect can actually read", async (t) => {
           description: "Not mine to record",
           period: currentPeriod(),
         }),
+      // The books are the one thing reception is kept out of too, so this
+      // stays the strict manager-only message.
       /manager account is required/,
     );
   });

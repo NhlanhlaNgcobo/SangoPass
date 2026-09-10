@@ -1,5 +1,11 @@
 import { parseContractor, parseUrgency } from "@/lib/server/maintenance";
 import { rank } from "@/lib/shared/maintenance";
+import { maskIdNumber } from "@/lib/shared/identity";
+import {
+  OFFICE_STATUSES,
+  REQUEST_KINDS,
+  stillOpen,
+} from "@/lib/shared/notices";
 import { AppError, choice, colour, money, text } from "@/lib/server/validation";
 import { themeReadable } from "@/lib/shared/theme";
 import { currentPeriod } from "@/lib/shared/money";
@@ -8,7 +14,6 @@ import {
   DEFAULT_LIMITS,
   endsAt,
   limitsOf,
-  maskIdNumber,
   monthBounds,
   nightsUsed,
   parseLimits,
@@ -81,6 +86,12 @@ function requireManager(persona: DemoPersona) {
     throw new AppError("A manager account is required.", 403);
 }
 
+/** The office: a manager, or reception acting for them. Mirrors office(). */
+function requireOffice(persona: DemoPersona) {
+  if (persona.role !== "manager" && persona.role !== "reception")
+    throw new AppError("A manager or reception account is required.", 403);
+}
+
 function requireProperty(
   world: DemoWorld,
   persona: DemoPersona,
@@ -111,6 +122,9 @@ export function apply(
     visitors: [...world.visitors],
     reports: [...world.reports],
     contractors: [...world.contractors],
+    tenancies: [...world.tenancies],
+    documents: [...world.documents],
+    requests: [...world.requests],
     invoices: [...world.invoices],
     invitations: [...world.invitations],
   };
@@ -119,7 +133,7 @@ export function apply(
 
   switch (action) {
     case "property": {
-      requireManager(persona);
+      requireOffice(persona);
       const name = text(input.name, "property name", 100);
       if (
         draft.properties.some(
@@ -153,7 +167,7 @@ export function apply(
     // switching to the tenant or security persona shows the manager's colours
     // already applied - which is the whole point of the feature.
     case "branding": {
-      requireManager(persona);
+      requireOffice(persona);
       const theme = {
         primary: colour(input.primary, "primary colour"),
         accent: colour(input.accent, "accent colour"),
@@ -168,7 +182,7 @@ export function apply(
     }
 
     case "unitUpdate": {
-      requireManager(persona);
+      requireOffice(persona);
       const id = text(input.id, "unit");
       const target = draft.units.find((u) => u.id === id);
       if (!target) throw new AppError("Unit not found.", 404);
@@ -197,7 +211,7 @@ export function apply(
     }
 
     case "unitArchive": {
-      requireManager(persona);
+      requireOffice(persona);
       const id = text(input.id, "unit");
       const target = draft.units.find((u) => u.id === id);
       if (!target) throw new AppError("Unit not found.", 404);
@@ -222,7 +236,7 @@ export function apply(
     }
 
     case "propertyUpdate": {
-      requireManager(persona);
+      requireOffice(persona);
       const property = requireProperty(draft, persona, input.id);
       const name = text(input.name, "property name", 100);
       if (
@@ -245,7 +259,7 @@ export function apply(
     }
 
     case "propertyArchive": {
-      requireManager(persona);
+      requireOffice(persona);
       const property = requireProperty(draft, persona, input.id);
       const archive = input.archived !== false;
       const units = draft.units.filter((u) => u.propertyId === property.id);
@@ -281,7 +295,7 @@ export function apply(
     }
 
     case "propertyLimits": {
-      requireManager(persona);
+      requireOffice(persona);
       const property = requireProperty(draft, persona, input.propertyId);
       const limits = parseLimits(input);
       draft.properties = draft.properties.map((p) =>
@@ -292,7 +306,7 @@ export function apply(
     }
 
     case "unit": {
-      requireManager(persona);
+      requireOffice(persona);
       const property = requireProperty(draft, persona, input.propertyId);
       const label = text(input.label, "unit label", 50);
       if (
@@ -407,7 +421,7 @@ export function apply(
     }
 
     case "invite": {
-      requireManager(persona);
+      requireOffice(persona);
       const role = choice(
         input.role,
         ["manager", "tenant", "security"] as const,
@@ -460,7 +474,7 @@ export function apply(
     }
 
     case "resendInvitation": {
-      requireManager(persona);
+      requireOffice(persona);
       const id = text(input.id, "invitation");
       const invitation = draft.invitations.find((i) => i.id === id);
       if (!invitation)
@@ -475,14 +489,14 @@ export function apply(
     }
 
     case "revokeInvitation": {
-      requireManager(persona);
+      requireOffice(persona);
       const id = text(input.id, "invitation");
       draft.invitations = draft.invitations.filter((i) => i.id !== id);
       break;
     }
 
     case "removeMember": {
-      requireManager(persona);
+      requireOffice(persona);
       const id = text(input.id, "member");
       if (id === persona.id)
         throw new AppError("You cannot remove your own access.", 409);
@@ -671,7 +685,7 @@ export function apply(
     }
 
     case "reportStatus": {
-      requireManager(persona);
+      requireOffice(persona);
       const id = text(input.id, "report");
       const status = choice(
         input.status,
@@ -687,7 +701,7 @@ export function apply(
     }
 
     case "reportUrgency": {
-      requireManager(persona);
+      requireOffice(persona);
       const id = text(input.id, "report");
       const urgency = parseUrgency(input.urgency);
       if (!draft.reports.some((r) => r.id === id))
@@ -699,7 +713,7 @@ export function apply(
     }
 
     case "contractor": {
-      requireManager(persona);
+      requireOffice(persona);
       const details = parseContractor(input);
       const id = next(draft, "contact");
       const contact: LiveContractor = { id, ...details };
@@ -709,7 +723,7 @@ export function apply(
     }
 
     case "contractorUpdate": {
-      requireManager(persona);
+      requireOffice(persona);
       const id = text(input.id, "contact");
       if (!draft.contractors.some((c) => c.id === id))
         throw new AppError("Contact not found.", 404);
@@ -721,11 +735,104 @@ export function apply(
     }
 
     case "contractorRemove": {
-      requireManager(persona);
+      requireOffice(persona);
       const id = text(input.id, "contact");
       if (!draft.contractors.some((c) => c.id === id))
         throw new AppError("Contact not found.", 404);
       draft.contractors = draft.contractors.filter((c) => c.id !== id);
+      break;
+    }
+
+    case "notice": {
+      if (persona.role !== "tenant")
+        throw new AppError(
+          "Only a resident can give notice. The office answers notices instead.",
+          403,
+        );
+      const property = requireProperty(world, persona, persona.propertyId);
+      const unit = draft.units.find((u) => u.id === persona.unitId);
+      const kind = choice(input.kind, REQUEST_KINDS, "notice type");
+      const effectiveDate = text(input.effectiveDate, "date", 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate))
+        throw new AppError("Enter the date as YYYY-MM-DD.");
+      const id = next(draft, "notice");
+      draft.requests = [
+        {
+          id,
+          propertyId: property.id,
+          propertyName: property.name,
+          unitId: unit?.id ?? null,
+          unitLabel: unit?.label ?? null,
+          residentId: persona.id,
+          residentName: persona.name,
+          kind,
+          effectiveDate,
+          details: typeof input.details === "string" ? input.details : "",
+          status: "open",
+          createdAt: new Date().toISOString(),
+          decidedAt: null,
+          decidedByName: "",
+          decisionNote: "",
+        },
+        ...draft.requests,
+      ];
+      result = { id };
+      break;
+    }
+
+    case "noticeWithdraw": {
+      const id = text(input.id, "notice");
+      const notice = draft.requests.find((r) => r.id === id);
+      if (!notice) throw new AppError("Notice not found.", 404);
+      if (notice.residentId !== persona.id)
+        throw new AppError("That is not your notice.", 403);
+      if (!stillOpen(notice.status))
+        throw new AppError(
+          "This notice has already been answered, so it can no longer be withdrawn. Speak to the office.",
+          409,
+        );
+      draft.requests = draft.requests.map((r) =>
+        r.id === id
+          ? { ...r, status: "withdrawn" as const, decidedAt: new Date().toISOString() }
+          : r,
+      );
+      break;
+    }
+
+    case "noticeStatus": {
+      requireOffice(persona);
+      const id = text(input.id, "notice");
+      const notice = draft.requests.find((r) => r.id === id);
+      if (!notice) throw new AppError("Notice not found.", 404);
+      if (notice.status === "withdrawn")
+        throw new AppError(
+          "The resident withdrew this notice. It stays withdrawn.",
+          409,
+        );
+      const status = choice(input.status, OFFICE_STATUSES, "status");
+      draft.requests = draft.requests.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status,
+              decidedAt: new Date().toISOString(),
+              decidedByName: persona.name,
+              decisionNote:
+                typeof input.note === "string" && input.note.trim()
+                  ? input.note
+                  : r.decisionNote,
+            }
+          : r,
+      );
+      break;
+    }
+
+    case "documentRemove": {
+      requireOffice(persona);
+      const id = text(input.id, "document");
+      if (!draft.documents.some((d) => d.id === id))
+        throw new AppError("Document not found.", 404);
+      draft.documents = draft.documents.filter((d) => d.id !== id);
       break;
     }
 

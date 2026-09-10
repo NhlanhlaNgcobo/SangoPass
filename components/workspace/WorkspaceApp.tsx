@@ -32,8 +32,12 @@ import {
   Wallet,
   Download,
   Pencil,
+  FolderOpen,
+  Inbox,
 } from "lucide-react";
 import PassScanner from "./PassScanner";
+import DocumentsPanel from "./DocumentsPanel";
+import RequestsPanel from "./RequestsPanel";
 import Brand from "@/components/ui/Brand";
 import type {
   IdType,
@@ -69,6 +73,7 @@ import {
   type BrandTheme,
 } from "@/lib/shared/theme";
 import { formatEntryCode, sameEntryCode } from "@/lib/shared/passcode";
+import { matchesMaskedId } from "@/lib/shared/identity";
 import { smsNotice } from "@/lib/shared/sms";
 import { financeCsv, financeFilename } from "@/lib/server/finance";
 import {
@@ -95,6 +100,14 @@ const rand = (cents: number) =>
     maximumFractionDigits: 0,
   }).format(cents / 100);
 const label = (value: string) => value.replaceAll("_", " ");
+const roleLabel = (role: string) =>
+  role === "tenant"
+    ? "Resident"
+    : role === "manager"
+      ? "Property manager"
+      : role === "reception"
+        ? "Reception"
+        : "Security";
 const idLabel = (type: IdType) =>
   type === "sa_id" ? "SA ID" : type === "passport" ? "Passport" : "Student no.";
 const day = () =>
@@ -107,6 +120,8 @@ type View =
   | "people"
   | "visitors"
   | "reports"
+  | "documents"
+  | "requests"
   | "contacts"
   | "money"
   | "billing"
@@ -438,13 +453,17 @@ export default function WorkspaceApp({
   const navigationOpen = compact && mobile;
   const navigationDialog = useDialog(navigationOpen, () => setMobile(false));
   const manager = state.membership.role === "manager",
+    reception = state.membership.role === "reception",
     security = state.membership.role === "security",
     // Only a resident hosts a guest. Managers set the limits instead.
     tenant = state.membership.role === "tenant";
+  // The front desk does everything a manager does to a building. Every screen
+  // below reads this instead of `manager`, except the two about money.
+  const office = manager || reception;
   const allowance = state.allowance;
   const nav = [
     { id: "overview", title: "Overview", icon: LayoutDashboard },
-    ...(manager
+    ...(office
       ? [
           { id: "properties", title: "Properties", icon: Building2 },
           { id: "people", title: "People", icon: Users },
@@ -457,17 +476,28 @@ export default function WorkspaceApp({
     },
     {
       id: "reports",
-      title: manager ? "Maintenance" : "Reports",
+      title: office ? "Maintenance" : "Reports",
       icon: ClipboardList,
     },
-    ...(manager
+    ...(office
       ? [
+          { id: "documents", title: "Documents", icon: FolderOpen },
+          { id: "requests", title: "Requests", icon: Inbox },
           { id: "contacts", title: "Maintenance contacts", icon: Wrench },
-          { id: "money", title: "Money", icon: Wallet },
-          { id: "billing", title: "Billing", icon: CreditCard },
-          { id: "brand", title: "Brand", icon: Palette },
         ]
       : []),
+    // A resident raises notices and watches what the office does with them, so
+    // they get the same tab under the name that describes their side of it.
+    ...(tenant ? [{ id: "requests", title: "My notices", icon: Inbox }] : []),
+    // Money is the whole of what reception does not get: the books, and the
+    // subscription that pays for the product.
+    ...(manager
+      ? [
+          { id: "money", title: "Money", icon: Wallet },
+          { id: "billing", title: "Billing", icon: CreditCard },
+        ]
+      : []),
+    ...(office ? [{ id: "brand", title: "Brand", icon: Palette }] : []),
   ];
   // What the workspace is painted with right now: the unsaved draft while a
   // manager is choosing, otherwise the organisation's saved colours - which
@@ -668,13 +698,17 @@ export default function WorkspaceApp({
     }
   }
   // The gate code is searchable too, so a guard who has been read a code down
-  // a radio can type it straight into the box they already use.
+  // a radio can type it straight into the box they already use. So is the
+  // identity document: at the gate the card in the visitor's hand is often the
+  // only thing that is certainly right, when the name was spelt differently on
+  // the request and nobody can find the reference.
   const visitors = state.visitors.filter(
     (v) =>
       `${v.visitorName} ${v.reference} ${v.hostName}`
         .toLowerCase()
         .includes(search.toLowerCase()) ||
-      (v.entryCode !== "" && sameEntryCode(v.entryCode, search)),
+      (v.entryCode !== "" && sameEntryCode(v.entryCode, search)) ||
+      (v.idNumber !== "" && matchesMaskedId(v.idNumber, search)),
   );
   // A directory is only useful if you can find the plumber in it at 6am, so
   // the trade and the company are searchable alongside the name.
@@ -722,7 +756,10 @@ export default function WorkspaceApp({
   // Seats and units are counted live so the billing screen agrees with the
   // limits the server enforces rather than describing them separately.
   const planNow = planFor(state.organisation.plan);
-  const managerSeats = state.members.filter((m) => m.role === "manager").length;
+  // Reception spends a seat too, exactly as the server counts it on invite.
+  const managerSeats = state.members.filter(
+    (m) => m.role === "manager" || m.role === "reception",
+  ).length;
   const passesThisMonth = state.visitors.filter(
     (v) => v.createdAt.slice(0, 7) === currentPeriod(),
   ).length;
@@ -934,6 +971,10 @@ export default function WorkspaceApp({
                     people: "The people who make your community.",
                     visitors: "A warm welcome. A clear record.",
                     reports: "Keep your community cared for.",
+                    documents: "Every stay, and the papers that go with it.",
+                    requests: tenant
+                      ? "Tell the office what is changing."
+                      : "What your residents say is about to change.",
                     contacts: "Everyone who keeps the place working.",
                     money: "What came in, what went out.",
                     billing: "Room to grow, at your own pace.",
@@ -968,7 +1009,7 @@ export default function WorkspaceApp({
                 onClick={() => open("report")}
               >
                 <Plus size={17} />
-                {manager ? "Log an issue" : "Report an issue"}
+                {office ? "Log an issue" : "Report an issue"}
               </button>
             ) : view === "contacts" ? (
               <button className="sp-primary" onClick={() => open("contractor")}>
@@ -1484,7 +1525,7 @@ export default function WorkspaceApp({
                           </td>
                           <td data-label="Role" role="cell">
                             <span className="sp-badge">
-                              {m.role === "tenant" ? "Resident" : m.role}
+                              {roleLabel(m.role)}
                             </span>
                           </td>
                           <td data-label="Property / unit" role="cell">
@@ -1533,7 +1574,7 @@ export default function WorkspaceApp({
                       <div>
                         <strong>{i.email}</strong>
                         <p>
-                          {i.role === "tenant" ? "Resident" : i.role} · expires{" "}
+                          {roleLabel(i.role)} · expires{" "}
                           {new Date(i.expiresAt).toLocaleDateString("en-ZA")}
                         </p>
                         {i.username && (
@@ -1582,8 +1623,8 @@ export default function WorkspaceApp({
                 <label className="sp-search">
                   <Search size={17} />
                   <input
-                    aria-label="Search visitors or pass reference"
-                    placeholder="Name or pass reference"
+                    aria-label="Search visitors by name, pass reference or identity number"
+                    placeholder="Name, reference or ID number"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
@@ -1625,7 +1666,7 @@ export default function WorkspaceApp({
                 empty(
                   "No visitors to show.",
                   search
-                    ? "Try another name or pass reference."
+                    ? "Try another name, pass reference or identity number."
                     : security
                       ? "Visitor invitations for your assigned property will appear here."
                       : "Invite a guest and share their personal QR pass.",
@@ -1804,11 +1845,11 @@ export default function WorkspaceApp({
               <section className="sp-panel">
                 <div className="sp-section-head">
                   <h2>
-                    {manager
+                    {office
                       ? "Maintenance & complaints"
                       : "Your reported issues"}
                   </h2>
-                  {manager && state.reports.length > 0 && (
+                  {office && state.reports.length > 0 && (
                     <small>
                       {
                         state.reports.filter((r) => r.status !== "resolved")
@@ -1901,7 +1942,7 @@ export default function WorkspaceApp({
               </section>
             </>
           )}
-          {view === "billing" && (
+          {view === "billing" && manager && (
             <>
               <section className="sp-panel sp-billing-summary">
                 <div>
@@ -1944,7 +1985,7 @@ export default function WorkspaceApp({
                       warn: openUnits.length > planNow.units,
                     },
                     {
-                      name: "Manager sign-ins",
+                      name: "Manager & reception sign-ins",
                       value: `${managerSeats} of ${planNow.managers}`,
                       hint:
                         planNow.managers === 1
@@ -2072,13 +2113,38 @@ export default function WorkspaceApp({
               </section>
             </>
           )}
+          {view === "documents" && office && (
+            <DocumentsPanel
+              state={state}
+              office={office}
+              orgId={state.membership.orgId}
+              demo={Boolean(demo)}
+              busy={busy}
+              onRemove={(id) => void act({ action: "documentRemove", id })}
+              onUploaded={(next) => {
+                setState(next);
+                setError("");
+                setNotice("Document filed.");
+              }}
+              onError={setError}
+            />
+          )}
+          {view === "requests" && (office || tenant) && (
+            <RequestsPanel
+              state={state}
+              office={office}
+              tenant={tenant}
+              busy={busy}
+              onAct={(input) => void act(input)}
+            />
+          )}
           {/*
             Its own screen rather than a panel under the maintenance queue,
             where it sat below however many open reports there happened to be.
             A manager reaches for this list when something has just broken, so
             it has to be one click from anywhere.
           */}
-          {view === "contacts" && manager && (
+          {view === "contacts" && office && (
             <section className="sp-panel">
               <div className="sp-section-head">
                 <h2>
@@ -2604,7 +2670,7 @@ export default function WorkspaceApp({
               </section>
             </>
           )}
-          {view === "brand" && manager && (
+          {view === "brand" && office && (
             <BrandStudio
               saved={savedTheme}
               draft={theme}
@@ -2689,8 +2755,25 @@ export default function WorkspaceApp({
                   >
                     <option value="tenant">Resident</option>
                     <option value="security">Security</option>
-                    <option value="manager">Property manager</option>
+                    {/*
+                      Only a manager may create office accounts, so reception
+                      is not offered these two - the server refuses them
+                      anyway, and an option that always fails is a trap.
+                    */}
+                    {manager && (
+                      <>
+                        <option value="reception">Reception</option>
+                        <option value="manager">Property manager</option>
+                      </>
+                    )}
                   </select>
+                  {inviteRole === "reception" && (
+                    <small className="sp-muted">
+                      The front desk for one property: residents, passes,
+                      notices and documents, but never the books or the
+                      subscription. Uses one of your plan&rsquo;s sign-ins.
+                    </small>
+                  )}
                 </label>
                 {inviteRole !== "manager" && propertySelect}
                 {inviteRole === "tenant" && (

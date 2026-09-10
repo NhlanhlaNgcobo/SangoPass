@@ -30,10 +30,21 @@ export function context(request: Request) {
   return { ip: clientIp(request) };
 }
 
-export async function body(request: Request): Promise<Record<string, unknown>> {
+/**
+ * Refuses a write that did not come from this application's own pages.
+ *
+ * The session cookie is SameSite=Lax, which stops a cross-site form post on
+ * its own; this is the second lock, and the one that does not depend on the
+ * browser having got the first right.
+ */
+export function assertOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin || origin !== appOrigin(request))
     throw new AppError("Request origin is not allowed.", 403);
+}
+
+export async function body(request: Request): Promise<Record<string, unknown>> {
+  assertOrigin(request);
   if (!request.headers.get("content-type")?.includes("application/json"))
     throw new AppError("Expected JSON.", 415);
   const value = await request.text();

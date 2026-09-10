@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Building2,
+  ConciergeBell,
   Shield,
   User,
 } from "lucide-react";
@@ -18,6 +19,7 @@ export const metadata = {
 
 const ICONS = {
   manager: Building2,
+  reception: ConciergeBell,
   tenant: User,
   security: Shield,
 } as const;

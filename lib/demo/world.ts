@@ -5,11 +5,14 @@ import { currentPeriod, previousPeriod } from "@/lib/shared/money";
 import { encodeEntryCode } from "@/lib/shared/passcode";
 import type {
   LiveContractor,
+  LiveDocument,
   LiveInvoice,
   LiveLedgerEntry,
   LiveMember,
   LiveProperty,
   LiveReport,
+  LiveRequest,
+  LiveTenancy,
   LiveUnit,
   LiveVisitor,
   WorkspaceState,
@@ -26,7 +29,7 @@ import type {
 export const DEMO_ORG_ID = "demo-org";
 export const DEMO_PASSWORD = "sangopass";
 
-export type DemoRole = "manager" | "tenant" | "security";
+export type DemoRole = "manager" | "reception" | "tenant" | "security";
 
 export interface DemoPersona {
   id: string;
@@ -48,6 +51,9 @@ export interface DemoWorld {
   visitors: LiveVisitor[];
   reports: LiveReport[];
   contractors: LiveContractor[];
+  tenancies: LiveTenancy[];
+  documents: LiveDocument[];
+  requests: LiveRequest[];
   ledger: LiveLedgerEntry[];
   invoices: LiveInvoice[];
   invitations: WorkspaceState["invitations"];
@@ -71,12 +77,24 @@ export const PERSONAS: DemoPersona[] = [
     username: null,
   },
   {
+    id: "demo-reception",
+    name: "Fatima Jacobs",
+    email: "fatima@ubuntuliving.demo",
+    role: "reception",
+    title: "Reception",
+    blurb:
+      "One building, the front desk: residents, passes, notices and the filing cabinet. No money.",
+    propertyId: COURT,
+    unitId: null,
+    username: null,
+  },
+  {
     id: "demo-resident",
     name: "Aisha Petersen",
     email: "aisha@ubuntuliving.demo",
     role: "tenant",
     title: "Resident",
-    blurb: "Request a guest, see your allowance, log an issue.",
+    blurb: "Request a guest, give notice, see your allowance, log an issue.",
     propertyId: COURT,
     unitId: "demo-unit-a204",
     username: "SP-A204-7F2C91B4",
@@ -207,6 +225,15 @@ export function seedWorld(): DemoWorld {
       propertyId: COURT,
       unitId: "demo-unit-a204",
       username: "SP-A204-7F2C91B4",
+    },
+    {
+      id: "demo-reception",
+      name: "Fatima Jacobs",
+      email: "fatima@ubuntuliving.demo",
+      role: "reception",
+      propertyId: COURT,
+      unitId: null,
+      username: null,
     },
     {
       id: "demo-guard",
@@ -454,6 +481,153 @@ export function seedWorld(): DemoWorld {
     },
   ];
 
+  // Occupancy history. Every occupied unit has a current stay, and A-101 and
+  // B-102 each carry a finished one, so the filing cabinet opens on the thing
+  // it exists for: the tenant who left, and the papers they left behind.
+  const nameOf = (id: string) =>
+    id === COURT ? "Ubuntu Court" : "Ubuntu Campus Residence";
+  const stay = (
+    id: string,
+    unitId: string,
+    label: string,
+    propertyId: string,
+    residentId: string,
+    residentName: string,
+    residentEmail: string,
+    username: string | null,
+    startedAt: string,
+    endedAt: string | null = null,
+    endedReason = "",
+  ): LiveTenancy => ({
+    id,
+    propertyId,
+    propertyName: nameOf(propertyId),
+    unitId,
+    unitLabel: label,
+    residentId,
+    residentName,
+    residentEmail,
+    username,
+    startedAt,
+    endedAt,
+    endedReason,
+    current: endedAt === null,
+  });
+
+  const tenancies: LiveTenancy[] = [
+    stay("demo-stay-a204", "demo-unit-a204", "A-204", COURT, "demo-resident", "Aisha Petersen", "aisha@ubuntuliving.demo", "SP-A204-7F2C91B4", "2025-02-01T08:00:00.000Z"),
+    stay("demo-stay-a101", "demo-unit-a101", "A-101", COURT, "demo-thabo", "Thabo Molefe", "thabo@ubuntuliving.demo", "SP-A101-3B7E20DD", "2024-11-01T08:00:00.000Z"),
+    stay("demo-stay-s01", "demo-unit-s01", "S-01", CAMPUS, "demo-lerato", "Lerato Mokoena", "lerato@ubuntuliving.demo", "20241187", "2025-01-15T08:00:00.000Z"),
+    stay("demo-stay-s02", "demo-unit-s02", "S-02", CAMPUS, "demo-yusuf", "Yusuf Adams", "yusuf@ubuntuliving.demo", "20239954", "2025-01-15T08:00:00.000Z"),
+    stay("demo-stay-b102", "demo-unit-b102", "B-102", COURT, "demo-riaan", "Riaan van Wyk", "riaan@ubuntuliving.demo", "SP-B102-9C4A11FE", "2024-06-01T08:00:00.000Z"),
+    // The ones that ended. This is the "previous occupants" the register would
+    // otherwise have forgotten the day their account was deleted.
+    stay("demo-stay-a101-old", "demo-unit-a101", "A-101", COURT, "demo-past-naledi", "Naledi Khoza", "naledi@ubuntuliving.demo", "SP-A101-1A55C7B0", "2023-03-01T08:00:00.000Z", "2024-10-25T08:00:00.000Z", "moved_out"),
+    stay("demo-stay-a204-old", "demo-unit-a204", "A-204", COURT, "demo-past-daniel", "Daniel Sithole", "daniel@ubuntuliving.demo", "SP-A204-44E1B209", "2023-08-01T08:00:00.000Z", "2025-01-20T08:00:00.000Z", "moved_out"),
+  ];
+
+  // The filing cabinet. No bytes here - the demo runs entirely in the
+  // visitor's browser and stores nothing - so these describe documents that
+  // cannot be downloaded, and the interface says so rather than pretending.
+  const paper = (
+    id: string,
+    tenancyId: string,
+    title: string,
+    kind: LiveDocument["kind"],
+    filename: string,
+    bytes: number,
+    uploadedAt: string,
+  ): LiveDocument => {
+    const source = tenancies.find((t) => t.id === tenancyId)!;
+    return {
+      id,
+      propertyId: source.propertyId,
+      propertyName: source.propertyName,
+      unitId: source.unitId,
+      unitLabel: source.unitLabel,
+      tenancyId: source.id,
+      residentId: source.residentId,
+      residentName: source.residentName,
+      title,
+      kind,
+      filename,
+      mime: filename.endsWith(".pdf") ? "application/pdf" : "image/jpeg",
+      bytes,
+      uploadedAt,
+      uploadedByName: "Nomsa Dlamini",
+    };
+  };
+
+  const documents: LiveDocument[] = [
+    paper("demo-doc-1", "demo-stay-a204", "Lease agreement — A-204", "lease", "lease-a204-petersen.pdf", 842_119, "2025-02-01T09:12:00.000Z"),
+    paper("demo-doc-2", "demo-stay-a204", "Entry inspection", "inspection", "inspection-a204-in.pdf", 431_880, "2025-02-01T10:04:00.000Z"),
+    paper("demo-doc-3", "demo-stay-a101", "Lease agreement — A-101", "lease", "lease-a101-molefe.pdf", 795_540, "2024-11-01T08:41:00.000Z"),
+    paper("demo-doc-4", "demo-stay-s01", "Lease agreement — S-01", "lease", "lease-s01-mokoena.pdf", 612_300, "2025-01-15T11:20:00.000Z"),
+    paper("demo-doc-5", "demo-stay-a101-old", "Lease agreement — A-101 (2023)", "lease", "lease-a101-khoza.pdf", 733_002, "2023-03-01T09:00:00.000Z"),
+    paper("demo-doc-6", "demo-stay-a101-old", "Exit inspection and deposit", "inspection", "exit-a101-khoza.pdf", 388_412, "2024-10-25T15:30:00.000Z"),
+    paper("demo-doc-7", "demo-stay-a204-old", "Notice to vacate", "notice", "notice-a204-sithole.pdf", 96_770, "2024-12-18T13:02:00.000Z"),
+    paper("demo-doc-8", "demo-stay-b102", "Lease agreement — B-102", "lease", "lease-b102-vanwyk.pdf", 701_244, "2024-06-01T08:15:00.000Z"),
+  ];
+
+  // Notices waiting on the office, and one already answered.
+  const requests: LiveRequest[] = [
+    {
+      id: "demo-request-1",
+      propertyId: COURT,
+      propertyName: nameOf(COURT),
+      unitId: "demo-unit-a101",
+      unitLabel: "A-101",
+      residentId: "demo-thabo",
+      residentName: "Thabo Molefe",
+      kind: "move_out",
+      effectiveDate: day(30),
+      details:
+        "Taking a job in Gqeberha. I would like the exit inspection on the last Saturday if someone is available.",
+      status: "open",
+      createdAt: stamp(-2),
+      decidedAt: null,
+      decidedByName: "",
+      decisionNote: "",
+    },
+    {
+      id: "demo-request-2",
+      propertyId: COURT,
+      propertyName: nameOf(COURT),
+      unitId: "demo-unit-a204",
+      unitLabel: "A-204",
+      residentId: "demo-resident",
+      residentName: "Aisha Petersen",
+      kind: "unit_change",
+      effectiveDate: day(60),
+      details:
+        "A-205 is empty and faces the courtyard. Happy to pay the difference in rent.",
+      status: "acknowledged",
+      createdAt: stamp(-6),
+      decidedAt: stamp(-4),
+      decidedByName: "Fatima Jacobs",
+      decisionNote: "Holding A-205 until the end of the month while she decides.",
+    },
+    {
+      id: "demo-request-3",
+      propertyId: CAMPUS,
+      propertyName: nameOf(CAMPUS),
+      unitId: "demo-unit-s02",
+      unitLabel: "S-02",
+      residentId: "demo-yusuf",
+      residentName: "Yusuf Adams",
+      kind: "property_change",
+      effectiveDate: day(60),
+      details:
+        "Transferring campuses next semester. Is there anything at Ubuntu Court?",
+      status: "declined",
+      createdAt: stamp(-21),
+      decidedAt: stamp(-18),
+      decidedByName: "Nomsa Dlamini",
+      decisionNote:
+        "Nothing free at Court until March. Ask again in the new year.",
+    },
+  ];
+
   // Two months of books, so a prospect opening Money sees a working set of
   // accounts rather than an empty screen, and can page back to a closed month.
   // Rent receipts are not seeded: they are produced by the rent register, and
@@ -528,6 +702,9 @@ export function seedWorld(): DemoWorld {
     visitors,
     reports,
     contractors,
+    tenancies,
+    documents,
+    requests,
     ledger,
     invoices: [
       {
@@ -570,6 +747,11 @@ export function seedWorld(): DemoWorld {
 export function viewFor(world: DemoWorld, persona: DemoPersona): WorkspaceState {
   const isManager = persona.role === "manager";
   const isSecurity = persona.role === "security";
+  // Reception runs one building. Everything below that treats it like a
+  // manager narrows to its property, which is the whole of the difference.
+  const isOffice = isManager || persona.role === "reception";
+  const here = <T extends { propertyId: string | null }>(rows: T[]) =>
+    isManager ? rows : rows.filter((r) => r.propertyId === persona.propertyId);
 
   const properties = isManager
     ? world.properties
@@ -579,19 +761,39 @@ export function viewFor(world: DemoWorld, persona: DemoPersona): WorkspaceState 
     ? []
     : isManager
       ? world.units
-      : world.units.filter((u) => u.id === persona.unitId);
+      : isOffice
+        ? world.units.filter((u) => u.propertyId === persona.propertyId)
+        : world.units.filter((u) => u.id === persona.unitId);
 
-  const visitors = isManager
-    ? world.visitors
+  const visitors = isOffice
+    ? here(world.visitors)
     : isSecurity
       ? world.visitors.filter((v) => v.propertyId === persona.propertyId)
       : world.visitors.filter((v) => v.hostId === persona.id);
 
-  const reports = isManager
-    ? world.reports
+  const reports = isOffice
+    ? here(world.reports)
     : isSecurity
       ? world.reports.filter((r) => r.propertyId === persona.propertyId)
       : world.reports.filter((r) => r.authorId === persona.id);
+
+  const tenancies = isOffice
+    ? here(world.tenancies)
+    : isSecurity
+      ? []
+      : world.tenancies.filter((t) => t.residentId === persona.id);
+
+  const documents = isOffice
+    ? here(world.documents)
+    : isSecurity
+      ? []
+      : world.documents.filter((d) => d.residentId === persona.id);
+
+  const requests = isOffice
+    ? here(world.requests)
+    : isSecurity
+      ? []
+      : world.requests.filter((r) => r.residentId === persona.id);
 
   let allowance: WorkspaceState["allowance"] = null;
   if (persona.role === "tenant" && persona.unitId && persona.propertyId) {
@@ -638,8 +840,8 @@ export function viewFor(world: DemoWorld, persona: DemoPersona): WorkspaceState 
     organisation: world.organisation,
     properties,
     units: [...units].sort((a, b) => a.label.localeCompare(b.label)),
-    members: isManager
-      ? [...world.members].sort((a, b) => a.name.localeCompare(b.name))
+    members: isOffice
+      ? [...here(world.members)].sort((a, b) => a.name.localeCompare(b.name))
       : [],
     visitors: [...visitors].sort(
       (a, b) =>
@@ -651,9 +853,18 @@ export function viewFor(world: DemoWorld, persona: DemoPersona): WorkspaceState 
         rank(a.urgency) - rank(b.urgency) ||
         b.createdAt.localeCompare(a.createdAt),
     ),
-    contractors: isManager
+    contractors: isOffice
       ? [...world.contractors].sort((a, b) => a.name.localeCompare(b.name))
       : [],
+    tenancies: [...tenancies].sort((a, b) =>
+      b.startedAt.localeCompare(a.startedAt),
+    ),
+    documents: [...documents].sort((a, b) =>
+      b.uploadedAt.localeCompare(a.uploadedAt),
+    ),
+    requests: [...requests].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    ),
     // The books never leave the manager, in the demo exactly as on the server.
     ledger: isManager
       ? [...world.ledger].sort(
@@ -663,7 +874,7 @@ export function viewFor(world: DemoWorld, persona: DemoPersona): WorkspaceState 
         )
       : [],
     invoices: isManager ? world.invoices : [],
-    invitations: isManager ? world.invitations : [],
+    invitations: isOffice ? world.invitations : [],
     allowance,
     billingConfigured: false,
     billingMode: "sandbox",

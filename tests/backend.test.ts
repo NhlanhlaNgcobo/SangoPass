@@ -223,7 +223,7 @@ test("real SaaS workflows preserve tenant isolation, role boundaries and payment
           email: "second@example.test",
           role: "manager",
         }),
-        /manager limit/,
+        /manager or reception sign-in/,
       );
     },
   );

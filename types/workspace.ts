@@ -1,6 +1,11 @@
 import type { BrandTheme } from "@/lib/shared/theme";
 import type { LedgerEntry } from "@/lib/shared/money";
-export type MemberRole = "manager" | "tenant" | "security";
+/**
+ * "reception" is the front desk: everything a manager does to a building, its
+ * people and its paperwork, for the one property they sit in, and nothing at
+ * all to do with money - no books, no rent receipts, no subscription.
+ */
+export type MemberRole = "manager" | "reception" | "tenant" | "security";
 export interface Account {
   id: string;
   name: string;
@@ -137,6 +142,82 @@ export interface LiveInvoice {
   status: string;
   createdAt: string;
 }
+/** One stay in one unit. Ended stays are kept, which is the whole point. */
+export interface LiveTenancy {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  unitId: string;
+  unitLabel: string;
+  residentId: string;
+  residentName: string;
+  residentEmail: string;
+  username: string | null;
+  startedAt: string;
+  /** Null while they still live there. */
+  endedAt: string | null;
+  endedReason: string;
+  current: boolean;
+}
+
+export type DocumentKind =
+  | "lease"
+  | "notice"
+  | "identity"
+  | "proof_of_payment"
+  | "inspection"
+  | "other";
+
+/**
+ * A filed document. The bytes are never here - only what it is and where to
+ * ask for it, which is /api/documents/[id].
+ */
+export interface LiveDocument {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  unitId: string | null;
+  unitLabel: string | null;
+  tenancyId: string | null;
+  residentId: string | null;
+  residentName: string;
+  title: string;
+  kind: DocumentKind;
+  filename: string;
+  mime: string;
+  bytes: number;
+  uploadedAt: string;
+  uploadedByName: string;
+}
+
+export type RequestKind = "move_out" | "unit_change" | "property_change";
+export type RequestStatus =
+  | "open"
+  | "acknowledged"
+  | "approved"
+  | "declined"
+  | "withdrawn"
+  | "completed";
+
+/** A resident telling the office something is about to change. */
+export interface LiveRequest {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  unitId: string | null;
+  unitLabel: string | null;
+  residentId: string;
+  residentName: string;
+  kind: RequestKind;
+  effectiveDate: string;
+  details: string;
+  status: RequestStatus;
+  createdAt: string;
+  decidedAt: string | null;
+  decidedByName: string;
+  decisionNote: string;
+}
+
 export interface WorkspaceState {
   asOf: string;
   user: Account;
@@ -160,8 +241,14 @@ export interface WorkspaceState {
   members: LiveMember[];
   visitors: LiveVisitor[];
   reports: LiveReport[];
-  /** Maintenance contacts. Managers only; empty for everyone else. */
+  /** Maintenance contacts. The office only; empty for everyone else. */
   contractors: LiveContractor[];
+  /** Who lived where, current stays and finished ones. Empty for security. */
+  tenancies: LiveTenancy[];
+  /** The tenant filing cabinet. Empty for security. */
+  documents: LiveDocument[];
+  /** Resident notices: moving out, changing unit, changing property. */
+  requests: LiveRequest[];
   /** The organisation's own money. Empty for every role but manager. */
   ledger: LiveLedgerEntry[];
   invoices: LiveInvoice[];

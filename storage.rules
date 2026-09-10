@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Tenant documents - signed leases, inspections, proof of payment - are
+// reached only through the Firebase Admin SDK on SangoPass's own Node server,
+// and Admin credentials bypass these rules entirely. No browser ever talks to
+// this bucket: a manager asking for a lease goes to /api/documents/[id], which
+// checks their organisation membership first and streams the bytes back. No
+// signed URL is ever issued, so there is no second way in to keep open.
+//
+// The correct rule set is therefore a total denial - the same reasoning as
+// firestore.rules. These files are the most sensitive thing the product holds:
+// a lease carries a person's name, their address and their signature. If you
+// later add a client that reads the bucket directly, do not relax this file
+// wholesale - add a narrow match block for that one path and keep the default
+// deny below.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

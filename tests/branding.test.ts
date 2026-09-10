@@ -141,7 +141,7 @@ test("a manager's colours are stored and reach everyone in the organisation", as
   await t.test("only a manager may change them", async () => {
     await assert.rejects(
       command(resident, orgId, { action: "branding", ...DEFAULT_THEME }),
-      /manager account is required/i,
+      /manager or reception account is required/i,
     );
   });
 
