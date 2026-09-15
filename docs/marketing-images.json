@@ -1,0 +1,564 @@
+{
+  "$comment": "SangoPass marketing image plan. Every shot is a real moment from the product, written so it can go straight into an image generator. Companion to docs/BRAND.md, which records the prompts behind the four images already in public/brand/.",
+  "version": "1.0",
+  "created": "2026-09-15",
+  "brand": {
+    "product": "SangoPass",
+    "line": "A better way to belong.",
+    "what": "Visitor access, residents and property operations for South African student residences, apartments and residential communities.",
+    "palette": {
+      "forest": "#143E35",
+      "ivory": "#FAFAF6",
+      "lime": "#D5ED9F",
+      "sage": "#71884C",
+      "note": "Forest for trust and structure, lime only as a highlight on forest with dark text on it. Grade scenes warm-neutral with forest green in the architecture rather than filtering everything green."
+    },
+    "tone": "Grounded, calm, ordinary competence. Middle-market South African, not luxury resort and not a fortress. People doing their jobs well."
+  },
+
+  "styleGuide": {
+    "promptPrefix": "Use case: photorealistic-natural. Asset: SangoPass ",
+    "houseStyle": "Authentic editorial photography. Candid and unposed. Natural individual faces, varied real skin tones and body types, ordinary smart-casual South African clothing. Warm late-afternoon or soft morning light. Warm neutral and forest green colour grading. Believable middle-market architecture with indigenous planting.",
+    "peopleDirection": "Represent South Africa's rainbow nation naturally: people from different backgrounds sharing ordinary community life. Name specific people per scene so the generator does not produce a row of identical stock models. Never a line-up. These are illustrative scenes, not customers, and must never be captioned as real customers or endorsements.",
+    "saContext": "Boom gates and guard huts as actually built here. Face brick and pale plaster. Strelitzia, aloes, spekboom, jacaranda. Cape Town, Johannesburg, Pretoria, Bloemfontein and Durban cues. South African security uniforms without any real company's branding or insignia.",
+    "universalNegative": "No text, no lettering, no numerals, no logos, no watermarks, no flags, no brand insignia, no readable user interface, no on-screen typography, no fake app screens, no distorted hands, no extra fingers, no mangled faces, no gun, no weapon, no aggressive posture, no luxury supercar, no razor wire, no electric fence prominence, no American or European suburbia, no stock-photo handshake, no pointing at screen with rigid smile.",
+    "screenPolicy": {
+      "rule": "Never let an image generator draw the interface. It produces garbled pseudo-text that reads as fake at a glance and undermines a product whose whole claim is that records are trustworthy.",
+      "how": [
+        "Angle the screen away from camera, or catch it at a raking angle where content is foreshortened.",
+        "Let the screen glow rather than show: blown highlights, shallow depth of field, screen out of the focal plane.",
+        "Crop the device at the frame edge so only a corner is visible.",
+        "Shoot over the shoulder with the person's head or hand occluding most of the display."
+      ],
+      "then": "Composite a real screenshot from the live demo at sango-pass.vercel.app/demo in post. Every shot below carries a 'screenshot' field naming which real screen to drop in, so the final asset shows the actual product rather than an invented one."
+    },
+    "aspectRatios": {
+      "hero": "3:2 landscape",
+      "social_square": "1:1",
+      "social_story": "9:16 vertical",
+      "linkedin": "1.91:1 landscape",
+      "email_header": "3:1 landscape",
+      "print_halfpage": "3:2 landscape"
+    }
+  },
+
+  "shots": [
+    {
+      "id": "gate-01-scan",
+      "title": "The scan at the boom",
+      "process": "Security scans a guest QR pass at the gate",
+      "priority": "P1",
+      "story": "The single most recognisable moment in the product. A guard holds a tablet to a visitor's phone at a car window; the boom is still down.",
+      "aspect": "3:2 landscape",
+      "channels": ["website hero", "pitch deck", "LinkedIn", "print one-pager"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass visitor access control photograph. Authentic editorial photograph at the vehicle entrance of a South African residential estate at golden hour. A Black South African security officer in a neat navy uniform, mid-forties, stands at the driver's window of a small silver hatchback holding a rugged tablet, scanning a QR code displayed on the phone held up by the driver, a young Indian South African woman. The boom is still down behind them. Face brick guard house with a forest green painted roof trim, aloes and spekboom planting, warm dusty light, a jacaranda in the middle distance. Both people relaxed and businesslike, an ordinary thirty second interaction. Landscape 3:2, camera at driver-window height, tablet screen angled away from camera and catching a soft highlight so no interface is legible. Premium documentary photography, grounded, not a security advertisement.",
+      "screenTreatment": "Tablet angled away, screen a soft specular highlight only.",
+      "screenshot": "Security role, Gate register, after a successful scan",
+      "altText": "A security officer at an estate boom gate scanning a QR code on a visitor's phone.",
+      "overlayCopy": "Scanned, checked, recorded. Thirty seconds."
+    },
+    {
+      "id": "gate-02-code",
+      "title": "The guest with no smartphone",
+      "process": "Guard verifies the eight-character gate code",
+      "priority": "P1",
+      "story": "The detail that wins the room in a pitch: the product works for a visitor who does not own a smartphone.",
+      "aspect": "3:2 landscape",
+      "channels": ["pitch deck", "Facebook", "sales email"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass gate code verification photograph. Authentic editorial photograph at a pedestrian side gate of a South African apartment complex. An older Black South African woman in a headwrap and a warm cardigan, in her sixties, reads carefully from a small handwritten slip of paper to a young coloured South African security guard who is typing on a tablet held low at his side. She is patient and dignified, he is attentive and unhurried. Pale plaster wall, forest green steel pedestrian gate, strelitzia planting, soft morning light. Landscape 3:2, waist-up two-shot, tablet screen turned fully away from camera. Warm documentary photography emphasising respect and ordinary competence, not surveillance.",
+      "screenTreatment": "Tablet held low and turned fully away; no screen visible.",
+      "screenshot": "Security role, Gate code field with a confirmed match",
+      "altText": "An older woman reading a code from a slip of paper to a security guard at a pedestrian gate.",
+      "overlayCopy": "No smartphone? Still gets in."
+    },
+    {
+      "id": "gate-03-id",
+      "title": "The card in their hand",
+      "process": "Guard finds the booking by identity number",
+      "priority": "P2",
+      "story": "The visitor forgot the pass, never got the text and cannot recall the reference. They are still holding a document with a number on it.",
+      "aspect": "1:1",
+      "channels": ["Instagram", "LinkedIn", "pitch deck"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass identity check photograph. Close authentic editorial photograph at a South African estate guard house window. A guard's hands and a visitor's hands meet across the counter as a green South African identity card is passed over; the guard's other hand rests on a tablet lying flat on the counter. Shallow depth of field on the hands, faces softly out of frame above. Warm interior light from the guard house, cool daylight behind. Square 1:1 composition, tablet lying flat and heavily foreshortened so nothing on it is legible, the identity card angled so no numbers or photograph can be read. Respectful documentary detail photography, hands and texture, no faces required.",
+      "screenTreatment": "Tablet flat on the counter, extreme foreshortening, unreadable.",
+      "screenshot": "Security role, Identity number search returning one match",
+      "altText": "Hands passing a South African identity card across a guard house counter beside a tablet.",
+      "overlayCopy": "Arrived with nothing? The card is enough."
+    },
+    {
+      "id": "gate-04-regular",
+      "title": "The cleaner who comes every weekday",
+      "process": "Standing pass signed in at the gate",
+      "priority": "P1",
+      "story": "The person who was signed in as a guest every morning for three years now has a pass that knows her days and her hours.",
+      "aspect": "3:2 landscape",
+      "channels": ["website", "estate proposal", "Facebook"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass regular staff access photograph. Authentic editorial photograph at 6:45am at the staff entrance of a South African residential estate. A Black South African domestic worker in her fifties, neat clothes and a shoulder bag, greets a security guard she clearly knows well; he is already tapping a tablet without breaking the conversation. Early winter morning light, long low sun, breath faintly visible, face brick wall and clipped indigenous hedging. Warmth and familiarity between two working people. Landscape 3:2, medium two-shot, tablet low and angled away from camera. Documentary photography with genuine human warmth, dignity in ordinary work.",
+      "screenTreatment": "Tablet low, angled away, motion-blurred slightly.",
+      "screenshot": "Security role, Regular passes with On site now populated",
+      "altText": "A domestic worker greeting a security guard at a staff entrance early in the morning.",
+      "overlayCopy": "Every weekday, 06:30 to 15:00. Signed in, signed out, recorded."
+    },
+    {
+      "id": "gate-05-onsite",
+      "title": "Who is inside right now",
+      "process": "The on-site register at a glance",
+      "priority": "P2",
+      "story": "The question a gate exists to answer, and the one a paper book cannot.",
+      "aspect": "9:16 vertical",
+      "channels": ["Instagram story", "WhatsApp status"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass on-site register photograph. Authentic editorial photograph inside a small South African estate guard house at dusk. A woman security officer in her thirties glances at a wall-mounted tablet while reaching for a logbook she is no longer really using; the paper book is closed and pushed to one side of the counter. Warm interior lamp light, blue evening light through the window, boom and driveway visible outside. Vertical 9:16, the officer in the lower two thirds, tablet catching a bright soft highlight in the upper third so no interface reads. Quiet competent documentary photography, calm rather than tense.",
+      "screenTreatment": "Wall tablet blown to a soft highlight; closed paper book deliberately visible as contrast.",
+      "screenshot": "Security role, On site now panel with two people inside",
+      "altText": "A security officer in a guard house glancing at a wall-mounted tablet at dusk, a closed paper logbook beside her.",
+      "overlayCopy": "Two people on site. Both signed in by name."
+    },
+    {
+      "id": "gate-06-paperbook",
+      "title": "The record you keep today",
+      "process": "The before state, shown honestly",
+      "priority": "P1",
+      "story": "Lead an ad or a proposal with the problem. A smudged page in a plastic folder is the strongest argument the product has.",
+      "aspect": "1:1",
+      "channels": ["Meta ads", "LinkedIn", "cold email"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass paper gate book photograph. Close authentic editorial photograph of a battered A4 visitors book open on a guard house counter in South Africa, pages curled and rain-spotted, columns filled in a dozen different handwritings, a cheap pen on a string, a plastic sleeve cover cracked at the corner. Late afternoon side light raking across the page texture. Square 1:1, tight top-down-ish composition on the book itself. Handwriting must be illegible scribble rather than readable words. No people. Honest unglamorous documentary still life, the texture of a real working object.",
+      "screenTreatment": "No screen. Handwriting must read as illegible scrawl, never as legible text.",
+      "screenshot": "none",
+      "altText": "A worn paper visitors book open on a guard house counter, filled in many different hands.",
+      "overlayCopy": "This is the record. Until something happens."
+    },
+
+    {
+      "id": "resident-01-request",
+      "title": "Booking a guest from the couch",
+      "process": "Resident requests a visit",
+      "priority": "P1",
+      "story": "The moment the user asked for specifically. It is ordinary and domestic, which is the point: no phone call to the gate.",
+      "aspect": "3:2 landscape",
+      "channels": ["website hero", "Instagram", "pitch deck"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass resident visitor request photograph. Authentic editorial photograph inside a modest contemporary South African apartment living room on a Thursday evening. A young Black South African man in a T-shirt sits on the arm of a sofa with his phone held in both hands, half smiling, mid-message to a friend he is booking in. Warm lamp light, a mug on the side table, indigenous plant in a ceramic pot, small balcony and city lights beyond the window. Comfortable middle-market home, lived in rather than styled. Landscape 3:2, the man on the right third, phone screen tipped away from camera and lost to glare. Natural domestic documentary photography.",
+      "screenTreatment": "Phone tipped away, screen lost to lamp glare.",
+      "screenshot": "Resident role, Request a guest visit form",
+      "altText": "A young man booking a visitor on his phone in his apartment living room in the evening.",
+      "overlayCopy": "Book your guest in before they leave home."
+    },
+    {
+      "id": "resident-02-password",
+      "title": "Confirmed with their own password",
+      "process": "Re-authentication on a guest request",
+      "priority": "P3",
+      "story": "A guest enters the building in the resident's name, so the request is confirmed with their password. Worth one image for a security-minded audience.",
+      "aspect": "1:1",
+      "channels": ["LinkedIn", "trust section of the site"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass resident confirmation photograph. Close authentic editorial photograph of a woman's hands holding a phone, one thumb mid-tap, in soft window light in a South African apartment. Only hands, phone edge and a suggestion of a knitted sleeve; face out of frame. Warm neutral tones, a blurred plant and window frame behind. Square 1:1, shallow depth of field, phone screen completely blown out to white so nothing is legible. Quiet tactile detail photography about care and deliberateness.",
+      "screenTreatment": "Screen blown fully to white.",
+      "screenshot": "Resident role, password confirmation step",
+      "altText": "Close view of hands holding a phone, screen bright, in soft window light.",
+      "overlayCopy": "Your guest, in your name, with your password."
+    },
+    {
+      "id": "resident-03-guestpass",
+      "title": "The pass arrives before they do",
+      "process": "Visitor receives the pass by email and SMS",
+      "priority": "P1",
+      "story": "The visitor, parked outside, knows they are on the system before they reach the boom.",
+      "aspect": "9:16 vertical",
+      "channels": ["Instagram story", "WhatsApp status", "Facebook"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass guest pass photograph. Authentic editorial photograph of a woman in her thirties sitting in the driver's seat of a parked car in a South African street, checking her phone before pulling off, handbag on the passenger seat. Late afternoon sun through the windscreen, a suburban street with a face brick wall and bougainvillea behind. Calm and unhurried, the small relief of knowing you are expected. Vertical 9:16, subject centred in the middle third so she survives a square crop, phone angled low and away with screen not legible. Warm natural documentary photography.",
+      "screenTreatment": "Phone angled low, screen not legible.",
+      "screenshot": "The /pass/[token] guest pass page with QR and gate code",
+      "altText": "A woman checking her phone in a parked car before driving to a visit.",
+      "overlayCopy": "You are on the system. Before you travel."
+    },
+    {
+      "id": "resident-04-readout",
+      "title": "Reading the code to a guest",
+      "process": "Resident reads the gate code aloud when the SMS never arrived",
+      "priority": "P3",
+      "story": "The fallback that keeps the product honest: the resident always holds a copy.",
+      "aspect": "1:1",
+      "channels": ["Facebook", "support content"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass gate code readout photograph. Authentic editorial photograph of a middle-aged white South African woman standing at her kitchen counter with a phone to her ear and her other phone flat on the counter, reading something out carefully. Late morning light, a bowl of naartjies, ordinary well-used kitchen. Warm and slightly wry, a small everyday problem being solved. Square 1:1, medium shot, the flat phone heavily foreshortened and unreadable. Natural domestic documentary photography.",
+      "screenTreatment": "Second phone flat on counter, foreshortened, unreadable.",
+      "screenshot": "Resident role, the pass detail showing the gate code",
+      "altText": "A woman on the phone in her kitchen reading a code from a second phone on the counter.",
+      "overlayCopy": "The text never arrived. Read it to them."
+    },
+    {
+      "id": "resident-05-report",
+      "title": "Reporting the leak",
+      "process": "Resident logs a maintenance issue with an urgency",
+      "priority": "P2",
+      "story": "The tap has been dripping for a week. Now it is logged, ranked and visible to the office.",
+      "aspect": "3:2 landscape",
+      "channels": ["website", "letting agent proposal"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass maintenance report photograph. Authentic editorial photograph of a young coloured South African woman crouched beside a bathroom basin in a South African flat, one hand under a dripping tap and a phone in the other, mildly exasperated rather than distressed. Bright hard morning bathroom light, white tiles, a folded towel, ordinary fittings showing their age. Landscape 3:2, low camera angle, phone held loosely with screen away from camera. Honest unglamorous domestic documentary photography.",
+      "screenTreatment": "Phone held loosely, screen away.",
+      "screenshot": "Resident role, Report an issue with urgency chosen",
+      "altText": "A woman crouched by a dripping bathroom tap holding her phone.",
+      "overlayCopy": "Logged, ranked, and on someone's screen."
+    },
+    {
+      "id": "resident-06-announcement",
+      "title": "The water is off on Tuesday",
+      "process": "Resident reads an announcement from the office",
+      "priority": "P2",
+      "story": "Replaces the WhatsApp group half the building has left, and the notice taped to a lift.",
+      "aspect": "1:1",
+      "channels": ["Instagram", "Facebook", "managing agent proposal"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass resident announcement photograph. Authentic editorial photograph of an Indian South African man in his forties standing in an apartment kitchen filling a large plastic water bottle at the sink, phone propped against the kettle beside him. Evening light, ordinary crowded counter, a child's drawing on the fridge behind. Practical preparation rather than alarm. Square 1:1, medium shot, propped phone at a raking angle with screen glare only. Warm domestic documentary photography.",
+      "screenTreatment": "Propped phone at raking angle, glare only.",
+      "screenshot": "Resident role, Notice board with the water outage announcement",
+      "altText": "A man filling water bottles at his kitchen sink with his phone propped nearby.",
+      "overlayCopy": "Told once. Reached everyone."
+    },
+
+    {
+      "id": "reception-01-desk",
+      "title": "Reception, mid-morning",
+      "process": "The reception dashboard in use",
+      "priority": "P1",
+      "story": "The shot the user asked for by name. The front desk of one building, working: a resident at the counter, the screen doing its job.",
+      "aspect": "3:2 landscape",
+      "channels": [
+        "website hero",
+        "pitch deck",
+        "managing agent proposal",
+        "LinkedIn"
+      ],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass reception desk photograph. Authentic editorial photograph at the reception counter of a South African apartment building at mid-morning. A coloured South African woman in her late twenties behind the desk, smart blouse and lanyard, looking up mid-sentence at a resident standing at the counter, a Black South African man holding a parcel. A desktop monitor sits at an angle on the counter beside her and a small potted plant. Pale plaster, forest green painted feature wall, warm daylight from a glazed entrance behind the resident. Real working desk with a stapler, a mug and papers, not a styled showroom. Landscape 3:2, three-quarter view from the resident's side, monitor turned well away from camera so no interface reads. Warm professional documentary photography.",
+      "screenTreatment": "Monitor turned well away and catching window light; composite the real screen in post if a screen must be shown.",
+      "screenshot": "Reception role, Overview with the urgent announcement banner",
+      "altText": "A receptionist at an apartment building counter speaking with a resident collecting a parcel.",
+      "overlayCopy": "Everything the building needs, on one screen."
+    },
+    {
+      "id": "reception-02-movein",
+      "title": "Move-in day at the desk",
+      "process": "Reception enrols a new resident",
+      "priority": "P1",
+      "story": "The new tenant gets a link, sets their own password and is on the system before they have unpacked.",
+      "aspect": "3:2 landscape",
+      "channels": ["letting agent proposal", "student proposal", "website"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass resident enrolment photograph. Authentic editorial photograph at a South African apartment building reception on a Saturday move-in morning. A young couple, a Black South African woman and a white South African man, stand at the counter with a cardboard box at their feet and a set of keys on the countertop between them and the receptionist, a man in his fifties with reading glasses who is typing. Sunlight through the entrance glazing, a trolley of boxes behind them, genuine mild move-in chaos. Landscape 3:2, monitor at the left edge of frame cropped and angled away. Warm candid documentary photography, a good-natured moment.",
+      "screenTreatment": "Monitor cropped at frame edge and angled away.",
+      "screenshot": "Reception role, enrolment form with unit selected",
+      "altText": "A couple with moving boxes at a reception counter while the receptionist enrols them.",
+      "overlayCopy": "Enrolled at the desk. Signed in before the kettle is unpacked."
+    },
+    {
+      "id": "reception-03-regular",
+      "title": "Issuing a contractor's pass",
+      "process": "Reception issues a regular pass after checking the ID",
+      "priority": "P2",
+      "story": "Only the office issues a standing pass, and only after seeing the document. That is the rule, and it looks like this.",
+      "aspect": "3:2 landscape",
+      "channels": ["estate proposal", "managing agent proposal"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass contractor pass photograph. Authentic editorial photograph at a South African estate management office counter. A painting contractor in dusty white overalls, a coloured South African man in his forties, hands his identity card across the counter to an office administrator, a Black South African woman in her thirties who is comparing it against her screen. Paint-flecked hands, a clipboard under his arm, morning light through vertical blinds. Businesslike and mutually respectful. Landscape 3:2, over-the-contractor's-shoulder framing, monitor visible only as an out-of-focus glow past her shoulder, identity card angled so nothing on it can be read. Documentary workplace photography.",
+      "screenTreatment": "Monitor out of focus behind her shoulder; identity card angled and unreadable.",
+      "screenshot": "Reception role, Issue a regular pass form",
+      "altText": "A painting contractor handing his identity card to an estate office administrator.",
+      "overlayCopy": "Days, hours, an end date. Issued once."
+    },
+    {
+      "id": "office-01-import",
+      "title": "A building enrolled from one file",
+      "process": "Manager bulk-imports residents from a spreadsheet",
+      "priority": "P1",
+      "story": "The hours lost retyping tenants each intake, gone. This is the letting agent's and student operator's headline.",
+      "aspect": "3:2 landscape",
+      "channels": ["letting agent proposal", "student proposal", "LinkedIn"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass bulk enrolment photograph. Authentic editorial photograph of a South African letting agency back office. A woman in her forties, mixed-race, sits back in her chair with visible relief, coffee in hand, in front of a dual monitor setup she has just finished with; a printed list with pen ticks lies beside the keyboard. Cluttered real office, filing boxes, a wall planner, warm afternoon light through a window blind. The feeling of a long job that turned out to be short. Landscape 3:2, three-quarter rear view so both monitors are foreshortened and illegible, the printed list in focus in the foreground with handwriting that reads as illegible scribble. Natural workplace documentary photography.",
+      "screenTreatment": "Both monitors foreshortened from behind; the paper list's handwriting must be illegible scribble.",
+      "screenshot": "Manager role, People, import result showing residents enrolled",
+      "altText": "A letting agent sitting back with a coffee after finishing a bulk enrolment at her desk.",
+      "overlayCopy": "A hundred residents. One file. One pass of emails."
+    },
+    {
+      "id": "office-02-maintenance",
+      "title": "Phoning the plumber",
+      "process": "Manager works the maintenance queue and calls a contact",
+      "priority": "P2",
+      "story": "Most urgent first, with the unit and the resident beside it, and the plumber one screen away.",
+      "aspect": "3:2 landscape",
+      "channels": ["letting agent proposal", "website"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass maintenance queue photograph. Authentic editorial photograph of a property manager in a small South African office, a Black South African man in his late thirties, standing with a phone to his ear and one hand resting on the back of his chair, mid-conversation and clearly getting somewhere. A laptop open on the desk beside a mug and a set of keys on a labelled fob. Late morning light, a window onto a courtyard. Landscape 3:2, medium shot, laptop screen angled away at the lower edge of frame. Warm competent workplace documentary photography.",
+      "screenTreatment": "Laptop screen angled away at lower frame edge.",
+      "screenshot": "Manager role, Maintenance queue with an urgent item",
+      "altText": "A property manager on the phone in his office with a laptop and keys on the desk.",
+      "overlayCopy": "Most urgent first. The plumber is one screen away."
+    },
+    {
+      "id": "office-03-announce",
+      "title": "Writing it once",
+      "process": "Office publishes an announcement",
+      "priority": "P2",
+      "story": "One message, addressed to a building or the whole company, to residents or to the gate.",
+      "aspect": "1:1",
+      "channels": ["managing agent proposal", "LinkedIn"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass announcement photograph. Authentic editorial photograph over the shoulder of a woman typing at a laptop at a tidy desk in a South African managing agent's office, a municipal notice about a water interruption lying beside the laptop. Her head and shoulder occlude most of the screen. Soft overcast daylight, a wall of scheme files behind. Square 1:1, close over-the-shoulder framing, screen largely hidden by her head and reduced to edge glow, the municipal notice angled so its text is not legible. Quiet focused workplace photography.",
+      "screenTreatment": "Head occludes most of the screen; paper notice angled and unreadable.",
+      "screenshot": "Manager role, Publish an announcement form",
+      "altText": "Over the shoulder of a woman typing at a laptop beside a municipal water notice.",
+      "overlayCopy": "Say it once. Everyone has it."
+    },
+    {
+      "id": "office-04-books",
+      "title": "The month, reconciled",
+      "process": "Manager reviews the rent register and the books",
+      "priority": "P2",
+      "story": "Marking a unit paid writes the receipt into the books, so the two cannot disagree.",
+      "aspect": "3:2 landscape",
+      "channels": ["letting agent proposal", "managing agent proposal"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass property accounts photograph. Authentic editorial photograph of a small South African property office at month end. An older Indian South African woman with reading glasses sits at a desk with a laptop and a pocket calculator, pen in hand, in the middle of a satisfying reconciliation. Afternoon light, a plant, a wall calendar, a stack of closed folders she no longer needs to open. Landscape 3:2, side-on medium shot, laptop screen fully in profile so nothing is legible, calculator display blank. Warm quiet workplace documentary photography.",
+      "screenTreatment": "Laptop in profile, screen invisible; calculator display blank.",
+      "screenshot": "Manager role, Money screen for the month",
+      "altText": "A property manager reconciling accounts at her desk with a laptop and calculator.",
+      "overlayCopy": "Marked paid in one place. Counted in the other."
+    },
+    {
+      "id": "office-05-lease",
+      "title": "Filed where it will be found",
+      "process": "A signed lease goes into the tenancy folder",
+      "priority": "P3",
+      "story": "The folder outlives the tenancy, which is when a deposit argument actually starts.",
+      "aspect": "1:1",
+      "channels": ["letting agent proposal", "trust section"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass document filing photograph. Close authentic editorial photograph of hands placing a stapled signed lease agreement onto a flatbed scanner beside a laptop in a South African office. Warm desk lamp light, the scanner lid half raised, a plant edge in the background. Square 1:1, tight top-down composition on hands and paper, the document angled and softly out of focus so no clause or signature is legible. Tactile detail photography about care with records.",
+      "screenTreatment": "Document angled and defocused; no legible text or signature.",
+      "screenshot": "Manager role, Documents, a tenancy folder",
+      "altText": "Hands placing a signed lease onto a scanner beside a laptop.",
+      "overlayCopy": "It stays with the stay, not with the tenant."
+    },
+
+    {
+      "id": "journey-01-welcome",
+      "title": "The link that starts it",
+      "process": "New resident receives the welcome email and sets a password",
+      "priority": "P2",
+      "story": "The credential the administrator cannot see. A small trust moment worth showing.",
+      "aspect": "9:16 vertical",
+      "channels": ["Instagram story", "onboarding content"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass welcome email photograph. Authentic editorial photograph of a young Black South African woman sitting cross-legged on the floor of a half-unpacked flat, back against a wall, phone in hand and a mug beside her on the bare floor. Open boxes, a rolled rug, bright bare-window afternoon light. A quiet pause in the middle of moving. Vertical 9:16 with the subject in the central third so she survives a square crop, phone screen turned away and not legible. Warm natural documentary photography.",
+      "screenTreatment": "Phone turned away, not legible.",
+      "screenshot": "The /join page showing username and unit",
+      "altText": "A young woman sitting on the floor of a half-unpacked flat looking at her phone.",
+      "overlayCopy": "Your own password. Not your manager's."
+    },
+    {
+      "id": "journey-02-intake",
+      "title": "Intake day",
+      "process": "Student residence registration at the start of the year",
+      "priority": "P1",
+      "story": "The fortnight the whole year turns on. Show the queue moving, not the queue standing.",
+      "aspect": "3:2 landscape",
+      "channels": ["student proposal", "Facebook", "LinkedIn"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass student intake photograph. Authentic editorial photograph at the entrance of a South African private student residence in February. Three or four students with suitcases and duvets, a mix of Black, white and Indian South African young adults, being checked in at a trestle table by two staff members with a tablet; a parent hovers in the background with a cardboard box. Bright hard summer light, face brick residence with forest green metal canopy, jacaranda litter on the paving. Busy but moving, good-humoured, not chaotic. Landscape 3:2, wide enough to show the queue and the building, tablet on the table heavily foreshortened and illegible. Warm reportage photography.",
+      "screenTreatment": "Tablet flat on trestle table, foreshortened, illegible.",
+      "screenshot": "Reception role, People, after a bulk import",
+      "altText": "Students with suitcases being checked into a private student residence on intake day.",
+      "overlayCopy": "The fortnight your whole year turns on."
+    },
+    {
+      "id": "journey-03-sharers",
+      "title": "Two of three beds",
+      "process": "Sharers moving into a multi-occupant flat",
+      "priority": "P2",
+      "story": "A two-bedroom taking three sharers is an ordinary letting here, and the product now records it as one.",
+      "aspect": "3:2 landscape",
+      "channels": ["student proposal", "letting agent proposal"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass shared flat photograph. Authentic editorial photograph inside a modest two-bedroom South African flat on moving day. Two young women, one Black South African and one white South African, unpacking in a shared living room with mismatched furniture, a third empty bedroom doorway visible behind them with a bare mattress. Laughing over a badly packed box. Bright natural light through an uncurtained window, ordinary middle-market interior. Landscape 3:2, medium wide, no devices in frame at all. Warm candid documentary photography about ordinary shared living.",
+      "screenTreatment": "No devices in frame.",
+      "screenshot": "Manager role, Units register showing 2 of 3 occupants",
+      "altText": "Two young women unpacking in a shared flat with a third empty bedroom behind them.",
+      "overlayCopy": "Two of three. The third bed is still free."
+    },
+
+    {
+      "id": "benefit-01-parent",
+      "title": "The call a parent does not have to make",
+      "process": "Peace of mind at a student residence",
+      "priority": "P1",
+      "story": "Parents are the real decision makers for private student accommodation. Sell to them.",
+      "aspect": "3:2 landscape",
+      "channels": ["student proposal", "Facebook ads", "website"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass student residence safety photograph. Authentic editorial photograph of the entrance of a South African private student residence at early evening. A student walks in through a well-lit controlled pedestrian entrance while a staff member at a small desk inside acknowledges her; warm interior light spills onto the paving. Face brick, forest green steel, planted bed of clivias, the last blue of the sky above. Safe and welcoming rather than fortified, no razor wire and no visible weapons. Landscape 3:2, exterior view looking in through the entrance, any screen inside reduced to a small warm glow. Calm reassuring architectural documentary photography.",
+      "screenTreatment": "Interior screen only a distant warm glow.",
+      "screenshot": "none",
+      "altText": "A student walking into a well-lit controlled entrance of a residence at dusk.",
+      "overlayCopy": "She got in at 19:12. You could know that."
+    },
+    {
+      "id": "benefit-02-trustees",
+      "title": "Answering the trustees",
+      "process": "Manager reports to a body corporate meeting",
+      "priority": "P1",
+      "story": "The managing agent's real buying moment: being able to answer the question in the room.",
+      "aspect": "3:2 landscape",
+      "channels": ["managing agent proposal", "estate proposal", "LinkedIn"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass trustee meeting photograph. Authentic editorial photograph of a body corporate meeting in a South African complex clubhouse. Five trustees of mixed background and age around a plain table, one of them a managing agent in her forties turning a tablet toward the others to answer a question; attentive rather than adversarial faces, notepads and a water jug. Fluorescent-and-daylight mixed lighting, plain hall with stacked chairs at the edge. Landscape 3:2, from the far end of the table, tablet at a steep angle so nothing on it is legible. Honest unglamorous meeting-room documentary photography.",
+      "screenTreatment": "Tablet at a steep angle, unreadable.",
+      "screenshot": "Manager role, Gate register filtered to a date",
+      "altText": "A managing agent turning a tablet toward trustees at a body corporate meeting.",
+      "overlayCopy": "\"Who was on the estate that Tuesday?\" Ten seconds."
+    },
+    {
+      "id": "benefit-03-guard",
+      "title": "The guard's shift, made simpler",
+      "process": "Dignity in the job the product changes most",
+      "priority": "P2",
+      "story": "The person whose work this alters is the guard. Show them as competent, not as a prop.",
+      "aspect": "1:1",
+      "channels": ["LinkedIn", "Instagram", "recruitment and partner content"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass security officer portrait. Authentic editorial environmental portrait of a South African security officer at the start of a shift, a woman in her forties in a neat uniform standing in the doorway of a guard house, arms relaxed, looking directly at camera with quiet self-possession. Early morning light, the boom and driveway soft behind her, a tablet resting on the counter inside. Square 1:1, waist-up, tablet deep in the background and out of focus. Respectful portrait photography in the documentary tradition, no weapon, no aggressive stance, no corporate insignia.",
+      "screenTreatment": "Tablet deep background, out of focus.",
+      "screenshot": "none",
+      "altText": "Portrait of a security officer standing in the doorway of a guard house at the start of her shift.",
+      "overlayCopy": "The book was never the hard part. Finding it afterwards was."
+    },
+    {
+      "id": "benefit-04-estate-dusk",
+      "title": "Ordinary evening",
+      "process": "The outcome, with nobody doing anything",
+      "priority": "P2",
+      "story": "An establishing image for a hero or an ad: safety that looks like ordinary life, not like a fortress.",
+      "aspect": "1.91:1 landscape",
+      "channels": ["website hero", "LinkedIn banner", "email header"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass residential community establishing photograph. Authentic editorial photograph of a South African residential complex at blue hour. Warm lit windows across low-rise face brick and pale plaster blocks with forest green frames, a paved path with low bollard lighting, two figures walking a dog in the middle distance, indigenous grasses and an aloe silhouette in the foreground. Calm and inhabited. Wide 1.91:1 landscape, generous sky, people small and unidentifiable. Premium architectural photography, warm and safe, no fortification, no razor wire, no visible cameras.",
+      "screenTreatment": "No screens.",
+      "screenshot": "none",
+      "altText": "A South African residential complex at blue hour with lit windows and people walking a dog.",
+      "overlayCopy": "Know who is at your gate, and why."
+    },
+    {
+      "id": "benefit-05-freetier",
+      "title": "The landlord with one block",
+      "process": "The free tier customer",
+      "priority": "P2",
+      "story": "Five units and ten residents is a whole business for many South African landlords. Do not picture them as a small version of an estate.",
+      "aspect": "3:2 landscape",
+      "channels": ["Facebook ads", "pricing page", "student proposal"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass small landlord photograph. Authentic editorial photograph of a man in his sixties, a Black South African landlord, standing in the small paved yard of a modest five-unit block he owns in a South African township or older suburb, phone in one hand and a bunch of keys in the other, looking up at the building with quiet pride. Painted plaster in a warm colour, burglar bars, a washing line, a lemon tree in a drum planter, hard midday light. Real and specific, not poor and not glossy. Landscape 3:2, subject in the lower third with the building above, phone at his side and screen not visible. Respectful documentary portrait photography.",
+      "screenTreatment": "Phone at his side, screen not visible.",
+      "screenshot": "Manager role, Billing on the free tier",
+      "altText": "A landlord standing in the yard of his small block of flats with keys and a phone.",
+      "overlayCopy": "Five units. Ten residents. R0."
+    },
+    {
+      "id": "benefit-06-privacy",
+      "title": "What the guard never sees",
+      "process": "Identity numbers are masked everywhere but the gate check",
+      "priority": "P3",
+      "story": "For the trust section and for POPIA-minded buyers. Abstract, because the subject is an absence.",
+      "aspect": "1:1",
+      "channels": ["trust section", "LinkedIn"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass data privacy still life. Authentic editorial still life of a South African green identity card lying face down on a warm wooden counter beside a set of keys and a closed notebook, soft window light raking across the grain. Nothing about the card is readable because it is face down. Square 1:1, close top-down composition, shallow depth of field, calm restrained palette of wood, ivory and deep green. Quiet conceptual still life photography about discretion.",
+      "screenTreatment": "No screens. Card face down, nothing readable.",
+      "screenshot": "none",
+      "altText": "A South African identity card lying face down on a wooden counter beside keys and a notebook.",
+      "overlayCopy": "The gate reads the card. The screen shows four characters."
+    },
+
+    {
+      "id": "brand-01-doorway",
+      "title": "The doorway",
+      "process": "Brand image tying to the logo",
+      "priority": "P2",
+      "story": "The mark is an open doorway and a verification tick. Give it a photographic counterpart.",
+      "aspect": "9:16 vertical",
+      "channels": ["Instagram", "brand", "app store style assets"],
+      "prompt": "Use case: photorealistic-natural. Asset: SangoPass brand doorway photograph. Authentic editorial architectural photograph of a single welcoming pedestrian entrance in a South African residential wall: a forest green steel gate standing open onto a sunlit planted courtyard beyond, pale plaster and face brick either side, a strelitzia leaning into frame. Nobody present. Strong graphic framing of the open doorway with warm light falling through it onto the paving. Vertical 9:16, the doorway centred, deep shadow around it. Quiet architectural photography about welcome and threshold.",
+      "screenTreatment": "No screens.",
+      "screenshot": "none",
+      "altText": "An open forest green pedestrian gate leading into a sunlit planted courtyard.",
+      "overlayCopy": "A better way to belong."
+    }
+  ],
+
+  "sequences": [
+    {
+      "id": "seq-one-visit",
+      "name": "One visit, end to end",
+      "use": "Website scrollytelling, pitch deck spread, a five-post carousel",
+      "shots": [
+        "resident-01-request",
+        "resident-03-guestpass",
+        "gate-01-scan",
+        "gate-05-onsite"
+      ],
+      "caption": "Booked from the couch. On the visitor's phone before they leave. Scanned at the boom. Still on the register on Tuesday."
+    },
+    {
+      "id": "seq-before-after",
+      "name": "The record you keep, and the record you could",
+      "use": "Meta and LinkedIn ads, cold email header",
+      "shots": ["gate-06-paperbook", "benefit-02-trustees"],
+      "caption": "Lead with the smudged page. Land on the question it cannot answer."
+    },
+    {
+      "id": "seq-regulars",
+      "name": "The people who work here",
+      "use": "Estate and managing agent proposals",
+      "shots": ["gate-04-regular", "reception-03-regular", "gate-05-onsite"],
+      "caption": "Issued once by the office. Recognised every morning at the gate. Visible while they are on site."
+    },
+    {
+      "id": "seq-intake",
+      "name": "Surviving intake",
+      "use": "Student accommodation campaign, January and February",
+      "shots": [
+        "office-01-import",
+        "journey-02-intake",
+        "journey-01-welcome",
+        "benefit-01-parent"
+      ],
+      "caption": "One upload, one queue that moves, one password they set themselves, one parent who sleeps."
+    },
+    {
+      "id": "seq-reception-day",
+      "name": "A day at the desk",
+      "use": "Letting agent and managing agent proposals",
+      "shots": [
+        "reception-01-desk",
+        "reception-02-movein",
+        "office-02-maintenance",
+        "office-04-books"
+      ],
+      "caption": "The front desk, move-in day, the maintenance queue and month end, on one screen."
+    }
+  ],
+
+  "productionNotes": {
+    "priorities": {
+      "P1": [
+        "gate-01-scan",
+        "gate-02-code",
+        "gate-04-regular",
+        "gate-06-paperbook",
+        "resident-01-request",
+        "resident-03-guestpass",
+        "reception-01-desk",
+        "reception-02-movein",
+        "office-01-import",
+        "journey-02-intake",
+        "benefit-01-parent",
+        "benefit-02-trustees"
+      ],
+      "note": "Twelve P1 images cover the website, all four niche proposals and a first month of social. Generate these before anything else."
+    },
+    "workflow": [
+      "Generate at the stated aspect ratio; do not crop a landscape hero into a story, reshoot it at 9:16 using the same prompt so the subject sits correctly.",
+      "Generate three or four variants per shot and choose on faces and hands, which are where these fail.",
+      "Composite the real screenshot named in each shot's 'screenshot' field, taken from the live demo at sango-pass.vercel.app/demo. Never let the generator draw the interface.",
+      "Add overlay copy in the brand typeface afterwards, never in the prompt.",
+      "Export WebP for the site beside the PNG original, matching the convention already used in public/brand/."
+    ],
+    "honesty": [
+      "These are illustrative generated scenes. Never caption one as a customer, a customer's property, or an endorsement, and never imply a named estate or residence uses the product unless it does.",
+      "Do not show a real security company's uniform, insignia or livery.",
+      "Do not show a legible identity number, vehicle registration, unit number tied to a real address, or a readable face on an identity document.",
+      "If a screenshot is composited in, use demo data rather than a real customer's records."
+    ],
+    "accessibility": "Every shot carries an altText written for a screen reader: what is happening, not what it is selling. Keep overlay copy off the face and at a contrast ratio of at least 4.5:1 against whatever sits behind it."
+  }
+}
