@@ -55,3 +55,7 @@ ui-debug.log*
 
 # verification builds
 /.next-verify/
+
+# Prospect research: third-party contact data and ~21MB of scraped pages.
+# Not product code, and not something to publish in a product repository.
+/outputs/
