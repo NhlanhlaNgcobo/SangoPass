@@ -1118,6 +1118,9 @@ export function seedWorld(): DemoWorld {
       // No logo: the demo stores nothing, so there is nowhere to have put one.
       // The sample estate wears the SangoPass mark and the panel says why.
       logoUpdatedAt: "",
+      logoWidth: 0,
+      logoHeight: 0,
+      logoPlate: false,
       name: "Ubuntu Living",
       plan: "growth",
       trialUntil: stamp(-30),

@@ -16,6 +16,7 @@ import {
   MAX_DOCUMENT_BYTES,
   MAX_LOGO_BYTES,
 } from "./documents";
+import { FORMAT_MIME, readImage } from "./images";
 import { store } from "./store";
 import type {
   DocumentRecord,
@@ -203,6 +204,24 @@ export async function openDocument(
 /* ------------------------------------------------------------------ */
 
 /**
+ * The smallest logo worth putting on a dashboard.
+ *
+ * A mark below this is not a small logo, it is a thumbnail or a fragment: it
+ * will be scaled up into the sidebar plate and look broken there. Better to
+ * say so while the manager still has the export dialog open.
+ */
+export const MIN_LOGO_EDGE = 48;
+
+/**
+ * The widest and narrowest shapes that can still be read at sidebar size.
+ *
+ * Beyond these a logo is a hairline once it has been fitted into the plate.
+ * Generous on purpose - a 10:1 wordmark is an ordinary thing for a company to
+ * own, and this exists to catch a cropped strip, not to police brand design.
+ */
+export const MAX_LOGO_RATIO = 12;
+
+/**
  * Puts a company's own logo on its dashboards.
  *
  * Stored under a fresh key each time rather than a fixed "logo" one. A company
@@ -225,9 +244,31 @@ export async function setLogo(
       413,
     );
   if (!LOGO_TYPES[file.mime])
+    throw new AppError("A logo must be a PNG, JPEG or WebP image.", 415);
+
+  // What the bytes are, rather than what the filename claimed. A file renamed
+  // to .png is caught here, and the same read gives the dimensions every
+  // dashboard needs to lay the logo out without a jump.
+  const facts = readImage(file.data);
+  if (!facts)
     throw new AppError(
-      "A logo must be a PNG, JPEG or WebP image.",
+      "That file is not a PNG, JPEG or WebP image, whatever it is named. Export it again from your design tool.",
       415,
+    );
+  if (FORMAT_MIME[facts.format] !== file.mime)
+    throw new AppError(
+      `That file is named as ${file.mime.replace("image/", "").toUpperCase()} but is actually ${facts.format.toUpperCase()}. Export it again rather than renaming it.`,
+      415,
+    );
+  if (facts.width < MIN_LOGO_EDGE || facts.height < MIN_LOGO_EDGE)
+    throw new AppError(
+      `That image is ${facts.width}×${facts.height} pixels, which is too small to stay sharp on a dashboard. Export it at least ${MIN_LOGO_EDGE} pixels on its shorter side.`,
+    );
+  const ratio =
+    Math.max(facts.width, facts.height) / Math.min(facts.width, facts.height);
+  if (ratio > MAX_LOGO_RATIO)
+    throw new AppError(
+      `That image is ${facts.width}×${facts.height}, which is too long and thin to read at the size a sidebar gives it. Crop the empty space around the mark and upload it again.`,
     );
 
   const database = store();
@@ -248,6 +289,15 @@ export async function setLogo(
         logoKey: storageKey,
         logoMime: file.mime,
         logoUpdatedAt: updatedAt,
+        logoWidth: facts.width,
+        logoHeight: facts.height,
+        // A file that cannot hold transparency is a rectangle, and a rectangle
+        // on a dark sidebar reads as a mistake unless it is deliberately set
+        // on a plate. A file that can hold transparency is assumed to use it.
+        // The manager overrides this either way from the Brand panel, because
+        // an RGBA export that happens to be flat white looks transparent from
+        // the header and is not.
+        logoPlate: !facts.alpha,
       });
       t.create("audit", randomUUID(), {
         orgId: m.orgId,

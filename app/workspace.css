@@ -21,6 +21,11 @@
   --sp-on-lime: #143e35;
   --sp-line: #e2e7de;
   --sp-muted: #69796e;
+  /* The box every company mark is fitted into, whatever shape it is. Read by
+     the sidebar and by the preview in the Brand panel, so the two cannot drift
+     apart and promise different things. */
+  --sp-logo-slot: 52px;
+  --sp-plate-pad: 7px;
   min-height: 100vh;
   background: #f6f7f3;
   color: #203b33;
@@ -37,7 +42,10 @@
 }
 .sp-sidebar {
   position: fixed;
-  inset: 0 auto 0 0;
+  /* Below whatever is pinned above the workspace, not underneath it. Zero on
+     a real account; the demo bar's measured height in the demo, where this
+     used to hide the company mark completely. */
+  inset: var(--sp-chrome-top, 0px) auto 0 0;
   width: 248px;
   background: var(--sp-forest);
   color: color-mix(in srgb, var(--sp-on-forest) 94%, var(--sp-forest));
@@ -638,9 +646,17 @@
   font-weight: 550;
   color: #36503f;
 }
+/*
+  The inline forms are in this list because they were not, and their fields
+  rendered as bare text on the panel: no border, no background, no padding. The
+  company name on the Brand screen looked like a caption rather than something
+  anyone could type in.
+*/
 .sp-form input,
 .sp-form select,
-.sp-form textarea {
+.sp-form textarea,
+.sp-inline-form input,
+.sp-inline-form select {
   width: 100%;
   border: 1px solid #d7dfd1;
   background: #fcfdf9;
@@ -650,6 +666,15 @@
   color: #203b33;
   font-size: 14px;
   font-weight: 400;
+}
+.sp-form input:focus-visible,
+.sp-form select:focus-visible,
+.sp-form textarea:focus-visible,
+.sp-inline-form input:focus-visible,
+.sp-inline-form select:focus-visible {
+  outline: 2px solid var(--sp-forest);
+  outline-offset: 1px;
+  border-color: var(--sp-forest);
 }
 .sp-form small {
   font-weight: 400;
@@ -1666,44 +1691,153 @@
 /* ------------------------------------------------------------------ */
 
 /*
-  A company logo is any shape at all, so it is bounded rather than sized:
-  height caps it against the sidebar, width stops a very wide mark pushing
-  the navigation sideways, and contain keeps it undistorted either way.
+  The mark at the top of the sidebar lives in a slot of one fixed size, and
+  every logo is fitted inside it.
+
+  A company logo is any shape at all - a wide wordmark, a square badge, a tall
+  crest - and sizing the slot from the image meant the sidebar's whole vertical
+  rhythm depended on which file a manager happened to upload, and shifted again
+  as that file loaded. The slot is 52px whether the image has arrived, is on
+  its way, or never came; only what sits inside it changes.
 */
+.sp-brand-link {
+  display: flex;
+  align-items: center;
+  height: var(--sp-logo-slot);
+  max-width: 100%;
+  flex: none;
+}
+.sp-logo-plate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  border-radius: 11px;
+}
+/* For a logo drawn in dark ink, or exported flat on white: on a dark brand
+   colour the first disappears and the second shows as a slab, and a deliberate
+   plate is the only thing that makes either look chosen rather than broken. */
+.sp-logo-plate.is-plated {
+  background: #ffffff;
+  padding: var(--sp-plate-pad) calc(var(--sp-plate-pad) + 4px);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+}
 .sp-org-logo {
   display: block;
-  max-height: 40px;
+  /*
+    Bounded on both axes in real lengths, not percentages. A percentage
+    max-height only resolves against a parent with a definite height, and the
+    plate's is set by its contents - so `max-height: 100%` here computed to
+    `none` and a square logo grew to its full size straight over the
+    navigation beneath it.
+  */
+  max-height: var(--sp-logo-slot);
   max-width: 100%;
   width: auto;
+  height: auto;
   object-fit: contain;
+}
+.is-plated > .sp-org-logo {
+  max-height: calc(var(--sp-logo-slot) - var(--sp-plate-pad) * 2);
 }
 
 .sp-identity {
   display: flex;
   flex-wrap: wrap;
-  gap: 22px;
+  gap: 26px;
   align-items: flex-start;
 }
 .sp-identity-preview {
   display: grid;
-  gap: 7px;
+  gap: 8px;
   font-size: 12px;
+  max-width: 100%;
 }
-/* Shown on the primary colour, because that is where it will actually sit. */
+.sp-identity-caption {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: var(--sp-muted);
+}
+/*
+  The sidebar itself, at the width it really is (248px less its 22px padding),
+  on the colour it really carries. A preview narrower or wider than the real
+  thing is a promise about what residents will see, and a wrong one.
+*/
 .sp-identity-chip {
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-width: 210px;
-  min-height: 78px;
-  padding: 14px 18px;
+  width: 204px;
+  max-width: 100%;
+  padding: 16px 0;
+  padding-inline: 14px;
   border-radius: 12px;
 }
-.sp-identity-chip img {
-  max-height: 46px;
-  max-width: 170px;
-  width: auto;
-  object-fit: contain;
+.sp-identity-shape {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--sp-muted);
+  max-width: 240px;
+}
+
+/* Two ways a logo can sit, chosen as cards rather than bare radios: the
+   difference between them is visual, so the control should be too. */
+.sp-logo-backing {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-inline-size: 0;
+}
+.sp-logo-backing legend {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 8px;
+}
+.sp-choice-row {
+  display: grid;
+  gap: 8px;
+  /* Two short labels do not want the whole width of a panel behind them. */
+  max-width: 420px;
+}
+.sp-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--sp-line);
+  border-radius: 11px;
+  cursor: pointer;
+  background: #fff;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.sp-choice:hover {
+  border-color: color-mix(in srgb, var(--sp-forest) 32%, var(--sp-line));
+}
+.sp-choice.is-chosen {
+  border-color: var(--sp-forest);
+  background: color-mix(in srgb, var(--sp-forest) 5%, #fff);
+}
+.sp-choice input {
+  margin: 2px 0 0;
+  accent-color: var(--sp-forest);
+  flex: none;
+}
+.sp-choice > span {
+  display: grid;
+  gap: 2px;
+}
+.sp-choice strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.sp-choice small {
+  font-size: 11.5px;
+  color: var(--sp-muted);
+  line-height: 1.45;
 }
 .sp-identity-actions {
   display: grid;

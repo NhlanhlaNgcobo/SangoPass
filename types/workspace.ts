@@ -329,6 +329,18 @@ export interface WorkspaceState {
      * the URL too and no member is left looking at the old one from cache.
      */
     logoUpdatedAt: string;
+    /**
+     * The shape of that logo, so every dashboard can reserve its exact box
+     * before the image arrives and nothing below it jumps on load.
+     *
+     * Width and height are zero for a logo uploaded before the product
+     * measured them; the interface falls back to bounding the image with CSS
+     * alone, exactly as it did then.
+     */
+    logoWidth: number;
+    logoHeight: number;
+    /** Set the logo on a light plate rather than on the brand colour. */
+    logoPlate: boolean;
   };
   properties: LiveProperty[];
   units: LiveUnit[];

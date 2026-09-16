@@ -72,6 +72,7 @@ import {
   choice,
   colour,
   email,
+  flag,
   money,
   password,
   text,
@@ -615,6 +616,9 @@ export async function workspace(
       }),
       // The stamp, never the file. Empty means no logo and the SangoPass mark.
       logoUpdatedAt: organisation.logoUpdatedAt || "",
+      logoWidth: organisation.logoWidth || 0,
+      logoHeight: organisation.logoHeight || 0,
+      logoPlate: Boolean(organisation.logoPlate),
     },
     properties: properties.map((p): LiveProperty => ({
       id: p.id,
@@ -990,8 +994,32 @@ export async function command(
           logoKey: "",
           logoMime: "",
           logoUpdatedAt: "",
+          logoWidth: 0,
+          logoHeight: 0,
+          logoPlate: false,
         });
         discard = org.logoKey;
+        subject = orgId;
+        break;
+      }
+
+      /**
+       * Whether the logo sits on a light plate or straight on the brand
+       * colour.
+       *
+       * Its own command rather than part of the upload, because the manager
+       * cannot know which looks right until they have seen their logo on their
+       * own colour - and a logo that turns out to need the other setting is
+       * otherwise a re-upload of a file that was never the problem.
+       */
+      case "logoPlate": {
+        office(m);
+        const org = await t.get<OrganisationRecord>("organisations", orgId);
+        if (!org?.logoKey)
+          throw new AppError("Upload a logo before choosing how it sits.", 404);
+        const plate = flag(input.plate, "logo backing");
+        t.update("organisations", orgId, { logoPlate: plate });
+        result = { plate };
         subject = orgId;
         break;
       }

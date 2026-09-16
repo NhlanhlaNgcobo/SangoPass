@@ -1,7 +1,14 @@
 "use client";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Building2, ConciergeBell, RotateCcw, Shield, User, X } from "lucide-react";
+import {
+  Building2,
+  ConciergeBell,
+  RotateCcw,
+  Shield,
+  User,
+  X,
+} from "lucide-react";
 import WorkspaceApp, {
   type DemoDriver,
 } from "@/components/workspace/WorkspaceApp";
@@ -24,8 +31,9 @@ const ICONS = {
 
 // Versioned: a stored world is a whole WorkspaceState, so the key moves with
 // its shape rather than letting yesterday's tab restore a world that is
-// missing a field this build now reads. v2 added the organisation's colours.
-const STORAGE_KEY = "sangopass_demo_world_v2";
+// missing a field this build now reads. v2 added the organisation's colours;
+// v3 added the logo's measured shape and how it is seated.
+const STORAGE_KEY = "sangopass_demo_world_v3";
 
 function restore(): DemoWorld | null {
   try {

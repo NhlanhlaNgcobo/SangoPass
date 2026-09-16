@@ -176,6 +176,12 @@ export async function register(
         // Written rather than left absent: a missing field is null in SQLite
         // and undefined in Firestore, and every record here states its fields
         // so the two backends cannot answer differently.
+        logoKey: "",
+        logoMime: "",
+        logoUpdatedAt: "",
+        logoWidth: 0,
+        logoHeight: 0,
+        logoPlate: false,
         suspendedAt: null,
         createdAt: timestamp,
       });

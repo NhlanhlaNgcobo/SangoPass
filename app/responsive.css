@@ -60,7 +60,9 @@ html {
 .sp-topbar {
   gap: 12px;
   position: sticky;
-  top: 0;
+  /* Sticks below the pinned chrome rather than under it. See --sp-chrome-top
+     on .sp-shell. */
+  top: var(--sp-chrome-top, 0px);
   z-index: 20;
   height: auto;
   min-height: 78px;

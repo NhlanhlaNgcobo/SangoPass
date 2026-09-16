@@ -1,12 +1,10 @@
 "use client";
 import { useRef, useState, type FormEvent } from "react";
 import { Check, ImageUp, Trash2 } from "lucide-react";
-import Brand from "@/components/ui/Brand";
+import OrgLogo from "./OrgLogo";
 import type { WorkspaceState } from "@/types/workspace";
 
-/** The URL a member's dashboard asks for the company logo. */
-export const logoUrl = (orgId: string, stamp: string) =>
-  `/api/branding/logo?org=${encodeURIComponent(orgId)}&v=${encodeURIComponent(stamp)}`;
+export { logoUrl } from "./OrgLogo";
 
 /**
  * The company's name and logo, above the colours.
@@ -15,6 +13,11 @@ export const logoUrl = (orgId: string, stamp: string) =>
  * switcher, and the logo replaces the SangoPass mark at the top of every
  * dashboard in it - so both are saved for everyone, exactly as the colours
  * are, and the panel says so before anyone presses anything.
+ *
+ * The preview is the sidebar's own component on the sidebar's own colour, at
+ * the sidebar's own width. A manager choosing a logo is really asking one
+ * question - what will my residents see? - and anything less than the real
+ * thing answers it wrongly.
  */
 export default function CompanyIdentity({
   state,
@@ -22,6 +25,7 @@ export default function CompanyIdentity({
   demo,
   onSaveName,
   onRemoveLogo,
+  onPlate,
   onUploaded,
   onError,
 }: {
@@ -30,6 +34,7 @@ export default function CompanyIdentity({
   demo: boolean;
   onSaveName: (name: string) => void;
   onRemoveLogo: () => void;
+  onPlate: (plate: boolean) => void;
   onUploaded: (next: WorkspaceState) => void;
   onError: (message: string) => void;
 }) {
@@ -37,9 +42,30 @@ export default function CompanyIdentity({
   const [uploading, setUploading] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
+  const organisation = state.organisation;
   const orgId = state.membership.orgId;
-  const stamp = state.organisation.logoUpdatedAt;
-  const renamed = name.trim() !== state.organisation.name && name.trim() !== "";
+  const stamp = organisation.logoUpdatedAt;
+  const renamed = name.trim() !== organisation.name && name.trim() !== "";
+  const { logoWidth: width, logoHeight: height } = organisation;
+
+  /**
+   * What the manager will notice about their own file, in their words.
+   *
+   * Said because the shape of a logo decides how much of the sidebar it can
+   * fill, and a manager who uploads a square badge and finds it smaller than
+   * they expected deserves to know why rather than to assume it is broken.
+   */
+  function shapeNote(): string | null {
+    if (!width || !height) return null;
+    const ratio = width / height;
+    if (ratio >= 2.2)
+      return `${width} × ${height} — a wide mark, which fills the space best.`;
+    if (ratio >= 1.25)
+      return `${width} × ${height} — a landscape mark, which sits comfortably.`;
+    if (ratio > 0.8)
+      return `${width} × ${height} — close to square, so it shows smaller than a wide logo would. A version with the name beside the symbol would fill the space.`;
+    return `${width} × ${height} — taller than it is wide, so it shows narrow. A version laid out sideways would fill the space.`;
+  }
 
   async function upload(file?: File) {
     if (!file) return;
@@ -74,6 +100,8 @@ export default function CompanyIdentity({
     if (renamed) onSaveName(name.trim());
   }
 
+  const note = shapeNote();
+
   return (
     <section className="sp-panel">
       <div className="sp-section-head">
@@ -87,21 +115,20 @@ export default function CompanyIdentity({
 
       <div className="sp-identity">
         <div className="sp-identity-preview">
-          <span className="sp-muted">How it appears</span>
+          <span className="sp-identity-caption">How everyone sees it</span>
+          {/*
+            The sidebar, at its real width and on the real colour, rather than
+            a chip that suggests one. The same component draws both.
+          */}
           <div
             className="sp-identity-chip"
-            style={{ background: state.organisation.theme.primary }}
+            style={{ background: organisation.theme.primary }}
           >
-            {stamp ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={logoUrl(orgId, stamp)}
-                alt={`${state.organisation.name} logo`}
-              />
-            ) : (
-              <Brand light />
-            )}
+            <div className="sp-brand-link">
+              <OrgLogo organisation={organisation} orgId={orgId} show={!demo} />
+            </div>
           </div>
+          {note && <small className="sp-identity-shape">{note}</small>}
         </div>
 
         <div className="sp-identity-actions">
@@ -159,10 +186,58 @@ export default function CompanyIdentity({
               />
             </div>
             <small className="sp-muted">
-              PNG, JPEG or WebP, under 2 MB. A wide logo on a transparent
-              background sits best against your primary colour.
+              PNG, JPEG or WebP, under 2 MB, at least 48 pixels on its shorter
+              side. A wide logo on a transparent background fills the space
+              best.
             </small>
           </label>
+
+          {/*
+            Offered only once there is a logo to seat, and defaulted on upload
+            from whether the file can carry transparency at all. A logo drawn
+            in dark ink vanishes against a dark brand colour, and one exported
+            flat on white shows as a slab - and the file cannot tell us which
+            of those it is, so the person who owns it says.
+          */}
+          {stamp && (
+            <fieldset className="sp-logo-backing">
+              <legend>How it sits</legend>
+              <div className="sp-choice-row">
+                <label
+                  className={`sp-choice ${organisation.logoPlate ? "" : "is-chosen"}`}
+                >
+                  <input
+                    type="radio"
+                    name="logo-backing"
+                    checked={!organisation.logoPlate}
+                    disabled={busy || uploading}
+                    onChange={() => onPlate(false)}
+                  />
+                  <span>
+                    <strong>Straight on your colour</strong>
+                    <small>For a logo on a transparent background.</small>
+                  </span>
+                </label>
+                <label
+                  className={`sp-choice ${organisation.logoPlate ? "is-chosen" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="logo-backing"
+                    checked={organisation.logoPlate}
+                    disabled={busy || uploading}
+                    onChange={() => onPlate(true)}
+                  />
+                  <span>
+                    <strong>On a light plate</strong>
+                    <small>
+                      For a dark logo, or one with a white background.
+                    </small>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+          )}
         </div>
       </div>
     </section>

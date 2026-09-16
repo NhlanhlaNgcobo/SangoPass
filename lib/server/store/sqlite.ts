@@ -31,6 +31,9 @@ export const FIELDS: Record<Collection, readonly string[]> = {
     "logoKey",
     "logoMime",
     "logoUpdatedAt",
+    "logoWidth",
+    "logoHeight",
+    "logoPlate",
     "suspendedAt",
     "createdAt",
   ],
@@ -304,7 +307,7 @@ export const FIELDS: Record<Collection, readonly string[]> = {
 
 const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL, password TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS organisations(id TEXT PRIMARY KEY, name TEXT NOT NULL, plan TEXT NOT NULL DEFAULT 'starter', trialUntil TEXT NOT NULL, paidUntil TEXT, brandPrimary TEXT NOT NULL DEFAULT '#143E35', brandAccent TEXT NOT NULL DEFAULT '#D5ED9F', logoKey TEXT NOT NULL DEFAULT '', logoMime TEXT NOT NULL DEFAULT '', logoUpdatedAt TEXT NOT NULL DEFAULT '', suspendedAt TEXT, createdAt TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS organisations(id TEXT PRIMARY KEY, name TEXT NOT NULL, plan TEXT NOT NULL DEFAULT 'starter', trialUntil TEXT NOT NULL, paidUntil TEXT, brandPrimary TEXT NOT NULL DEFAULT '#143E35', brandAccent TEXT NOT NULL DEFAULT '#D5ED9F', logoKey TEXT NOT NULL DEFAULT '', logoMime TEXT NOT NULL DEFAULT '', logoUpdatedAt TEXT NOT NULL DEFAULT '', logoWidth INTEGER NOT NULL DEFAULT 0, logoHeight INTEGER NOT NULL DEFAULT 0, logoPlate INTEGER NOT NULL DEFAULT 0, suspendedAt TEXT, createdAt TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS memberships(id TEXT PRIMARY KEY, userId TEXT NOT NULL, orgId TEXT NOT NULL, role TEXT NOT NULL, propertyId TEXT, unitId TEXT, username TEXT, usernameKey TEXT, orgName TEXT NOT NULL DEFAULT '', memberName TEXT NOT NULL DEFAULT '', userEmail TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS properties(id TEXT PRIMARY KEY, orgId TEXT NOT NULL, name TEXT NOT NULL, address TEXT NOT NULL, type TEXT NOT NULL, loginCode TEXT NOT NULL DEFAULT '', sleepoverNightsPerMonth INTEGER NOT NULL DEFAULT 8, maxConsecutiveNights INTEGER NOT NULL DEFAULT 3, maxActiveGuests INTEGER NOT NULL DEFAULT 2, archivedAt TEXT)",
   "CREATE TABLE IF NOT EXISTS units(id TEXT PRIMARY KEY, orgId TEXT NOT NULL DEFAULT '', propertyId TEXT NOT NULL, label TEXT NOT NULL, bedrooms INTEGER NOT NULL DEFAULT 0, maxOccupants INTEGER NOT NULL DEFAULT 1, occupants INTEGER NOT NULL DEFAULT 0, rentCents INTEGER NOT NULL DEFAULT 0, rentPaid INTEGER NOT NULL DEFAULT 0, frequency TEXT NOT NULL DEFAULT 'monthly', residentId TEXT, residentName TEXT, rentPaidPeriod TEXT NOT NULL DEFAULT '', archivedAt TEXT, archivedWithProperty INTEGER NOT NULL DEFAULT 0)",
@@ -399,7 +402,21 @@ const REBUILT = [
 /* Migration                                                           */
 /* ------------------------------------------------------------------ */
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
+
+// v15 records the shape of the company logo, so a dashboard can reserve the
+// right box for it before the image loads, and lets a company say whether its
+// logo wants a light plate behind it.
+//
+// All three backfill to zero, which is what a logo uploaded before this
+// existed genuinely is: unmeasured. The dashboard treats an unmeasured logo
+// exactly as it did before - bounded by CSS and laid out once it arrives - so
+// nobody's existing logo changes, and the next upload measures it.
+const ALTERS_V15 = [
+  "ALTER TABLE organisations ADD COLUMN logoWidth INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE organisations ADD COLUMN logoHeight INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE organisations ADD COLUMN logoPlate INTEGER NOT NULL DEFAULT 0",
+];
 
 // v14 lets a unit hold more than one resident, and separates an operator
 // suspension from an unpaid month.
@@ -600,6 +617,7 @@ function migrate(database: DatabaseSync) {
     if (from < 9) steps.push(...ALTERS_V9);
     if (from < 11) steps.push(...ALTERS_V11);
     if (from < 14) steps.push(...ALTERS_V14, BACKFILL_V14);
+    if (from < 15) steps.push(...ALTERS_V15);
     database.exec("BEGIN IMMEDIATE");
     try {
       database.exec(

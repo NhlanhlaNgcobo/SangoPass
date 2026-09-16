@@ -32,6 +32,18 @@ export function choice<T extends string>(
     throw new AppError(`Choose a valid ${label}.`);
   return value as T;
 }
+/**
+ * A yes or a no, and nothing else.
+ *
+ * Deliberately not `Boolean(value)`: a checkbox that arrives as the string
+ * "false" would coerce to true, and a setting that silently records the
+ * opposite of what somebody chose is worse than one that refuses.
+ */
+export function flag(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean")
+    throw new AppError(`Choose yes or no for ${label}.`);
+  return value;
+}
 export function colour(value: unknown, label: string): string {
   const hex = normaliseHex(value);
   if (!hex) throw new AppError(`Enter a valid ${label} as a hex code.`);

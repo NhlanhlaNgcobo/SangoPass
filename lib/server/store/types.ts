@@ -137,6 +137,28 @@ export interface OrganisationRecord {
   /** Changes on every upload, so a replaced logo is never served from cache. */
   logoUpdatedAt: string;
   /**
+   * The logo's own pixel size, read from the file's header when it was
+   * uploaded. Zero for a logo stored before this was recorded, and for no
+   * logo at all.
+   *
+   * Kept so that every dashboard can reserve the exact box the image will
+   * occupy before a single byte of it has arrived. Without it the sidebar is
+   * laid out twice - once without the logo and once with - and everything
+   * below it jumps on load.
+   */
+  logoWidth: number;
+  logoHeight: number;
+  /**
+   * Whether to set the logo on a light plate rather than straight onto the
+   * company's brand colour.
+   *
+   * A logo drawn in dark ink, or exported flat on white, disappears or shows
+   * as a slab against a dark sidebar. Only the person who owns the logo can
+   * say which kind theirs is, so this is their choice - defaulted on upload
+   * from whether the file can hold transparency at all.
+   */
+  logoPlate: boolean;
+  /**
    * When an operator suspended this organisation, or null.
    *
    * Kept apart from the trial and paid dates on purpose. Not paying is an

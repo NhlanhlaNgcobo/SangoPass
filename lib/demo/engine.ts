@@ -869,12 +869,13 @@ export function apply(
       break;
     }
 
-    case "logoRemove": {
+    case "logoRemove":
+    case "logoPlate": {
       requireOffice(persona);
-      // The demo never had one to remove: nothing is stored, so nothing was
-      // uploaded. Said plainly rather than pretending it worked.
+      // The demo never had one to remove or to re-seat: nothing is stored, so
+      // nothing was uploaded. Said plainly rather than pretending it worked.
       throw new AppError(
-        "The demo keeps nothing, so there is no logo to remove. Uploading one works on a real account.",
+        "The demo keeps nothing, so there is no logo to change. Uploading one works on a real account.",
         409,
       );
     }

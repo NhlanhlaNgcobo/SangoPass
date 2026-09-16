@@ -20,10 +20,14 @@ export async function GET(request: Request) {
       headers: {
         "Content-Type": mime,
         "Content-Length": String(bytes.length),
-        // Private, because it identifies the organisation viewing it, and
-        // revalidated because a company that changes its logo wants to see the
-        // change. The URL carries the update time, so a hit is always current.
-        "Cache-Control": "private, max-age=300",
+        // Private, because it identifies the organisation viewing it.
+        //
+        // Immutable, because the URL carries the moment the logo was uploaded:
+        // a company that replaces its logo is served from a different address,
+        // so this one can never go stale and never needs revalidating. It was
+        // five minutes, which meant every resident on a phone re-downloaded
+        // the whole image a dozen times a day to be told nothing had changed.
+        "Cache-Control": "private, max-age=31536000, immutable",
         // The strict policy for uploaded bytes lives in next.config.ts, whose
         // headers() wins over anything set here. See uploadCsp there.
         "X-Content-Type-Options": "nosniff",

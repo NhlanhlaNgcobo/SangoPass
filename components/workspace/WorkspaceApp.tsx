@@ -1,5 +1,8 @@
 "use client";
 import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
   useState,
   type CSSProperties,
   type FormEvent,
@@ -43,7 +46,8 @@ import RequestsPanel from "./RequestsPanel";
 import AnnouncementsPanel from "./AnnouncementsPanel";
 import ImportPanel from "./ImportPanel";
 import RegularsPanel from "./RegularsPanel";
-import CompanyIdentity, { logoUrl } from "./CompanyIdentity";
+import CompanyIdentity from "./CompanyIdentity";
+import OrgLogo from "./OrgLogo";
 import Brand from "@/components/ui/Brand";
 import type {
   IdType,
@@ -418,6 +422,17 @@ export interface DemoDriver {
   banner: ReactNode;
 }
 
+/**
+ * useLayoutEffect on the client, useEffect on the server.
+ *
+ * The chrome offset below has to be in place before the first paint or the
+ * sidebar visibly drops into position, and useLayoutEffect is the hook that
+ * guarantees that. It also does nothing during server rendering and says so in
+ * the console, so the server gets the hook that is allowed to do nothing.
+ */
+const useBeforePaint =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export default function WorkspaceApp({
   initial,
   demo,
@@ -452,10 +467,28 @@ export default function WorkspaceApp({
     // units and properties that have been filed away.
     [editing, setEditing] = useState(""),
     [showArchived, setShowArchived] = useState(false),
+    // How much pinned chrome sits above the workspace, measured from the
+    // element that holds it. See --sp-chrome-top on the shell below.
+    [chromeTop, setChromeTop] = useState(0),
     // An unsaved brand colour choice. While it is set the whole dashboard is
     // painted with it, so a manager judges the colours on the real interface
     // rather than on a swatch. Leaving the Brand view drops it.
     [themeDraft, setThemeDraft] = useState<BrandTheme | null>(null);
+  const chrome = useRef<HTMLDivElement>(null);
+  useBeforePaint(() => {
+    const node = chrome.current;
+    if (!node) return;
+    // Watched rather than measured once: the demo bar wraps to two and three
+    // lines as the window narrows, and a stale offset leaves the sidebar
+    // either overlapped again or floating below a gap.
+    const observer = new ResizeObserver(() =>
+      setChromeTop(node.getBoundingClientRect().height),
+    );
+    observer.observe(node);
+    setChromeTop(node.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, []);
+
   const router = useRouter();
   const compact = useMediaQuery("(max-width: 1023px)");
   const navigationOpen = compact && mobile;
@@ -856,8 +889,24 @@ export default function WorkspaceApp({
     </div>
   );
   return (
-    <div className="sp-shell" style={themeVariables(theme) as CSSProperties}>
-      {demo?.banner}
+    <div
+      className="sp-shell"
+      style={
+        {
+          ...themeVariables(theme),
+          "--sp-chrome-top": `${chromeTop}px`,
+        } as CSSProperties
+      }
+    >
+      {/*
+        Anything pinned above the workspace - today only the demo bar. The
+        sidebar and the top bar are fixed and sticky to the viewport, so they
+        know nothing about what is stacked over them and used to slide
+        underneath it, taking the company's logo out of sight with them. Its
+        height is measured rather than assumed because the bar wraps to two and
+        three lines as the window narrows.
+      */}
+      <div ref={chrome}>{demo?.banner}</div>
       <div
         className={`sp-navigation ${navigationOpen ? "is-open" : ""}`}
         {...(navigationOpen ? navigationDialog : { ref: navigationDialog.ref })}
@@ -879,28 +928,26 @@ export default function WorkspaceApp({
             when they have not. The stamp in the URL changes with the upload,
             so replacing a logo is visible immediately rather than whenever a
             member's cache happens to expire.
+
+            Both sit in a plate of one fixed size. A logo is any shape at all -
+            a wide wordmark, a square badge, a tall crest - and letting each
+            one set its own height moved everything below it, so the sidebar's
+            spacing depended on which file a manager happened to upload.
           */}
           <Link
+            className="sp-brand-link"
             href="/"
             aria-label={
-              state.organisation.logoUpdatedAt
+              state.organisation.logoUpdatedAt && !demo
                 ? `${state.organisation.name} home`
                 : "SangoPass home"
             }
           >
-            {state.organisation.logoUpdatedAt && !demo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                className="sp-org-logo"
-                src={logoUrl(
-                  state.membership.orgId,
-                  state.organisation.logoUpdatedAt,
-                )}
-                alt={state.organisation.name}
-              />
-            ) : (
-              <Brand light />
-            )}
+            <OrgLogo
+              organisation={state.organisation}
+              orgId={state.membership.orgId}
+              show={!demo}
+            />
           </Link>
           <button
             className="sp-mobile-close sp-icon"
@@ -2937,6 +2984,7 @@ export default function WorkspaceApp({
               demo={Boolean(demo)}
               onSaveName={(name) => void act({ action: "companyName", name })}
               onRemoveLogo={() => void act({ action: "logoRemove" })}
+              onPlate={(plate) => void act({ action: "logoPlate", plate })}
               onUploaded={(next) => {
                 setState(next);
                 setError("");
