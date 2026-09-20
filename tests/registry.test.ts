@@ -18,9 +18,11 @@ import type { Account } from "../types/workspace";
 
 const pass = "A long secure test phrase 2026!";
 
-const sast = () =>
+// Tomorrow, so a 09:00–18:00 fixture is still ahead of the clock whatever
+// time of day the suite runs.
+const tomorrow = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(
-    new Date(),
+    new Date(Date.now() + 86_400_000),
   );
 
 interface Estate {
@@ -151,7 +153,7 @@ test("a unit can be repriced and relabelled", async (t) => {
         idType: "passport",
         idNumber: "A1234567",
         visitType: "daily",
-        visitDate: sast(),
+        visitDate: tomorrow(),
         arrival: "09:00",
         departure: "18:00",
         password: pass,
