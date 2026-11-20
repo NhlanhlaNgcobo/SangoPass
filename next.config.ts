@@ -5,7 +5,8 @@ import type { NextConfig } from "next";
 // pinned. 'unsafe-inline' remains for styles only: Next.js injects inline
 // style attributes, and the app has no inline event handlers.
 // Development needs eval and a websocket for hot reload, so the strict policy
-// is production-only; dev keeps the same shape with those two allowances.
+// is production-only; dev keeps the same shape with those two allowances, plus
+// http://localhost:8400 for the Impeccable live-mode design picker.
 const development = process.env.NODE_ENV !== "production";
 
 const csp = [
@@ -15,13 +16,15 @@ const csp = [
   "frame-ancestors 'none'",
   "form-action 'self' https://www.payfast.co.za https://sandbox.payfast.co.za",
   development
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8400"
     : "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "media-src 'self' blob:",
-  development ? "connect-src 'self' ws: wss:" : "connect-src 'self'",
+  development
+    ? "connect-src 'self' ws: wss: http://localhost:8400"
+    : "connect-src 'self'",
   "worker-src 'self' blob:",
   ...(development ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
