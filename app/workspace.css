@@ -1123,10 +1123,16 @@
 
 /* Present on every demo screen so nobody mistakes sample data for their own,
    and so a prospect can move between roles mid-sentence. */
-.sp-demo-bar {
+/* The holder is what sticks, not the bar inside it. A sticky element only
+   sticks within its parent, and this holder is exactly as tall as the bar, so
+   a sticky bar scrolled away with it - while the sidebar and top bar stayed
+   offset by its height, leaving a gap the page scrolled through. */
+.sp-chrome {
   position: sticky;
   top: 0;
   z-index: 40;
+}
+.sp-demo-bar {
   background: #143e35;
   color: #eaf3dd;
 }

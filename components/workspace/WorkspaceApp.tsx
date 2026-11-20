@@ -906,7 +906,9 @@ export default function WorkspaceApp({
         height is measured rather than assumed because the bar wraps to two and
         three lines as the window narrows.
       */}
-      <div ref={chrome}>{demo?.banner}</div>
+      <div ref={chrome} className="sp-chrome">
+        {demo?.banner}
+      </div>
       <div
         className={`sp-navigation ${navigationOpen ? "is-open" : ""}`}
         {...(navigationOpen ? navigationDialog : { ref: navigationDialog.ref })}
