@@ -24,9 +24,11 @@ import type { Account } from "../types/workspace";
 
 const pass = "A long secure test phrase 2026!";
 
-const sast = (offsetMs = 0) =>
+// Tomorrow, so a 09:00–18:00 fixture is still ahead of the clock whatever
+// time of day the suite runs.
+const tomorrow = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(
-    new Date(Date.now() + offsetMs),
+    new Date(Date.now() + 86_400_000),
   );
 
 interface Home {
@@ -104,7 +106,7 @@ const guestRequest = (
   idType: "passport" as const,
   idNumber: "A1234567",
   visitType: "daily" as const,
-  visitDate: sast(),
+  visitDate: tomorrow(),
   arrival: "09:00",
   departure: "18:00",
   password: pass,
